@@ -3,7 +3,7 @@
 
 import * as store from './store.js';
 import * as srs from './srs.js';
-import { syncNow, testConnection } from './sync.js';
+import { syncNow, testConnection, cleanUrl, cleanToken } from './sync.js';
 import { demoCards } from './demo.js';
 
 const app = document.getElementById('app');
@@ -797,17 +797,17 @@ function renderSettings() {
             <button class="outline quiet" data-act="${S.settings.demo ? 'demo-off' : 'demo-on'}">${S.settings.demo ? 'デモを終了' : 'デモデータで試す'}</button>
           </div>
         </section>
-        <p class="small" style="text-align:center">Grass v1.0</p>
+        <p class="small" style="text-align:center">Grass v1.0.1</p>
       </main>
       ${nav('settings')}
     </div>`;
 }
 
 async function saveConnection(form) {
-  const apiUrl = form.apiUrl.value.trim();
-  const token = form.token.value.trim();
+  const apiUrl = cleanUrl(form.apiUrl.value);
+  const token = cleanToken(form.token.value);
   S.ui.connDraft = { apiUrl, token };   // 失敗しても入力を消さない
-  if (!/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec$/.test(apiUrl)) {
+  if (!/^https:\/\/script\.google\.com\/(?:a\/[^/]+\/)?macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(apiUrl)) {
     S.ui.connMsg = { ok: false, text: 'URL は https://script.google.com/macros/s/…/exec の形で入れてください' };
     render();
     return;
@@ -938,6 +938,13 @@ document.addEventListener('visibilitychange', () => {
   render();
   if (configured() && !S.settings.demo) runSync();
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+    const hadController = !!navigator.serviceWorker.controller;
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!hadController || reloaded || route().name === 'review') return;   // 復習の途中では再読み込みしない
+      reloaded = true;
+      location.reload();
+    });
     navigator.serviceWorker.register('./sw.js').catch(() => {});
   }
 })();

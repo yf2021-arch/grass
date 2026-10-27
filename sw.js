@@ -1,7 +1,7 @@
 // オフラインでも開けるように、アプリ本体をキャッシュする。
 // アプリを更新したら VERSION を上げる（古いキャッシュは自動で消える）。
 
-const VERSION = 'grass-v1.0.0';
+const VERSION = 'grass-v1.0.1';
 const SHELL = [
   './',
   './index.html',
@@ -50,19 +50,19 @@ self.addEventListener('fetch', event => {
 
   if (url.origin !== self.location.origin) return;
 
-  // アプリ本体：キャッシュを先に返し、裏で新しい版を取りに行く
+  // アプリ本体：まずネットから新しい版を取り、つながらないときはキャッシュを返す
   event.respondWith(
     caches.open(VERSION).then(async cache => {
-      const hit = await cache.match(req, { ignoreSearch: true });
-      const fresh = fetch(req).then(res => {
+      try {
+        const res = await fetch(req, { cache: 'no-cache' });
         if (res.ok) cache.put(req, res.clone());
         return res;
-      }).catch(() => null);
-      if (hit) return hit;
-      const res = await fresh;
-      if (res) return res;
-      if (req.mode === 'navigate') return cache.match('./index.html');
-      return new Response('', { status: 504 });
+      } catch (e) {
+        const hit = await cache.match(req, { ignoreSearch: true });
+        if (hit) return hit;
+        if (req.mode === 'navigate') return (await cache.match('./index.html')) || new Response('', { status: 504 });
+        return new Response('', { status: 504 });
+      }
     }),
   );
 });
