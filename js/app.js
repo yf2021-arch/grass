@@ -1,10 +1,11 @@
 // Grass — 画面と操作
-// 画面：#/today 今日・#/review 復習・#/done 完了・#/inbox 受信箱・#/search 検索・#/card/ID 詳細・#/settings 設定
+// 画面：#/today 今日・#/review 復習・#/done 完了・#/inbox 受信箱・#/search 検索・#/card/ID 詳細・#/family/名前 語の家族・#/settings 設定
 
 import * as store from './store.js';
 import * as srs from './srs.js';
 import { syncNow, testConnection, cleanUrl, cleanToken } from './sync.js';
 import { demoCards } from './demo.js';
+import { parseVisual, visualHtml } from './visual.js';
 
 const app = document.getElementById('app');
 
@@ -12,6 +13,7 @@ const DEFAULT_SETTINGS = { apiUrl: '', token: '', newPerDay: 5, rootFirst: true,
 
 const S = {
   cards: [],
+  visuals: {},          // data/visuals.json（AA列がまだ空の既存カード用）
   settings: { ...DEFAULT_SETTINGS },
   intervals: srs.DEFAULT_INTERVALS,
   sync: null,
@@ -37,6 +39,28 @@ const items = s => String(s ?? '').split('｜').map(x => x.trim()).filter(Boolea
 const byId = id => S.cards.find(c => c.ID === id);
 const configured = () => !!(S.settings.apiUrl && S.settings.token);
 const WEEK = ['日', '月', '火', '水', '木', '金', '土'];
+
+/** カードのイメージ図：シートの AA列「イメージ図」が優先。空なら同梱の data/visuals.json */
+function visualOf(card) {
+  return parseVisual(card?.['イメージ図']) || parseVisual(S.visuals[card?.ID]);
+}
+
+/** 語の家族：関連タグの「家族:〇〇」、なければイメージ図の family */
+function familyOf(card) {
+  const tag = val(card, '関連タグ').split(/[,、]\s*/).map(t => t.trim()).find(t => /^家族[:：]/.test(t));
+  if (tag) return tag.replace(/^家族[:：]\s*/, '');
+  const raw = parseVisual(card?.['イメージ図']) || S.visuals[card?.ID];
+  return raw?.family ? String(raw.family) : '';
+}
+
+const familyMembers = name => (name ? S.cards.filter(c => familyOf(c) === name) : []);
+
+async function loadVisuals() {
+  try {
+    const res = await fetch('data/visuals.json', { cache: 'no-cache' });
+    if (res.ok) S.visuals = (await res.json()).cards || {};
+  } catch (e) { /* オフラインで未キャッシュなら、絵なしで続ける */ }
+}
 
 function mdLabel(str) {
   const m = String(str).match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -168,7 +192,7 @@ function nav(current) {
 
 function render() {
   const r = route();
-  const screens = { today: renderToday, review: renderReview, done: renderDone, inbox: renderInbox, search: renderSearch, card: renderDetail, settings: renderSettings };
+  const screens = { today: renderToday, review: renderReview, done: renderDone, inbox: renderInbox, search: renderSearch, card: renderDetail, family: renderFamily, settings: renderSettings };
   (screens[r.name] || renderToday)(r.arg);
   refreshSyncBits();
 }
@@ -291,7 +315,9 @@ function startSession(extraNew = 0) {
 
 function hintsFor(card) {
   const list = [];
-  if (val(card, '根源イメージ')) list.push({ label: '根源イメージ', text: val(card, '根源イメージ') });
+  const pic = visualOf(card);
+  if (pic) list.push({ label: 'イメージ図', root: true, pic, text: val(card, '根源イメージ') });
+  else if (val(card, '根源イメージ')) list.push({ label: '根源イメージ', root: true, text: val(card, '根源イメージ') });
   if (val(card, '英語の意味')) list.push({ label: 'English', text: val(card, '英語の意味'), en: true });
   return list;
 }
@@ -324,10 +350,15 @@ function renderReview() {
 
   if (!ss.flipped) {
     const hints = hintsFor(card);
-    if (ss.hint === null) ss.hint = S.settings.rootFirst && hints[0]?.label === '根源イメージ' ? 1 : 0;
-    const shown = hints.slice(0, ss.hint).map((h, k) => `
+    if (ss.hint === null) ss.hint = S.settings.rootFirst && hints[0]?.root ? 1 : 0;
+    const shown = hints.slice(0, ss.hint).map((h, k) => h.pic ? `
+      <div class="hint pic">
+        <span>${ICON.bulb}ヒント ${k + 1} · ${h.label}</span>
+        ${visualHtml(h.pic, { alt: h.text })}
+        ${h.text ? `<p class="cap">${esc(h.text)}</p>` : ''}
+      </div>` : `
       <div class="hint">
-        <span>${k === 0 && h.label === '根源イメージ' ? ICON.bulb : ''}ヒント ${k + 1} · ${h.label}</span>
+        <span>${k === 0 && h.root ? ICON.bulb : ''}ヒント ${k + 1} · ${h.label}</span>
         <p ${h.en ? 'lang="en"' : ''}>${esc(h.text)}</p>
       </div>`).join('');
     const nextHint = hints[ss.hint];
@@ -433,7 +464,11 @@ function backBody(card, panels) {
   } else if (memo) {
     out.push(panel('misuse', '誤用・発見', `<p>${esc(memo)}</p>`, panels.misuse, true));
   }
-  if (roots.length) out.push(panel('roots', '語源・根源', roots.map(r => `<p>${esc(r)}</p>`).join(''), panels.roots));
+  const pic = visualOf(card);
+  if (roots.length || pic) {
+    out.push(panel('roots', pic ? '語源・根源・イメージ図' : '語源・根源',
+      (pic ? visualHtml(pic, { alt: val(card, '根源イメージ') }) : '') + roots.map(r => `<p>${esc(r)}</p>`).join(''), panels.roots));
+  }
   if (syn.length || (fit.length && !ng.length) || en) {
     const parts = [];
     if (fit.length && !ng.length) parts.push(`<p>${esc(fit.join('／'))}</p>`);
@@ -445,6 +480,16 @@ function backBody(card, panels) {
     }
     if (en) parts.push(`<p class="note" lang="en">English: ${esc(en)}</p>`);
     out.push(panel('colloc', '組み合わせ・類義語', parts.join(''), panels.colloc));
+  }
+
+  const fam = familyOf(card);
+  const sibs = familyMembers(fam).filter(c => c.ID !== card.ID);
+  if (sibs.length) {
+    out.push(`
+      <a class="fam-link" href="#/family/${encodeURIComponent(fam)}">
+        <span class="t"><b>語の家族「${esc(fam)}」</b><span>${esc(sibs.map(c => val(c, '表現')).join('・'))}</span></span>
+        ${ICON.chevron}
+      </a>`);
   }
 
   const source = val(card, '出典');
@@ -724,6 +769,38 @@ function renderDetail(id) {
     </div>`;
 }
 
+/* ============================== 語の家族 ============================== */
+
+function renderFamily(name) {
+  const list = familyMembers(name);
+  if (!list.length) { go('#/search'); return; }
+  const fromId = S.ui.familyFrom;
+  const tiles = list.map(c => {
+    const pic = visualOf(c);
+    const st = val(c, '状態');
+    return `
+      <a class="fam-tile ${c.ID === fromId ? 'here' : ''}" href="#/card/${encodeURIComponent(c.ID)}">
+        ${pic ? visualHtml(pic, { mini: true, alt: val(c, '根源イメージ') }) : ''}
+        <span class="w">${esc(val(c, '表現'))}</span>
+        <span class="g">${esc(val(c, '根源イメージ') || val(c, '日本語の意味'))}</span>
+        <span class="st s-${esc(st)}">${esc(st || '—')}</span>
+      </a>`;
+  }).join('');
+  app.innerHTML = `
+    <div class="screen plain">
+      <header class="detail-head">
+        <button class="close" data-act="back" aria-label="戻る">${ICON.back}</button>
+      </header>
+      <main class="scroll fam">
+        <div class="fam-title">
+          <h1>「${esc(name)}」の家族</h1>
+          <p>${list.length}枚 · 絵を並べて、違いを見比べる</p>
+        </div>
+        <div class="fam-grid">${tiles}</div>
+      </main>
+    </div>`;
+}
+
 /* ============================== 設定 ============================== */
 
 function renderSettings() {
@@ -797,7 +874,7 @@ function renderSettings() {
             <button class="outline quiet" data-act="${S.settings.demo ? 'demo-off' : 'demo-on'}">${S.settings.demo ? 'デモを終了' : 'デモデータで試す'}</button>
           </div>
         </section>
-        <p class="small" style="text-align:center">Grass v1.0.1</p>
+        <p class="small" style="text-align:center">Grass v1.1.0</p>
       </main>
       ${nav('settings')}
     </div>`;
@@ -889,6 +966,11 @@ const actions = {
 };
 
 app.addEventListener('click', e => {
+  const fam = e.target.closest('a.fam-link');
+  if (fam) {
+    const r = route();
+    S.ui.familyFrom = r.name === 'card' ? r.arg : (S.session ? S.session.ids[S.session.i] : null);
+  }
   const el = e.target.closest('[data-act]');
   if (!el || el.tagName === 'INPUT') return;
   const fn = actions[el.dataset.act];
@@ -928,7 +1010,7 @@ document.addEventListener('visibilitychange', () => {
 
 (async function boot() {
   try {
-    await loadAll();
+    await Promise.all([loadAll(), loadVisuals()]);
   } catch (e) {
     app.innerHTML = `<div class="empty"><h2>データを開けません</h2><p>${esc(e.message)}</p></div>`;
     return;

@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>イメージ図の一覧</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Serif+JP:wght@600&display=swap">
+<link rel="stylesheet" href="../css/app.css">
+<style>
+  body { overflow: auto; height: auto; }
+  .g { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; padding: 16px; }
+  .c { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 12px; display: flex; flex-direction: column; gap: 6px; }
+  .c h3 { margin: 0; font-size: 15px; }
+  .c small { color: var(--muted); font-size: 11px; }
+</style>
+</head>
+<body>
+<div class="g" id="g"></div>
+<script type="module">
+  // 開発用：data/visuals.json のすべての絵を並べて確認する（アプリからは使わない）
+  import { parseVisual, visualHtml } from '../js/visual.js';
+  const data = (await (await fetch('../data/visuals.json')).json()).cards;
+  const names = await (await fetch('names.json').catch(() => null))?.json?.().catch(() => ({})) || {};
+  document.getElementById('g').innerHTML = Object.entries(data).map(([id, v]) => {
+    const s = parseVisual(v);
+    return `<div class="c"><h3>${names[id] || id}</h3><small>${id} · ${v.type}${v.motion ? ' / ' + v.motion : ''}${v.mark ? ' / ' + v.mark : ''}${v.family ? ' · 家族:' + v.family : ''}</small>${visualHtml(s)}</div>`;
+  }).join('');
+  document.body.dataset.ready = '1';
+</script>
+</body>
+</html>

@@ -1,0 +1,968 @@
+{
+ "version": 1,
+ "cards": {
+  "JP-0001": {
+   "type": "motion",
+   "motion": "matomeru",
+   "a": "ばらばら",
+   "b": "一つの束",
+   "family": "まとまる"
+  },
+  "JP-0002": {
+   "type": "motion",
+   "motion": "kumitate",
+   "a": "複数の要素",
+   "b": "一つの全体",
+   "family": "まとまる"
+  },
+  "JP-0003": {
+   "type": "timeline",
+   "mark": "future",
+   "a": "今の状態",
+   "b": "どこに行き着く？"
+  },
+  "JP-0004": {
+   "type": "motion",
+   "motion": "osamaru",
+   "a": "現実の範囲",
+   "b": "成立できる余地"
+  },
+  "JP-0005": {
+   "type": "motion",
+   "motion": "kuwaeru",
+   "a": "あるまとまり",
+   "b": "外から足す"
+  },
+  "JP-0006": {
+   "type": "kanji",
+   "parts": [
+    {
+     "char": "不",
+     "meaning": "ない"
+    },
+    {
+     "char": "要",
+     "meaning": "必要"
+    }
+   ],
+   "scene": "置いておく必要がない"
+  },
+  "JP-0007": {
+   "type": "motion",
+   "motion": "fusagu",
+   "a": "開いた穴・道",
+   "b": "通れない"
+  },
+  "JP-0008": {
+   "type": "motion",
+   "motion": "zureru",
+   "a": "本来の軌道",
+   "b": "外れて乱れる"
+  },
+  "JP-0009": {
+   "type": "motion",
+   "motion": "tsuku",
+   "a": "何もない",
+   "b": "パッとくっつく",
+   "family": "思う"
+  },
+  "JP-0010": {
+   "type": "motion",
+   "motion": "sashikomu",
+   "a": "並び・境界",
+   "b": "割って中へ",
+   "family": "込む"
+  },
+  "JP-0011": {
+   "type": "motion",
+   "motion": "shitamawaru",
+   "a": "基準線",
+   "b": "その下側",
+   "family": "基準線"
+  },
+  "JP-0012": {
+   "type": "motion",
+   "motion": "uwamawaru",
+   "a": "基準線",
+   "b": "その上側",
+   "family": "基準線"
+  },
+  "JP-0013": {
+   "type": "motion",
+   "motion": "koeru",
+   "a": "限界線",
+   "b": "その先へ",
+   "family": "基準線"
+  },
+  "JP-0014": {
+   "type": "timeline",
+   "mark": "each",
+   "a": "毎回",
+   "b": "同じように扱う",
+   "family": "たびに"
+  },
+  "JP-0015": {
+   "type": "timeline",
+   "mark": "each",
+   "a": "起きるたび",
+   "b": "その場で対応",
+   "family": "たびに"
+  },
+  "JP-0016": {
+   "type": "timeline",
+   "mark": "each",
+   "a": "一回",
+   "b": "一回ずつ処理",
+   "family": "たびに"
+  },
+  "JP-0017": {
+   "type": "scale",
+   "pos": "rise",
+   "a": "使った量",
+   "b": "料金も増える",
+   "family": "課金"
+  },
+  "JP-0018": {
+   "type": "timeline",
+   "mark": "repeat",
+   "a": "毎月",
+   "b": "決まった額",
+   "family": "課金"
+  },
+  "JP-0019": {
+   "type": "timeline",
+   "mark": "before",
+   "a": "先に頭で作る",
+   "b": "前提に置く",
+   "family": "前もって"
+  },
+  "JP-0020": {
+   "type": "motion",
+   "motion": "osamaru",
+   "a": "はみ出し",
+   "b": "枠の内側",
+   "family": "枠"
+  },
+  "JP-0021": {
+   "type": "timeline",
+   "mark": "before",
+   "a": "準備",
+   "b": "本番",
+   "family": "前もって"
+  },
+  "JP-0022": {
+   "type": "kanji",
+   "parts": [
+    {
+     "char": "要",
+     "meaning": "必要・大切"
+    },
+    {
+     "char": "件",
+     "meaning": "事柄"
+    }
+   ],
+   "scene": "必ず満たす項目"
+  },
+  "JP-0023": {
+   "type": "body",
+   "part": "kuchi",
+   "a": "何度も噛む",
+   "b": "ゆっくり味わう"
+  },
+  "JP-0024": {
+   "type": "motion",
+   "motion": "sorou",
+   "a": "食い違い",
+   "b": "再び一致",
+   "family": "一致"
+  },
+  "JP-0025": {
+   "type": "motion",
+   "motion": "kuichigau",
+   "a": "かみ合うはず",
+   "b": "ずれて合わない",
+   "family": "一致"
+  },
+  "JP-0026": {
+   "type": "motion",
+   "motion": "yokotenkai",
+   "a": "一つの成功",
+   "b": "横へ広げる"
+  },
+  "JP-0027": {
+   "type": "motion",
+   "motion": "hameru",
+   "a": "具体例",
+   "b": "枠・型に入れる",
+   "family": "枠"
+  },
+  "JP-0028": {
+   "type": "motion",
+   "motion": "erabu",
+   "a": "たくさんの候補",
+   "b": "好きに選び取る"
+  },
+  "JP-0031": {
+   "type": "motion",
+   "motion": "hikaru",
+   "a": "暗い中",
+   "b": "ピカッと浮かぶ",
+   "family": "思う"
+  },
+  "JP-0032": {
+   "type": "motion",
+   "motion": "matomeru",
+   "a": "散らばり",
+   "b": "一つの形",
+   "family": "まとまる"
+  },
+  "JP-0033": {
+   "type": "motion",
+   "motion": "ireko",
+   "a": "大きな箱",
+   "b": "その中にまた箱"
+  },
+  "JP-0034": {
+   "type": "motion",
+   "motion": "chuukan",
+   "a": "上層と下層",
+   "b": "その間の層"
+  },
+  "JP-0035": {
+   "type": "motion",
+   "motion": "dasu",
+   "a": "大きな集合",
+   "b": "一部だけ外へ"
+  },
+  "JP-0036": {
+   "type": "motion",
+   "motion": "heikou",
+   "a": "作業A・作業B",
+   "b": "同時に進む"
+  },
+  "JP-0037": {
+   "type": "timeline",
+   "mark": "end",
+   "a": "残り時間",
+   "b": "ゼロで終わり"
+  },
+  "JP-0038": {
+   "type": "motion",
+   "motion": "uwagaki",
+   "a": "古い色・記録",
+   "b": "新しく一新"
+  },
+  "JP-0039": {
+   "type": "motion",
+   "motion": "dodai",
+   "a": "情報・事実",
+   "b": "その上に考える",
+   "family": "土台"
+  },
+  "JP-0040": {
+   "type": "motion",
+   "motion": "chijimu",
+   "a": "大きく広がる",
+   "b": "ぎゅっと小さく",
+   "family": "大きさ"
+  },
+  "JP-0041": {
+   "type": "motion",
+   "motion": "utsusu",
+   "a": "別の文章",
+   "b": "自分の文章へ"
+  },
+  "JP-0042": {
+   "type": "motion",
+   "motion": "hikiiru",
+   "a": "一人",
+   "b": "全体をまとめる",
+   "family": "演奏"
+  },
+  "JP-0043": {
+   "type": "motion",
+   "motion": "shitagau",
+   "a": "指揮に合わせ",
+   "b": "音を出す人",
+   "family": "演奏"
+  },
+  "JP-0044": {
+   "type": "motion",
+   "motion": "tadoru",
+   "a": "残された跡",
+   "b": "行き先",
+   "family": "たどる"
+  },
+  "JP-0045": {
+   "type": "motion",
+   "motion": "ochikomu",
+   "a": "悪い状態",
+   "b": "深く抜けにくい",
+   "family": "落ちる"
+  },
+  "JP-0046": {
+   "type": "timeline",
+   "mark": "gate",
+   "a": "以前",
+   "b": "もう戻れない"
+  },
+  "JP-0047": {
+   "type": "motion",
+   "motion": "keiro",
+   "a": "方法・道具",
+   "b": "目的"
+  },
+  "JP-0048": {
+   "type": "motion",
+   "motion": "kumitate",
+   "a": "小さな部品",
+   "b": "一つの全体",
+   "family": "まとまる"
+  },
+  "JP-0049": {
+   "type": "scale",
+   "pos": 85,
+   "a": "いまいち",
+   "b": "いい感じ"
+  },
+  "JP-0050": {
+   "type": "motion",
+   "motion": "sashikomu",
+   "a": "すき間",
+   "b": "スッと入れる",
+   "family": "込む"
+  },
+  "JP-0051": {
+   "type": "motion",
+   "motion": "wakeru",
+   "a": "一つの箱",
+   "b": "それぞれの箱",
+   "family": "分ける"
+  },
+  "JP-0052": {
+   "type": "scale",
+   "pos": 30,
+   "a": "まだ柔らかい",
+   "b": "固まる・決まる"
+  },
+  "JP-0053": {
+   "type": "motion",
+   "motion": "kasaneru",
+   "a": "一層",
+   "b": "積み上げる"
+  },
+  "JP-0054": {
+   "type": "kanji",
+   "parts": [
+    {
+     "char": "小",
+     "meaning": "ちょっとした"
+    },
+    {
+     "char": "利口",
+     "meaning": "賢い"
+    }
+   ],
+   "scene": "目先だけ器用"
+  },
+  "JP-0055": {
+   "type": "motion",
+   "motion": "chikamichi",
+   "a": "みんなの道",
+   "b": "一人だけ近道"
+  },
+  "JP-0056": {
+   "type": "motion",
+   "motion": "hamidasu",
+   "a": "枠",
+   "b": "一部が外へ",
+   "family": "枠"
+  },
+  "JP-0057": {
+   "type": "motion",
+   "motion": "chirabaru",
+   "a": "一つの箱",
+   "b": "バラバラに",
+   "family": "まとまる"
+  },
+  "JP-0058": {
+   "type": "body",
+   "part": "mune",
+   "a": "心の中",
+   "b": "包まず見せる"
+  },
+  "JP-0059": {
+   "type": "motion",
+   "motion": "dodai",
+   "a": "前提",
+   "b": "その上に推論",
+   "family": "土台"
+  },
+  "JP-0060": {
+   "type": "motion",
+   "motion": "susumu",
+   "a": "状態＋行動",
+   "b": "Next State"
+  },
+  "JP-0061": {
+   "type": "scale",
+   "pos": "edge",
+   "a": "普通の範囲",
+   "b": "極端な例まで"
+  },
+  "JP-0062": {
+   "type": "scale",
+   "pos": "rise",
+   "a": "程度が上がる",
+   "b": "結果も上がる"
+  },
+  "JP-0063": {
+   "type": "motion",
+   "motion": "koeru",
+   "a": "予想される壁",
+   "b": "反対の結果へ"
+  },
+  "JP-0064": {
+   "type": "motion",
+   "motion": "sashikomu",
+   "a": "進む流れ",
+   "b": "途中に手を入れる",
+   "family": "込む"
+  },
+  "JP-0065": {
+   "type": "motion",
+   "motion": "chokusen",
+   "a": "長い推論",
+   "b": "直接ぱっと",
+   "family": "考える"
+  },
+  "JP-0066": {
+   "type": "motion",
+   "motion": "susumu",
+   "a": "分かっている情報",
+   "b": "新しい結論",
+   "family": "考える"
+  },
+  "JP-0067": {
+   "type": "body",
+   "part": "te",
+   "a": "外にあるもの",
+   "b": "つかんで得る"
+  },
+  "JP-0068": {
+   "type": "motion",
+   "motion": "susumu",
+   "a": "進み続ける",
+   "b": "目標に届く"
+  },
+  "JP-0069": {
+   "type": "motion",
+   "motion": "wakeru",
+   "a": "大きな仕事",
+   "b": "小分けにさばく"
+  },
+  "JP-0070": {
+   "type": "motion",
+   "motion": "douki",
+   "a": "変数A・変数B",
+   "b": "一緒に動く",
+   "family": "関係"
+  },
+  "JP-0071": {
+   "type": "motion",
+   "motion": "inga",
+   "a": "原因の種",
+   "b": "結果の実",
+   "family": "関係"
+  },
+  "JP-0072": {
+   "type": "motion",
+   "motion": "tsuranuku",
+   "a": "最初",
+   "b": "最後まで一本"
+  },
+  "JP-0073": {
+   "type": "body",
+   "part": "me",
+   "a": "世界を見る",
+   "b": "データにする"
+  },
+  "JP-0074": {
+   "type": "motion",
+   "motion": "mawaru",
+   "a": "自分の出力",
+   "b": "次の入力"
+  },
+  "JP-0076": {
+   "type": "motion",
+   "motion": "chikazuku",
+   "a": "離れた二点",
+   "b": "距離が縮まる",
+   "family": "距離"
+  },
+  "JP-0077": {
+   "type": "motion",
+   "motion": "hanareru",
+   "a": "近かった二点",
+   "b": "間が開く",
+   "family": "距離"
+  },
+  "JP-0078": {
+   "type": "motion",
+   "motion": "fureru",
+   "a": "指先",
+   "b": "軽く当たる",
+   "family": "触れる"
+  },
+  "JP-0079": {
+   "type": "motion",
+   "motion": "sesshoku",
+   "a": "物体A・B",
+   "b": "互いに触れ合う",
+   "family": "触れる"
+  },
+  "JP-0080": {
+   "type": "motion",
+   "motion": "tsuku",
+   "a": "すき間",
+   "b": "ぴたっと一つ",
+   "family": "触れる"
+  },
+  "JP-0081": {
+   "type": "motion",
+   "motion": "tataku",
+   "a": "手・道具",
+   "b": "勢いよく当てる"
+  },
+  "JP-0082": {
+   "type": "motion",
+   "motion": "susumu",
+   "a": "現在地",
+   "b": "前・次の段階"
+  },
+  "JP-0083": {
+   "type": "motion",
+   "motion": "ochiru",
+   "a": "上",
+   "b": "下へ",
+   "family": "落ちる"
+  },
+  "JP-0084": {
+   "type": "motion",
+   "motion": "ochiru",
+   "a": "高い位置",
+   "b": "重力方向へ",
+   "family": "落ちる"
+  },
+  "JP-0085": {
+   "type": "motion",
+   "motion": "suton",
+   "a": "急に",
+   "b": "ストンと",
+   "family": "落ちる"
+  },
+  "JP-0086": {
+   "type": "motion",
+   "motion": "oku",
+   "a": "動かして",
+   "b": "決めた所で止める",
+   "family": "位置"
+  },
+  "JP-0087": {
+   "type": "motion",
+   "motion": "ichi",
+   "a": "空間・順序",
+   "b": "一点に印",
+   "family": "位置"
+  },
+  "JP-0088": {
+   "type": "motion",
+   "motion": "haichi",
+   "a": "複数の点",
+   "b": "方向・距離の関係",
+   "family": "位置"
+  },
+  "JP-0089": {
+   "type": "motion",
+   "motion": "kakudo",
+   "a": "軸の線",
+   "b": "開き具合"
+  },
+  "JP-0090": {
+   "type": "motion",
+   "motion": "shiten",
+   "a": "見る位置",
+   "b": "見え方が決まる"
+  },
+  "JP-0091": {
+   "type": "motion",
+   "motion": "kubaru",
+   "a": "それぞれ",
+   "b": "決めた位置へ",
+   "family": "位置"
+  },
+  "JP-0092": {
+   "type": "motion",
+   "motion": "sesshokuten",
+   "a": "二つの輪郭",
+   "b": "触れ合う一点",
+   "family": "触れる"
+  },
+  "JP-0093": {
+   "type": "motion",
+   "motion": "fukuramu",
+   "a": "現実から離れ",
+   "b": "頭の中で膨らむ"
+  },
+  "JP-0094": {
+   "type": "motion",
+   "motion": "kosureru",
+   "a": "二つの面",
+   "b": "こすれて抵抗"
+  },
+  "JP-0095": {
+   "type": "motion",
+   "motion": "tenbin",
+   "a": "ほかの材料",
+   "b": "これを重く見る"
+  },
+  "JP-0096": {
+   "type": "motion",
+   "motion": "tenbin",
+   "a": "手放すもの",
+   "b": "得たい目的"
+  },
+  "JP-0097": {
+   "type": "motion",
+   "motion": "osamaru",
+   "a": "境界線",
+   "b": "内側ならOK",
+   "family": "許す"
+  },
+  "JP-0098": {
+   "type": "motion",
+   "motion": "yurumeru",
+   "a": "縛り・禁止",
+   "b": "ゆるめて自由に",
+   "family": "許す"
+  },
+  "JP-0099": {
+   "type": "motion",
+   "motion": "karamu",
+   "a": "何本もの糸",
+   "b": "もつれて分けにくい"
+  },
+  "JP-0100": {
+   "type": "motion",
+   "motion": "chijimu",
+   "a": "外枠",
+   "b": "内側へ寄せる",
+   "family": "大きさ"
+  },
+  "JP-0101": {
+   "type": "motion",
+   "motion": "shibomu",
+   "a": "広がり",
+   "b": "きゅっと縮む",
+   "family": "大きさ"
+  },
+  "JP-0102": {
+   "type": "motion",
+   "motion": "hirogaru",
+   "a": "小さな枠",
+   "b": "外側へ広がる",
+   "family": "大きさ"
+  },
+  "JP-0108": {
+   "type": "motion",
+   "motion": "komu",
+   "a": "抽象的な考え",
+   "b": "具体的な器へ",
+   "family": "込む"
+  },
+  "JP-0109": {
+   "type": "kanji",
+   "parts": [
+    {
+     "char": "骨",
+     "meaning": "ほね"
+    },
+    {
+     "char": "格",
+     "meaning": "枠組み"
+    }
+   ],
+   "scene": "中心の構造が全体を支える"
+  },
+  "JP-0110": {
+   "type": "motion",
+   "motion": "osu",
+   "a": "望ましい行動",
+   "b": "背中を押す",
+   "family": "後押し"
+  },
+  "JP-0120": {
+   "type": "motion",
+   "motion": "kiku",
+   "a": "働きかけ",
+   "b": "狙った効果"
+  },
+  "JP-0121": {
+   "type": "timeline",
+   "mark": "start",
+   "a": "いちばん初め",
+   "b": "続き"
+  },
+  "JP-0123": {
+   "type": "kanji",
+   "parts": [
+    {
+     "char": "解",
+     "meaning": "ほどく・分ける"
+    },
+    {
+     "char": "剖",
+     "meaning": "切り開く"
+    }
+   ],
+   "scene": "中を細かく分けて見る",
+   "family": "分ける"
+  },
+  "JP-0124": {
+   "type": "motion",
+   "motion": "kiru",
+   "a": "一つの塊",
+   "b": "独立して扱う",
+   "family": "分ける"
+  },
+  "JP-0126": {
+   "type": "motion",
+   "motion": "betsu",
+   "a": "一つの流れ",
+   "b": "別枠で扱う",
+   "family": "分ける"
+  },
+  "JP-0127": {
+   "type": "motion",
+   "motion": "mazeru",
+   "a": "別々のもの",
+   "b": "一つの中に",
+   "family": "分ける"
+  },
+  "JP-0128": {
+   "type": "motion",
+   "motion": "usureru",
+   "a": "はっきりした線",
+   "b": "見えにくい線",
+   "family": "分ける"
+  },
+  "JP-0129": {
+   "type": "motion",
+   "motion": "gappei",
+   "a": "AとB",
+   "b": "一つのAB",
+   "family": "まとまる"
+  },
+  "JP-0130": {
+   "type": "motion",
+   "motion": "wa",
+   "a": "集合A・B",
+   "b": "どちらかに入る全部"
+  },
+  "JP-0135": {
+   "type": "timeline",
+   "mark": "later",
+   "a": "今は払わない",
+   "b": "後で請求が来る"
+  },
+  "JP-0137": {
+   "type": "motion",
+   "motion": "mawaru",
+   "a": "出したお金",
+   "b": "戻ってくる割合"
+  },
+  "JP-0138": {
+   "type": "motion",
+   "motion": "tadoru",
+   "a": "点と点",
+   "b": "一本の線を進む",
+   "family": "たどる"
+  },
+  "JP-0139": {
+   "type": "body",
+   "part": "te",
+   "a": "先が見えない",
+   "b": "つかんで次へ",
+   "family": "たどる"
+  },
+  "JP-0140": {
+   "type": "motion",
+   "motion": "aete",
+   "a": "楽な道",
+   "b": "あえてこちら"
+  },
+  "JP-0141": {
+   "type": "motion",
+   "motion": "yureru",
+   "a": "大きな相手",
+   "b": "ビリビリひるむ"
+  },
+  "JP-0142": {
+   "type": "timeline",
+   "mark": "extra",
+   "a": "失われた時間",
+   "b": "最後に足す"
+  },
+  "JP-0143": {
+   "type": "body",
+   "part": "maku",
+   "a": "胸",
+   "b": "お腹"
+  },
+  "JP-0145": {
+   "type": "motion",
+   "motion": "kieru",
+   "a": "あったもの",
+   "b": "すっと消える",
+   "family": "消える"
+  },
+  "JP-0146": {
+   "type": "motion",
+   "motion": "koboreru",
+   "a": "容器の中",
+   "b": "縁から外へ",
+   "family": "あふれる"
+  },
+  "JP-0147": {
+   "type": "motion",
+   "motion": "osaekirenai",
+   "a": "ふたで押さえる",
+   "b": "すき間からあふれる",
+   "family": "あふれる"
+  },
+  "JP-0148": {
+   "type": "motion",
+   "motion": "hikiyoseru",
+   "a": "次々と",
+   "b": "くっついて離れない"
+  },
+  "JP-0149": {
+   "type": "motion",
+   "motion": "gutto",
+   "a": "力を込めて",
+   "b": "ひと息で"
+  },
+  "JP-0150": {
+   "type": "motion",
+   "motion": "nukeru",
+   "a": "引っかかりなし",
+   "b": "すっと抜ける"
+  },
+  "JP-0151": {
+   "type": "motion",
+   "motion": "hajikeru",
+   "a": "風船",
+   "b": "高く響く音"
+  },
+  "JP-0152": {
+   "type": "motion",
+   "motion": "hamon",
+   "a": "小石",
+   "b": "波紋が広がる"
+  },
+  "JP-0153": {
+   "type": "scale",
+   "pos": "beyond",
+   "a": "ふつう",
+   "b": "引くほどやりすぎ"
+  },
+  "JP-0154": {
+   "type": "motion",
+   "motion": "kairi",
+   "a": "並んでいた二本",
+   "b": "少しずつ離れる",
+   "family": "距離"
+  },
+  "JP-0155": {
+   "type": "motion",
+   "motion": "osu",
+   "a": "迷う仲間",
+   "b": "ドンと前へ",
+   "family": "後押し"
+  },
+  "JP-0156": {
+   "type": "motion",
+   "motion": "mawaru",
+   "a": "中心の穴",
+   "b": "外を回って戻る"
+  },
+  "JP-0157": {
+   "type": "motion",
+   "motion": "gossori",
+   "a": "並んでいた物",
+   "b": "まとめて消える",
+   "family": "消える"
+  },
+  "JP-0158": {
+   "type": "motion",
+   "motion": "yureru",
+   "a": "手で",
+   "b": "左右にゆらゆら"
+  },
+  "JP-0159": {
+   "type": "motion",
+   "motion": "koeru",
+   "a": "限界・予想",
+   "b": "勢いよく突破",
+   "family": "基準線"
+  },
+  "JP-0160": {
+   "type": "kanji",
+   "parts": [
+    {
+     "char": "金",
+     "meaning": "金属"
+    },
+    {
+     "char": "段",
+     "meaning": "打つ"
+    }
+   ],
+   "scene": "熱い鉄を何度も打って強くする"
+  },
+  "JP-0161": {
+   "type": "motion",
+   "motion": "ippon",
+   "a": "ほかの道はふさがる",
+   "b": "残る一本"
+  },
+  "JP-0162": {
+   "type": "kanji",
+   "parts": [
+    {
+     "char": "疒",
+     "meaning": "やまいだれ"
+    },
+    {
+     "char": "辟",
+     "meaning": "かたよる"
+    }
+   ],
+   "scene": "かたよった習性"
+  },
+  "JP-0163": {
+   "type": "motion",
+   "motion": "narabi",
+   "a": "並んだ家",
+   "b": "どれも同じように"
+  },
+  "JP-0164": {
+   "type": "motion",
+   "motion": "kakomu",
+   "a": "散らばり",
+   "b": "一つのかたまり",
+   "family": "まとまる"
+  }
+ }
+}

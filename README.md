@@ -55,9 +55,20 @@ Claude（grass-card-extractor）──register──▶ Apps Script ◀──pul
 - 受信箱からは毎日「1日の新規カード」の枚数まで、優先度順・古い順で自動的に学習に入ります
 - 間隔を変えたいときは 03_設定 の「復習間隔」を書き換えて同期します
 
+## イメージ図と語の家族（v1.1.0）
+
+- 復習の表では、ヒント1が **イメージ図**（絵）になります。絵のないカードは、これまでどおり根源イメージの文です
+- 裏の「語源・根源・イメージ図」に同じ絵が出ます。同じ家族のカードがあれば「語の家族」から一覧で見比べられます
+- 絵は AA列「イメージ図」の JSON から、アプリが描きます（型は motion／body／kanji／timeline／contrast／scale）
+- 既存の139枚の絵は `data/visuals.json` に入っていて、AA列が空でもアプリに表示されます
+- シートにも入れたいときは、`gas/ImportVisuals.gs` を Apps Script に追加して `grassImportVisuals` を一度実行します
+  （AA列の見出しを作り、空のセルにだけ書きます）。新しいカードは、Claude のスキルが最初から AA列に入れます
+- 絵を直すときは `tools/build_visuals.py` を編集して `python3 tools/build_visuals.py` を実行します。
+  `tools/gallery.html` で全部の絵を一覧できます
+
 ## アプリを更新するとき
 
-ファイルを直したら、`sw.js` の `VERSION`（例：`grass-v1.0.1`）を上げてからアップロードしてください。
+ファイルを直したら、`sw.js` の `VERSION`（例：`grass-v1.1.0`）を上げてからアップロードしてください。
 スマホ側は、次に開いたときに裏で新しい版を取得し、その次に開いたときから新しい版になります。
 
 ## ファイル
@@ -66,11 +77,15 @@ Claude（grass-card-extractor）──register──▶ Apps Script ◀──pul
 |---|---|
 | `index.html` | 入口 |
 | `css/app.css` | デザイン（キャンバス「Grass Japanese PWA」の色・文字・寸法。ダークモード対応） |
-| `js/app.js` | 7つの画面と操作 |
+| `js/app.js` | 8つの画面と操作（語の家族を含む） |
 | `js/srs.js` | 復習のルール、今日のセッションの組み立て |
 | `js/sync.js` | シートとの同期 |
 | `js/store.js` | スマホ内の保存（IndexedDB） |
 | `js/demo.js` | デモ用カード |
+| `js/visual.js` | イメージ図を描く（型ごとのテンプレート） |
+| `data/visuals.json` | 既存カードのイメージ図と語の家族 |
+| `gas/ImportVisuals.gs` | 既存カードの AA列「イメージ図」を埋める Apps Script |
+| `tools/` | イメージ図のデータ作成と一覧（開発用） |
 | `sw.js` | オフライン対応（Service Worker） |
 | `manifest.webmanifest`, `icons/` | インストール用 |
 
