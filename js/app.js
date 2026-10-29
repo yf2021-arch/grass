@@ -13,7 +13,7 @@ const DEFAULT_SETTINGS = { apiUrl: '', token: '', newPerDay: 5, rootFirst: true,
 
 const S = {
   cards: [],
-  visuals: {},          // data/visuals.json（AA列がまだ空の既存カード用）
+  visuals: {},          // data/visuals.json（イメージ図列がまだ空の既存カード用）
   settings: { ...DEFAULT_SETTINGS },
   intervals: srs.DEFAULT_INTERVALS,
   sync: null,
@@ -40,7 +40,7 @@ const byId = id => S.cards.find(c => c.ID === id);
 const configured = () => !!(S.settings.apiUrl && S.settings.token);
 const WEEK = ['日', '月', '火', '水', '木', '金', '土'];
 
-/** カードのイメージ図：シートの AA列「イメージ図」が優先。空なら同梱の data/visuals.json */
+/** カードのイメージ図：シートの「イメージ図」列（AC）が優先。空なら同梱の data/visuals.json */
 function visualOf(card) {
   return parseVisual(card?.['イメージ図']) || parseVisual(S.visuals[card?.ID]);
 }

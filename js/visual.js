@@ -1,7 +1,7 @@
-// イメージ図：カードの「イメージ図」（AA列）の JSON から、絵（SVG）を組み立てる。
+// イメージ図：カードの「イメージ図」列（AC列。見出し名で探す）の JSON から、絵（SVG）を組み立てる。
 // 型は motion / body / kanji / timeline / contrast / scale の6つ。
 // ラベル a・b・label は絵の下に HTML で出す（SVG の中に文字を入れない）。
-// シートの AA 列が空のカードは、data/visuals.json（既存カード用）を使う。
+// シートのイメージ図列が空のカードは、data/visuals.json（既存カード用）を使う。
 
 const W = 240;
 const H = 120;
@@ -383,7 +383,7 @@ function drawScale(spec) {
 
 const TYPES = ['motion', 'body', 'kanji', 'timeline', 'contrast', 'scale'];
 
-/** AA列の文字列（またはオブジェクト）を、正しい形の spec にする。使えなければ null */
+/** イメージ図列の文字列（またはオブジェクト）を、正しい形の spec にする。使えなければ null */
 export function parseVisual(raw) {
   if (!raw) return null;
   let spec = raw;

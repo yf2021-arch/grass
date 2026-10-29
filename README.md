@@ -59,10 +59,10 @@ Claude（grass-card-extractor）──register──▶ Apps Script ◀──pul
 
 - 復習の表では、ヒント1が **イメージ図**（絵）になります。絵のないカードは、これまでどおり根源イメージの文です
 - 裏の「語源・根源・イメージ図」に同じ絵が出ます。同じ家族のカードがあれば「語の家族」から一覧で見比べられます
-- 絵は AA列「イメージ図」の JSON から、アプリが描きます（型は motion／body／kanji／timeline／contrast／scale）
-- 既存の139枚の絵は `data/visuals.json` に入っていて、AA列が空でもアプリに表示されます
+- 絵は 「イメージ図」列（AC列）の JSON から、アプリが描きます（型は motion／body／kanji／timeline／contrast／scale）
+- 既存の139枚の絵は `data/visuals.json` に入っていて、イメージ図列が空でもアプリに表示されます
 - シートにも入れたいときは、`gas/ImportVisuals.gs` を Apps Script に追加して `grassImportVisuals` を一度実行します
-  （AA列の見出しを作り、空のセルにだけ書きます）。新しいカードは、Claude のスキルが最初から AA列に入れます
+  （見出し「イメージ図」がなければ右端の次の列＝今は AC列に作り、空のセルにだけ書きます）。新しいカードは、Claude のスキルが最初からこの列に入れます。列は見出し名で探すので、位置が変わっても動きます
 - 絵を直すときは `tools/build_visuals.py` を編集して `python3 tools/build_visuals.py` を実行します。
   `tools/gallery.html` で全部の絵を一覧できます
 
@@ -84,7 +84,7 @@ Claude（grass-card-extractor）──register──▶ Apps Script ◀──pul
 | `js/demo.js` | デモ用カード |
 | `js/visual.js` | イメージ図を描く（型ごとのテンプレート） |
 | `data/visuals.json` | 既存カードのイメージ図と語の家族 |
-| `gas/ImportVisuals.gs` | 既存カードの AA列「イメージ図」を埋める Apps Script |
+| `gas/ImportVisuals.gs` | 既存カードの「イメージ図」列（AC列）を埋める Apps Script |
 | `tools/` | イメージ図のデータ作成と一覧（開発用） |
 | `sw.js` | オフライン対応（Service Worker） |
 | `manifest.webmanifest`, `icons/` | インストール用 |
