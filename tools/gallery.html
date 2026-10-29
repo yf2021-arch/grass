@@ -21,7 +21,8 @@
   import { parseVisual, visualHtml } from '../js/visual.js';
   const data = (await (await fetch('../data/visuals.json')).json()).cards;
   const names = await (await fetch('names.json').catch(() => null))?.json?.().catch(() => ({})) || {};
-  document.getElementById('g').innerHTML = Object.entries(data).map(([id, v]) => {
+  const only = new URLSearchParams(location.search).get('rev');
+  document.getElementById('g').innerHTML = Object.entries(data).filter(([, v]) => !only || String(v.rev || 1) === only).map(([id, v]) => {
     const s = parseVisual(v);
     return `<div class="c"><h3>${names[id] || id}</h3><small>${id} · ${v.type}${v.motion ? ' / ' + v.motion : ''}${v.mark ? ' / ' + v.mark : ''}${v.family ? ' · 家族:' + v.family : ''}</small>${visualHtml(s)}</div>`;
   }).join('');

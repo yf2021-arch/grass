@@ -344,11 +344,12 @@ a { color: var(--accent); }
 /* ---------- イメージ図 ---------- */
 .visual { margin: 0; display: flex; flex-direction: column; gap: 8px; }
 .v-svg { width: 100%; max-width: 360px; height: auto; align-self: center; overflow: visible; }
-.v-svg path, .v-svg rect, .v-svg circle { fill: none; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.v-svg path, .v-svg rect, .v-svg circle, .v-svg ellipse { fill: none; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 .v-svg .s-i { stroke: var(--text); }
 .v-svg .s-a { stroke: var(--accent); }
 .v-svg .s-f { stroke: var(--dash); }
 .v-svg .s-w { stroke: var(--wrong); }
+.v-svg .s-g { stroke: var(--good); stroke-width: 3; }
 .v-svg .dash { stroke-dasharray: 5 5; }
 .v-svg .thick { stroke-width: 5; }
 .v-svg .op6 { opacity: .6; }

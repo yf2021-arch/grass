@@ -9,7 +9,7 @@
  * することは2つだけです：
  *   - 01_知識カード の見出しに「イメージ図」がなければ、いちばん右の次の列に作る
  *   - GitHub Pages の data/visuals.json を読み、ID が一致し、イメージ図が空のカードにだけ書く
- *     （すでに入っているセルは上書きしません。何度実行しても同じ結果です）
+ *     （入っているセルは、visuals.json の版（rev）のほうが新しいときだけ置き換えます。何度実行しても安全です）
  */
 const GRASS_VISUALS_URL = 'https://yf2021-arch.github.io/grass/data/visuals.json';
 
@@ -41,7 +41,14 @@ function grassImportVisuals() {
   let written = 0;
   const next = current.map((row, i) => {
     const id = String(ids[i][0]).trim();
-    if (String(row[0]).trim() || !visuals[id]) return [row[0]];
+    const cur = String(row[0]).trim();
+    if (!visuals[id]) return [row[0]];
+    if (cur) {
+      // 既に入っている絵は、同梱の絵のほうが新しい版（rev）のときだけ置き換える
+      let curRev = 1;
+      try { curRev = Number(JSON.parse(cur).rev) || 1; } catch (e) { return [row[0]]; }
+      if ((Number(visuals[id].rev) || 1) <= curRev) return [row[0]];
+    }
     written += 1;
     return [JSON.stringify(visuals[id])];
   });

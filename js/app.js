@@ -42,7 +42,11 @@ const WEEK = ['日', '月', '火', '水', '木', '金', '土'];
 
 /** カードのイメージ図：シートの「イメージ図」列（AC）が優先。空なら同梱の data/visuals.json */
 function visualOf(card) {
-  return parseVisual(card?.['イメージ図']) || parseVisual(S.visuals[card?.ID]);
+  const fromSheet = parseVisual(card?.['イメージ図']);
+  const bundled = parseVisual(S.visuals[card?.ID]);
+  // 同梱の絵のほうが新しい版（rev）なら、シートに反映される前でもそちらを使う
+  if (fromSheet && bundled && (Number(bundled.rev) || 1) > (Number(fromSheet.rev) || 1)) return bundled;
+  return fromSheet || bundled;
 }
 
 /** 語の家族：関連タグの「家族:〇〇」、なければイメージ図の family */
@@ -874,7 +878,7 @@ function renderSettings() {
             <button class="outline quiet" data-act="${S.settings.demo ? 'demo-off' : 'demo-on'}">${S.settings.demo ? 'デモを終了' : 'デモデータで試す'}</button>
           </div>
         </section>
-        <p class="small" style="text-align:center">Grass v1.1.0</p>
+        <p class="small" style="text-align:center">Grass v1.2.0</p>
       </main>
       ${nav('settings')}
     </div>`;

@@ -60,7 +60,7 @@ Claude（grass-card-extractor）──register──▶ Apps Script ◀──pul
 - 復習の表では、ヒント1が **イメージ図**（絵）になります。絵のないカードは、これまでどおり根源イメージの文です
 - 裏の「語源・根源・イメージ図」に同じ絵が出ます。同じ家族のカードがあれば「語の家族」から一覧で見比べられます
 - 絵は 「イメージ図」列（AC列）の JSON から、アプリが描きます（型は motion／body／kanji／timeline／contrast／scale）
-- 既存の139枚の絵は `data/visuals.json` に入っていて、イメージ図列が空でもアプリに表示されます
+- 既存の139枚の絵は `data/visuals.json` に入っていて（描き直した絵は `rev: 2`。シートの絵より版が新しければアプリはこちらを使う）、イメージ図列が空でもアプリに表示されます
 - シートにも入れたいときは、`gas/ImportVisuals.gs` を Apps Script に追加して `grassImportVisuals` を一度実行します
   （見出し「イメージ図」がなければ右端の次の列＝今は AC列に作り、空のセルにだけ書きます）。新しいカードは、Claude のスキルが最初からこの列に入れます。列は見出し名で探すので、位置が変わっても動きます
 - 絵を直すときは `tools/build_visuals.py` を編集して `python3 tools/build_visuals.py` を実行します。

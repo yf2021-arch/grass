@@ -3,10 +3,11 @@
  "cards": {
   "JP-0001": {
    "type": "motion",
-   "motion": "matomeru",
-   "a": "ばらばら",
-   "b": "一つの束",
-   "family": "まとまる"
+   "motion": "tabaneru",
+   "a": "ばらばらの棒",
+   "b": "帯で一つに束ねる",
+   "family": "まとまる",
+   "rev": 2
   },
   "JP-0002": {
    "type": "motion",
@@ -23,9 +24,10 @@
   },
   "JP-0004": {
    "type": "motion",
-   "motion": "osamaru",
-   "a": "現実の範囲",
-   "b": "成立できる余地"
+   "motion": "yochi",
+   "a": "現実の中に",
+   "b": "まだ入る余地がある",
+   "rev": 2
   },
   "JP-0005": {
    "type": "motion",
@@ -68,10 +70,11 @@
   },
   "JP-0010": {
    "type": "motion",
-   "motion": "sashikomu",
-   "a": "並び・境界",
-   "b": "割って中へ",
-   "family": "込む"
+   "motion": "warikomu",
+   "a": "並び",
+   "b": "押し広げて中へ",
+   "family": "込む",
+   "rev": 2
   },
   "JP-0011": {
    "type": "motion",
@@ -96,45 +99,51 @@
   },
   "JP-0014": {
    "type": "timeline",
-   "mark": "each",
+   "mark": "everysame",
    "a": "毎回",
-   "b": "同じように扱う",
-   "family": "たびに"
+   "b": "いつも同じ対応",
+   "family": "たびに",
+   "rev": 2
   },
   "JP-0015": {
    "type": "timeline",
    "mark": "each",
    "a": "起きるたび",
-   "b": "その場で対応",
-   "family": "たびに"
+   "b": "その時に合わせて対応",
+   "family": "たびに",
+   "rev": 2
   },
   "JP-0016": {
    "type": "timeline",
-   "mark": "each",
-   "a": "一回",
-   "b": "一回ずつ処理",
-   "family": "たびに"
+   "mark": "kaigoto",
+   "a": "一回ごと",
+   "b": "一回を単位に区切る",
+   "family": "たびに",
+   "rev": 2
   },
   "JP-0017": {
-   "type": "scale",
-   "pos": "rise",
-   "a": "使った量",
-   "b": "料金も増える",
-   "family": "課金"
+   "type": "motion",
+   "motion": "hirei",
+   "a": "使った量が増える",
+   "b": "料金も上がる",
+   "family": "課金",
+   "rev": 2
   },
   "JP-0018": {
-   "type": "timeline",
-   "mark": "repeat",
-   "a": "毎月",
-   "b": "決まった額",
-   "family": "課金"
+   "type": "motion",
+   "motion": "teigaku",
+   "a": "使った量が増えても",
+   "b": "料金はいつも同じ",
+   "family": "課金",
+   "rev": 2
   },
   "JP-0019": {
    "type": "timeline",
-   "mark": "before",
-   "a": "先に頭で作る",
-   "b": "前提に置く",
-   "family": "前もって"
+   "mark": "soutei",
+   "a": "まだ起きていない",
+   "b": "頭の中で先に作る",
+   "family": "前もって",
+   "rev": 2
   },
   "JP-0020": {
    "type": "motion",
@@ -151,18 +160,11 @@
    "family": "前もって"
   },
   "JP-0022": {
-   "type": "kanji",
-   "parts": [
-    {
-     "char": "要",
-     "meaning": "必要・大切"
-    },
-    {
-     "char": "件",
-     "meaning": "事柄"
-    }
-   ],
-   "scene": "必ず満たす項目"
+   "type": "motion",
+   "motion": "checklist",
+   "a": "目的のために",
+   "b": "必ず満たす項目",
+   "rev": 2
   },
   "JP-0023": {
    "type": "body",
@@ -262,10 +264,11 @@
   },
   "JP-0040": {
    "type": "motion",
-   "motion": "chijimu",
-   "a": "大きく広がる",
+   "motion": "asshuku",
+   "a": "両側から押す",
    "b": "ぎゅっと小さく",
-   "family": "大きさ"
+   "family": "大きさ",
+   "rev": 2
   },
   "JP-0041": {
    "type": "motion",
@@ -289,10 +292,11 @@
   },
   "JP-0044": {
    "type": "motion",
-   "motion": "tadoru",
+   "motion": "tsuiseki",
    "a": "残された跡",
-   "b": "行き先",
-   "family": "たどる"
+   "b": "相手を追いかける",
+   "family": "たどる",
+   "rev": 2
   },
   "JP-0045": {
    "type": "motion",
@@ -315,16 +319,18 @@
   },
   "JP-0048": {
    "type": "motion",
-   "motion": "kumitate",
-   "a": "小さな部品",
-   "b": "一つの全体",
-   "family": "まとまる"
+   "motion": "youso",
+   "a": "一つの全体",
+   "b": "その中の一部",
+   "family": "まとまる",
+   "rev": 2
   },
   "JP-0049": {
-   "type": "scale",
-   "pos": 85,
-   "a": "いまいち",
-   "b": "いい感じ"
+   "type": "motion",
+   "motion": "ikeru",
+   "a": "行ける＝通れる",
+   "b": "うまくいく・いい感じ",
+   "rev": 2
   },
   "JP-0050": {
    "type": "motion",
@@ -341,10 +347,11 @@
    "family": "分ける"
   },
   "JP-0052": {
-   "type": "scale",
-   "pos": 30,
-   "a": "まだ柔らかい",
-   "b": "固まる・決まる"
+   "type": "motion",
+   "motion": "katamaru",
+   "a": "液体",
+   "b": "まだ柔らかい（今ここ）",
+   "rev": 2
   },
   "JP-0053": {
    "type": "motion",
@@ -394,41 +401,47 @@
   },
   "JP-0059": {
    "type": "motion",
-   "motion": "dodai",
-   "a": "前提",
-   "b": "その上に推論",
-   "family": "土台"
+   "motion": "zentei",
+   "a": "先に置く条件",
+   "b": "その上で考える",
+   "family": "土台",
+   "rev": 2
   },
   "JP-0060": {
    "type": "motion",
-   "motion": "susumu",
+   "motion": "yosoku",
    "a": "状態＋行動",
-   "b": "Next State"
+   "b": "次の状態を予測",
+   "rev": 2
   },
   "JP-0061": {
-   "type": "scale",
-   "pos": "edge",
+   "type": "motion",
+   "motion": "sura",
    "a": "普通の範囲",
-   "b": "極端な例まで"
+   "b": "極端な例まで内側に",
+   "rev": 2
   },
   "JP-0062": {
-   "type": "scale",
-   "pos": "rise",
-   "a": "程度が上がる",
-   "b": "結果も上がる"
+   "type": "motion",
+   "motion": "hirei",
+   "a": "程度が上がるほど",
+   "b": "結果も上がる",
+   "rev": 2
   },
   "JP-0063": {
    "type": "motion",
-   "motion": "koeru",
-   "a": "予想される壁",
-   "b": "反対の結果へ"
+   "motion": "gyaku",
+   "a": "予想される結果",
+   "b": "反対の結果へ",
+   "rev": 2
   },
   "JP-0064": {
    "type": "motion",
-   "motion": "sashikomu",
-   "a": "進む流れ",
-   "b": "途中に手を入れる",
-   "family": "込む"
+   "motion": "kainyuu",
+   "a": "進んでいる流れ",
+   "b": "途中で向きを変える",
+   "family": "込む",
+   "rev": 2
   },
   "JP-0065": {
    "type": "motion",
@@ -439,10 +452,11 @@
   },
   "JP-0066": {
    "type": "motion",
-   "motion": "susumu",
+   "motion": "suiron",
    "a": "分かっている情報",
-   "b": "新しい結論",
-   "family": "考える"
+   "b": "まだ見えない結論",
+   "family": "考える",
+   "rev": 2
   },
   "JP-0067": {
    "type": "body",
@@ -458,9 +472,10 @@
   },
   "JP-0069": {
    "type": "motion",
-   "motion": "wakeru",
+   "motion": "konasu",
    "a": "大きな仕事",
-   "b": "小分けにさばく"
+   "b": "小分けにさばく",
+   "rev": 2
   },
   "JP-0070": {
    "type": "motion",
@@ -483,10 +498,11 @@
    "b": "最後まで一本"
   },
   "JP-0073": {
-   "type": "body",
-   "part": "me",
-   "a": "世界を見る",
-   "b": "データにする"
+   "type": "motion",
+   "motion": "kansoku",
+   "a": "世界を見る・測る",
+   "b": "データにする",
+   "rev": 2
   },
   "JP-0074": {
    "type": "motion",
@@ -550,10 +566,11 @@
   },
   "JP-0084": {
    "type": "motion",
-   "motion": "ochiru",
+   "motion": "rakka",
    "a": "高い位置",
    "b": "重力方向へ",
-   "family": "落ちる"
+   "family": "落ちる",
+   "rev": 2
   },
   "JP-0085": {
    "type": "motion",
@@ -629,16 +646,18 @@
   },
   "JP-0096": {
    "type": "motion",
-   "motion": "tenbin",
-   "a": "手放すもの",
-   "b": "得たい目的"
+   "motion": "tebanasu",
+   "a": "大切なもの",
+   "b": "手放して目的を得る",
+   "rev": 2
   },
   "JP-0097": {
    "type": "motion",
-   "motion": "osamaru",
-   "a": "境界線",
-   "b": "内側ならOK",
-   "family": "許す"
+   "motion": "kyoyou",
+   "a": "多少のズレ",
+   "b": "範囲内ならOK",
+   "family": "許す",
+   "rev": 2
   },
   "JP-0098": {
    "type": "motion",
@@ -778,9 +797,10 @@
   },
   "JP-0137": {
    "type": "motion",
-   "motion": "mawaru",
+   "motion": "rimawari",
    "a": "出したお金",
-   "b": "戻ってくる割合"
+   "b": "増えて戻る割合",
+   "rev": 2
   },
   "JP-0138": {
    "type": "motion",
@@ -790,11 +810,12 @@
    "family": "たどる"
   },
   "JP-0139": {
-   "type": "body",
-   "part": "te",
+   "type": "motion",
+   "motion": "tegakari",
    "a": "先が見えない",
    "b": "つかんで次へ",
-   "family": "たどる"
+   "family": "たどる",
+   "rev": 2
   },
   "JP-0140": {
    "type": "motion",
@@ -804,9 +825,10 @@
   },
   "JP-0141": {
    "type": "motion",
-   "motion": "yureru",
+   "motion": "bibiru",
    "a": "大きな相手",
-   "b": "ビリビリひるむ"
+   "b": "震えて一歩下がる",
+   "rev": 2
   },
   "JP-0142": {
    "type": "timeline",
@@ -893,9 +915,10 @@
   },
   "JP-0156": {
    "type": "motion",
-   "motion": "mawaru",
+   "motion": "torasu",
    "a": "中心の穴",
-   "b": "外を回って戻る"
+   "b": "外を回って戻る",
+   "rev": 2
   },
   "JP-0157": {
    "type": "motion",
@@ -912,10 +935,11 @@
   },
   "JP-0159": {
    "type": "motion",
-   "motion": "koeru",
+   "motion": "buchikoeru",
    "a": "限界・予想",
-   "b": "勢いよく突破",
-   "family": "基準線"
+   "b": "蹴散らして突破",
+   "family": "基準線",
+   "rev": 2
   },
   "JP-0160": {
    "type": "kanji",
@@ -938,18 +962,11 @@
    "b": "残る一本"
   },
   "JP-0162": {
-   "type": "kanji",
-   "parts": [
-    {
-     "char": "疒",
-     "meaning": "やまいだれ"
-    },
-    {
-     "char": "辟",
-     "meaning": "かたよる"
-    }
-   ],
-   "scene": "かたよった習性"
+   "type": "motion",
+   "motion": "kuse",
+   "a": "何度も同じ所",
+   "b": "自然にできた溝",
+   "rev": 2
   },
   "JP-0163": {
    "type": "motion",
