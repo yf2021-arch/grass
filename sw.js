@@ -1,7 +1,7 @@
 // オフラインでも開けるように、アプリ本体をキャッシュする。
 // アプリを更新したら VERSION を上げる（古いキャッシュは自動で消える）。
 
-const VERSION = 'grass-v1.3.0';
+const VERSION = 'grass-v1.4.0';
 const SHELL = [
   './',
   './index.html',
@@ -14,13 +14,15 @@ const SHELL = [
   './js/demo.js',
   './js/visual.js',
   './js/speak.js',
+  './js/cardaudio.js',
   './data/visuals.json',
   './data/chunks.json',
   './icons/icon-192.png',
   './icons/icon-512.png',
 ];
 const FONT_CACHE = 'grass-fonts';
-const AUDIO_CACHE = 'grass-audio';   // 話す練習の音声。アプリを更新しても残す（古いファイルはアプリ側が片付ける）
+const AUDIO_CACHE = 'grass-audio';
+const CARD_AUDIO_CACHE = 'grass-audio-cards';   // カードの音声（スマホに読み込んだもの）。絶対に消さない   // 話す練習の音声。アプリを更新しても残す（古いファイルはアプリ側が片付ける）
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -29,7 +31,7 @@ self.addEventListener('install', event => {
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== VERSION && k !== FONT_CACHE && k !== AUDIO_CACHE).map(k => caches.delete(k))))
+      .then(keys => Promise.all(keys.filter(k => ![VERSION, FONT_CACHE, AUDIO_CACHE, CARD_AUDIO_CACHE].includes(k)).map(k => caches.delete(k))))
       .then(() => self.clients.claim()),
   );
 });

@@ -442,3 +442,16 @@ a { color: var(--accent); }
 .v-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
 .mini.play { color: var(--muted); margin: -4px -6px 0 0; }
 .audio-row .kv b { font-size: 13px; }
+
+/* ---------- カードの音声・聞いて答える（v1.4.0） ---------- */
+.with-play { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.with-play > :first-child { min-width: 0; }
+.mini.play.lg { width: 44px; height: 44px; margin-top: 4px; }
+.mini.play.sm { height: 28px; min-width: 28px; padding: 0 4px; margin: -2px 0 -4px 2px; display: inline-flex; vertical-align: middle; }
+.mini.play.sm svg { width: 16px; height: 16px; }
+.fit-items { display: inline-flex; flex-wrap: wrap; gap: 4px 10px; }
+.fit-item { display: inline-flex; align-items: center; }
+.listen { justify-content: flex-start; }
+.listen-btn { margin-top: 8px; min-height: 160px; border-radius: 24px; border: 1.5px solid var(--accent); background: var(--accent-tint); color: var(--accent-strong); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; font-size: 18px; font-weight: 700; }
+.listen-btn svg { width: 40px; height: 40px; }
+.listen-btn small { font-size: 12px; font-weight: 400; color: var(--muted); min-height: 1em; }

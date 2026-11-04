@@ -95,6 +95,24 @@ Claude（grass-card-extractor）──register──▶ Apps Script ◀──pul
   クレジットは `manifest.json` の `credit` に入り、「話す」画面に表示されます
 - 今の音声：AivisSpeech「まい」（ノーマル、速さ 1.0）。モデルのライセンスは ACML 1.0（個人・商用とも可、クレジットは任意。なりすましや誤解を招く使い方などは禁止）
 
+## カードの音声と「聞いて答える」（v1.4.0）
+
+知識カードの音声は、**このスマホの中だけ**に置きます。例文に職場の内容が入ることがあるので、音声も元の文も公開リポジトリには入れません。
+
+1. PC で AivisSpeech を起動する
+2. まず10枚で試す：`python tools/make_card_audio.py --speaker 番号 --limit 10`
+   （カードはシートの API から読みます。URL と TOKEN を聞かれるので 10_API設定 から貼る。CSV なら `--csv ファイル名`）
+3. 聞いてアクセントを確かめ、よければ全部：`python tools/make_card_audio.py --speaker 番号`
+4. できた `grass-card-audio/grass-card-audio.pack` をスマホに移す（USB・Google ドライブなど）
+5. アプリの「設定 > カードの音声（このスマホだけ）> 音声パックを読み込む」で選ぶ
+
+- 音声にするのは：表現（「読み」のかなから）・自分の例文・合わない使い方の「→」のあとの正しい言い方・よく合う組み合わせ。✕ の間違いには付けません。言語が en のカードは作りません
+- 新しいカードが増えたら、もう一度実行して読み込み直すだけ（同じ文は作り直さない）。パックを読み込むと、前の音声と入れ替わります
+- 音声は Cache Storage の `grass-audio-cards` に入り、アプリを更新しても消えません。PC に残る `.pack` がバックアップです
+- **聞いて答える**（設定 > 学習）：オンにすると、例文の音声があるカードは、文字を出さずに音声から始まります（最初の1回は自動で再生）。
+  意味を言ってから「答えを見る」。聞いた回数は復習の記録（log の `listen`・`plays`）に残ります
+- `grass-card-audio/` と `*.pack` は `.gitignore` に入れてあります
+
 ## アプリを更新するとき
 
 ファイルを直したら、`sw.js` の `VERSION`（例：`grass-v1.1.0`）を上げてからアップロードしてください。
@@ -113,11 +131,12 @@ Claude（grass-card-extractor）──register──▶ Apps Script ◀──pul
 | `js/demo.js` | デモ用カード |
 | `js/visual.js` | イメージ図を描く（型ごとのテンプレート） |
 | `js/speak.js` | 話す練習（場面から言う・読んで顔を上げる・詰まりメモ・音声） |
+| `js/cardaudio.js` | カードの音声パックの読み込みと再生（スマホの中だけ） |
 | `data/chunks.json` | 話す練習の素材（職場の決まった言い方30個） |
 | `data/audio/` | 話す練習の音声（`tools/make_audio.py` で作る） |
 | `data/visuals.json` | 既存カードのイメージ図と語の家族 |
 | `gas/ImportVisuals.gs` | 既存カードの「イメージ図」列（AC列）を埋める Apps Script |
-| `tools/` | イメージ図のデータ作成と一覧、`make_audio.py`（AivisSpeech で音声を作る） |
+| `tools/` | イメージ図のデータ作成と一覧、`make_audio.py`（話す練習の音声）・`make_card_audio.py`（カードの音声パック） |
 | `sw.js` | オフライン対応（Service Worker） |
 | `manifest.webmanifest`, `icons/` | インストール用 |
 

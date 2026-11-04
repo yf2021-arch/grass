@@ -7,10 +7,11 @@ import { syncNow, testConnection, cleanUrl, cleanToken } from './sync.js';
 import { demoCards } from './demo.js';
 import { parseVisual, visualHtml } from './visual.js';
 import { createSpeak } from './speak.js';
+import { createCardAudio } from './cardaudio.js';
 
 const app = document.getElementById('app');
 
-const DEFAULT_SETTINGS = { apiUrl: '', token: '', newPerDay: 5, rootFirst: true, demo: false };
+const DEFAULT_SETTINGS = { apiUrl: '', token: '', newPerDay: 5, rootFirst: true, listenFirst: false, demo: false };
 
 const S = {
   cards: [],
@@ -198,6 +199,12 @@ function nav(current) {
 }
 
 const speak = createSpeak({ app, esc, go, nav, store, todayStr: srs.todayStr, addDays: srs.addDays, ICON });
+const cardAudio = createCardAudio({ store });
+
+/** カードの音声ボタン（その音声がこのスマホにあるときだけ出す） */
+const playBtn = (id, key, extra = '') => cardAudio.has(id, key)
+  ? `<button class="mini quiet play ${extra}" data-act="ca-play" data-id="${esc(id)}" data-k="${esc(key)}" aria-label="読み上げる">${ICON.speaker}</button>`
+  : '';
 
 function render() {
   const r = route();
@@ -361,6 +368,30 @@ function renderReview() {
   const card = byId(ss.ids[ss.i]);
   if (!card) { nextCard(); return; }
 
+  if (!ss.flipped && S.settings.listenFirst && cardAudio.has(card.ID, 'ex')) {
+    ss.listen = true;
+    const first = !ss.plays;
+    app.innerHTML = `
+      <div class="screen plain">
+        ${reviewHeader(card)}
+        <main class="scroll front listen">
+          <section class="sec"><h2>聞いて答える</h2>
+            <p class="scene">例文を聞いて、意味を言ってみる（どの言語でもかまいません）。分からなければ、何度でも聞き直してよい。</p>
+          </section>
+          <button class="listen-btn" data-act="ca-play" data-id="${esc(card.ID)}" data-k="ex">${ICON.speaker}<span>${first ? '例文を聞く' : 'もう一度聞く'}</span><small>${ss.plays ? `聞いた回数 ${ss.plays}` : ''}</small></button>
+        </main>
+        <footer class="rv-foot">
+          <p>聞いて意味を言ってから、答えを見る</p>
+          <button class="reveal" data-act="flip">答えを見る</button>
+        </footer>
+      </div>`;
+    if (first && !ss.autoPlayed) {           // 前のタップの直後なので、自動で1回流す（失敗してもボタンで聞ける）
+      ss.autoPlayed = true;
+      cardAudio.play(card.ID, 'ex').then(ok => { if (ok && S.session === ss && !ss.flipped) { ss.plays = (ss.plays || 0) + 1; render(); } });
+    }
+    return;
+  }
+
   if (!ss.flipped) {
     const hints = hintsFor(card);
     if (ss.hint === null) ss.hint = S.settings.rootFirst && hints[0]?.root ? 1 : 0;
@@ -434,9 +465,17 @@ function exampleHtml(card) {
   const ex = val(card, '自分の例文');
   if (!ex) return '';
   const hit = srs.findHighlight(ex, val(card, '表現'));
-  if (!hit) return `<p class="example">${esc(ex)}</p>`;
-  const [a, b] = hit;
-  return `<p class="example">${esc(ex.slice(0, a))}<mark>${esc(ex.slice(a, b))}</mark>${esc(ex.slice(b))}</p>`;
+  const text = hit
+    ? `${esc(ex.slice(0, hit[0]))}<mark>${esc(ex.slice(hit[0], hit[1]))}</mark>${esc(ex.slice(hit[1]))}`
+    : esc(ex);
+  const btn = playBtn(card.ID, 'ex');
+  return btn ? `<div class="with-play"><p class="example">${text}</p>${btn}</div>` : `<p class="example">${text}</p>`;
+}
+
+/** よく合う組み合わせ：音声があれば1つずつボタン付き、なければ「／」でつなぐ */
+function fitHtml(card, fit) {
+  if (!fit.some((_, i) => cardAudio.has(card.ID, `c${i + 1}`))) return esc(fit.join('／'));
+  return `<span class="fit-items">${fit.map((f, i) => `<span class="fit-item">${esc(f)}${playBtn(card.ID, `c${i + 1}`, 'sm')}</span>`).join('')}</span>`;
 }
 
 function panel(key, title, body, open, warn = false) {
@@ -447,12 +486,13 @@ function panel(key, title, body, open, warn = false) {
     </section>`;
 }
 
-function misuseLines(list) {
-  return list.map(raw => {
+function misuseLines(list, id = '') {
+  return list.map((raw, i) => {
     const t = raw.replace(/^[✗✕×]\s*/, '');
     const [wrong, ...rest] = t.split('→');
     const right = rest.join('→').trim();
-    return `<p><span class="ng-c">✕</span> ${esc(wrong.trim())}</p>${right ? `<p><span class="ok-c">→</span> ${esc(right)}</p>` : ''}`;
+    // 音声は正しい言い方にだけ付ける（✕ の間違いは鳴らさない）
+    return `<p><span class="ng-c">✕</span> ${esc(wrong.trim())}</p>${right ? `<p class="ok-line"><span class="ok-c">→</span> ${esc(right)}${id ? playBtn(id, `ok${i + 1}`, 'sm') : ''}</p>` : ''}`;
   }).join('');
 }
 
@@ -470,8 +510,8 @@ function backBody(card, panels) {
     out.push(`
       <section class="panel fit">
         <h3>合う使い方・合わない使い方</h3>
-        ${fit.length ? `<p class="fit-line"><b class="ok-c">合う</b><span>${esc(fit.join('／'))}</span></p>` : ''}
-        <div class="body" style="padding:0">${misuseLines(ng)}</div>
+        ${fit.length ? `<p class="fit-line"><b class="ok-c">合う</b><span>${fitHtml(card, fit)}</span></p>` : ''}
+        <div class="body" style="padding:0">${misuseLines(ng, card.ID)}</div>
       </section>`);
     if (memo) out.push(panel('memo', '発見メモ', `<p>${esc(memo)}</p>`, panels.memo));
   } else if (memo) {
@@ -484,7 +524,7 @@ function backBody(card, panels) {
   }
   if (syn.length || (fit.length && !ng.length) || en) {
     const parts = [];
-    if (fit.length && !ng.length) parts.push(`<p>${esc(fit.join('／'))}</p>`);
+    if (fit.length && !ng.length) parts.push(`<p>${fitHtml(card, fit)}</p>`);
     if (syn.length) {
       parts.push(`<div class="syn">${syn.map(x => {
         const k = x.search(/[：:]/);
@@ -508,7 +548,7 @@ function backBody(card, panels) {
   const source = val(card, '出典');
   return `
     <div style="display:flex;flex-direction:column;gap:6px">
-      <h1 class="word">${esc(val(card, '表現'))}</h1>
+      <div class="with-play"><h1 class="word">${esc(val(card, '表現'))}</h1>${playBtn(card.ID, 'w', 'lg')}</div>
       ${reading ? `<p class="reading">${esc(reading)}</p>` : ''}
     </div>
     ${exampleHtml(card)}
@@ -528,6 +568,7 @@ async function rate(result) {
     await applyProgress(card, progress);
     if (wasNew) await bumpNewDone();
     const entry = { date: srs.todayStr(), id: card.ID, result, used: ss.used, at: Date.now() };
+    if (ss.listen) { entry.listen = true; entry.plays = ss.plays || 0; }   // 「聞いて答える」で答えたカード
     await store.add('log', entry);
     S.log.push(entry);
     ss.counts[result] += 1;
@@ -549,6 +590,9 @@ function nextCard() {
   ss.hint = null;
   ss.used = false;
   ss.panels = null;
+  ss.listen = false;
+  ss.plays = 0;
+  ss.autoPlayed = false;
   if (ss.i >= ss.ids.length) {
     ss.summary = { ms: Date.now() - ss.startedAt };
     scheduleSync(300);
@@ -851,6 +895,21 @@ function renderSettings() {
               <span class="t"><b>根源イメージを最初から表示</b><span>オフにすると、ヒントはボタンで開きます</span></span>
               <span class="switch"><input type="checkbox" data-act="rootFirst" ${S.settings.rootFirst ? 'checked' : ''}><span></span></span>
             </label>
+            <label class="line">
+              <span class="t"><b>聞いて答える</b><span>例文の音声があるカードは、文字を出さずに音声から始めます</span></span>
+              <span class="switch"><input type="checkbox" data-act="listenFirst" ${S.settings.listenFirst ? 'checked' : ''}><span></span></span>
+            </label>
+          </div>
+        </section>
+
+        <section>
+          <h2>カードの音声（このスマホだけ）</h2>
+          <div class="group">
+            ${cardAudioStatus()}
+            <input type="file" id="ca-file" class="sr" tabindex="-1" aria-hidden="true">
+            <button class="outline" data-act="ca-import" ${S.ui.caBusy ? 'disabled' : ''}>${S.ui.caBusy ? esc(S.ui.caBusy) : '音声パックを読み込む'}</button>
+            ${cardAudio.count() ? '<button class="outline quiet" data-act="ca-clear">このスマホの音声を消す</button>' : ''}
+            <p class="small">パックは PC の tools/make_card_audio.py で作ります。例文に職場の内容が入ることがあるので、公開リポジトリには入れません。PC に残るパックがバックアップです。</p>
           </div>
         </section>
 
@@ -887,10 +946,38 @@ function renderSettings() {
             <button class="outline quiet" data-act="${S.settings.demo ? 'demo-off' : 'demo-on'}">${S.settings.demo ? 'デモを終了' : 'デモデータで試す'}</button>
           </div>
         </section>
-        <p class="small" style="text-align:center">Grass v1.3.0</p>
+        <p class="small" style="text-align:center">Grass v1.4.0</p>
       </main>
       ${nav('settings')}
     </div>`;
+}
+
+function cardAudioStatus() {
+  const h = cardAudio.info();
+  const msg = S.ui.caMsg ? `<p class="msg ${S.ui.caMsg.ok ? 'ok' : 'err'}">${esc(S.ui.caMsg.text)}</p>` : '';
+  if (!h) return `<div class="kv"><span>音声</span><b>未読み込み</b></div>${msg}`;
+  const cards = new Set(Object.keys(h.files || {}).map(k => k.split(':')[0])).size;
+  const when = h.loadedAt ? timeLabel(h.loadedAt) : '';
+  return `
+    <div class="kv"><span>音声</span><b>${cards}枚・${cardAudio.count()}個</b></div>
+    <div class="kv"><span>声</span><b>${esc(h.speaker?.name || '—')}${h.speaker?.style ? ` / ${esc(h.speaker.style)}` : ''}</b></div>
+    <div class="kv"><span>読み込み</span><b>${esc(when)}</b></div>
+    ${msg}
+    ${h.credit ? `<p class="small">${esc(h.credit)}</p>` : ''}`;
+}
+
+async function importCardAudio(file) {
+  S.ui.caBusy = '読み込み中…';
+  S.ui.caMsg = null;
+  render();
+  try {
+    const n = await cardAudio.importPack(file, (k, total) => { S.ui.caBusy = `読み込み中… ${k} / ${total}`; render(); });
+    S.ui.caMsg = { ok: true, text: `${n}個の音声を読み込みました` };
+  } catch (e) {
+    S.ui.caMsg = { ok: false, text: e.message };
+  }
+  S.ui.caBusy = null;
+  render();
 }
 
 async function saveConnection(form) {
@@ -977,7 +1064,19 @@ const actions = {
     go('#/today');
   },
 };
-Object.assign(actions, speak.actions);
+Object.assign(actions, speak.actions, {
+  'ca-play': async el => {
+    const ok = await cardAudio.play(el.dataset.id, el.dataset.k);
+    const ss = S.session;
+    if (ok && ss && route().name === 'review' && !ss.flipped && el.dataset.k === 'ex') { ss.plays = (ss.plays || 0) + 1; render(); }
+  },
+  'ca-import': () => document.getElementById('ca-file')?.click(),
+  'ca-clear': async () => {
+    await cardAudio.clear();
+    S.ui.caMsg = { ok: true, text: 'このスマホの音声を消しました' };
+    render();
+  },
+});
 
 app.addEventListener('click', e => {
   const fam = e.target.closest('a.fam-link');
@@ -992,6 +1091,16 @@ app.addEventListener('click', e => {
 });
 
 app.addEventListener('change', async e => {
+  if (e.target.id === 'ca-file') {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (file) importCardAudio(file);
+    return;
+  }
+  if (e.target.dataset.act === 'listenFirst') {
+    await saveSettings({ listenFirst: e.target.checked });
+    return;
+  }
   if (e.target.dataset.act === 'rootFirst') {
     await saveSettings({ rootFirst: e.target.checked });
   }
@@ -1027,7 +1136,7 @@ document.addEventListener('visibilitychange', () => {
 
 (async function boot() {
   try {
-    await Promise.all([loadAll(), loadVisuals(), speak.load()]);
+    await Promise.all([loadAll(), loadVisuals(), speak.load(), cardAudio.load()]);
   } catch (e) {
     app.innerHTML = `<div class="empty"><h2>データを開けません</h2><p>${esc(e.message)}</p></div>`;
     return;
