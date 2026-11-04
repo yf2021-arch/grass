@@ -1,3 +1,4 @@
 # カードの音声（職場の内容が入ることがあるので公開しない）
 grass-card-audio/
 *.pack
+__pycache__/
