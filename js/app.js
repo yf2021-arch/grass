@@ -946,7 +946,7 @@ function renderSettings() {
             <button class="outline quiet" data-act="${S.settings.demo ? 'demo-off' : 'demo-on'}">${S.settings.demo ? 'デモを終了' : 'デモデータで試す'}</button>
           </div>
         </section>
-        <p class="small" style="text-align:center">Grass v1.4.0</p>
+        <p class="small" style="text-align:center">Grass v1.4.1</p>
       </main>
       ${nav('settings')}
     </div>`;
@@ -956,14 +956,26 @@ function cardAudioStatus() {
   const h = cardAudio.info();
   const msg = S.ui.caMsg ? `<p class="msg ${S.ui.caMsg.ok ? 'ok' : 'err'}">${esc(S.ui.caMsg.text)}</p>` : '';
   if (!h) return `<div class="kv"><span>音声</span><b>未読み込み</b></div>${msg}`;
-  const cards = new Set(Object.keys(h.files || {}).map(k => k.split(':')[0])).size;
+  const ids = [...new Set(Object.keys(h.files || {}).map(k => k.slice(0, k.lastIndexOf(':'))))];
+  const matched = ids.map(id => byId(id)).filter(Boolean);
+  const missing = ids.length - matched.length;
   const when = h.loadedAt ? timeLabel(h.loadedAt) : '';
+  const open = S.ui.caList;
+  const list = matched.map(c => `
+      <a class="result" href="#/card/${encodeURIComponent(c.ID)}">
+        <span class="l"><span class="w"><b>${esc(val(c, '表現'))}</b><span>${esc(val(c, '主分類'))}</span></span><span>${esc(val(c, '日本語の意味'))}</span></span>
+        <span class="r"><span class="st s-${esc(val(c, '状態'))}">${esc(val(c, '状態') || '—')}</span><small>${srs.nextLabel(c)}</small></span>
+      </a>`).join('');
   return `
-    <div class="kv"><span>音声</span><b>${cards}枚・${cardAudio.count()}個</b></div>
+    <div class="kv"><span>音声</span><b>${ids.length}枚・${cardAudio.count()}個</b></div>
+    <div class="kv"><span>このスマホのカードと一致</span><b>${matched.length} / ${ids.length}枚</b></div>
+    ${missing ? `<p class="msg err">${missing}枚は、このスマホのカードに見つかりません（ID が違うか、まだ同期していないカードです）。同期してから開き直してください。</p>` : ''}
     <div class="kv"><span>声</span><b>${esc(h.speaker?.name || '—')}${h.speaker?.style ? ` / ${esc(h.speaker.style)}` : ''}</b></div>
     <div class="kv"><span>読み込み</span><b>${esc(when)}</b></div>
     ${msg}
-    ${h.credit ? `<p class="small">${esc(h.credit)}</p>` : ''}`;
+    ${h.credit ? `<p class="small">${esc(h.credit)}</p>` : ''}
+    ${matched.length ? `<button class="outline quiet" data-act="ca-list" aria-expanded="${!!open}">${open ? '一覧を閉じる' : `音声のあるカードを見る（${matched.length}枚）`}</button>` : ''}
+    ${open && matched.length ? `<div class="results ca-list">${list}</div>` : ''}`;
 }
 
 async function importCardAudio(file) {
@@ -1071,6 +1083,12 @@ Object.assign(actions, speak.actions, {
     if (ok && ss && route().name === 'review' && !ss.flipped && el.dataset.k === 'ex') { ss.plays = (ss.plays || 0) + 1; render(); }
   },
   'ca-import': () => document.getElementById('ca-file')?.click(),
+  'ca-list': () => {
+    S.ui.caList = !S.ui.caList;
+    const top = app.querySelector('.scroll')?.scrollTop || 0;
+    render();
+    app.querySelector('.scroll')?.scrollTo(0, top);
+  },
   'ca-clear': async () => {
     await cardAudio.clear();
     S.ui.caMsg = { ok: true, text: 'このスマホの音声を消しました' };
