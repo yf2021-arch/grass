@@ -67,8 +67,8 @@ def style_name(sp_list, style_id):
     for sp in sp_list:
         for st in sp.get('styles', []):
             if st.get('id') == style_id:
-                return sp.get('name', ''), st.get('name', '')
-    return None, None
+                return sp.get('name', ''), st.get('name', ''), sp
+    return None, None, None
 
 
 def texts(chunk):
@@ -115,7 +115,7 @@ def main():
             print('\n例：python tools/make_audio.py --speaker 番号')
         return
 
-    name, style = style_name(sp_list, args.speaker)
+    name, style, sp = style_name(sp_list, args.speaker)
     if name is None:
         sys.exit(f'番号 {args.speaker} の声が見つかりません。--list で確認してください。')
 
@@ -167,7 +167,8 @@ def main():
 
     manifest = {
         'engine': 'AivisSpeech',
-        'speaker': {'id': args.speaker, 'name': name, 'style': style},
+        'speaker': {'id': args.speaker, 'name': name, 'style': style,
+                    'uuid': sp.get('speaker_uuid', ''), 'version': sp.get('version', '')},   # 使ったモデルを後から特定できるように
         'speed': args.speed,
         'credit': f'音声：AivisSpeech（{name}）',
         'files': files,
