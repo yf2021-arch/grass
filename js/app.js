@@ -1,11 +1,12 @@
 // Grass — 画面と操作
-// 画面：#/today 今日・#/review 復習・#/done 完了・#/inbox 受信箱・#/search 検索・#/card/ID 詳細・#/family/名前 語の家族・#/settings 設定
+// 画面：#/today 今日・#/review 復習・#/done 完了・#/inbox 受信箱・#/speak 話す・#/drill 話す練習・#/search 検索・#/card/ID 詳細・#/family/名前 語の家族・#/settings 設定
 
 import * as store from './store.js';
 import * as srs from './srs.js';
 import { syncNow, testConnection, cleanUrl, cleanToken } from './sync.js';
 import { demoCards } from './demo.js';
 import { parseVisual, visualHtml } from './visual.js';
+import { createSpeak } from './speak.js';
 
 const app = document.getElementById('app');
 
@@ -92,6 +93,8 @@ const ICON = {
   home: '<svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10.5L12 4l8 6.5V20h-5v-6H9v6H4z"/></svg>',
   inbox: '<svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13l2.5-8h11L20 13v6H4z"/><path d="M4 13h5l1 2h4l1-2h5"/></svg>',
   find: '<svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg>',
+  speak: '<svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5h16v10H10l-4.5 3.5V15.5H4z"/><path d="M8.5 9.5h7M8.5 12h4"/></svg>',
+  speaker: '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>',
   gear: '<svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4"/></svg>',
 };
 
@@ -191,12 +194,14 @@ function go(hash) {
 function nav(current) {
   const item = (name, label, icon) =>
     `<a href="#/${name}" ${current === name ? 'aria-current="page"' : ''}>${icon}${label}</a>`;
-  return `<nav class="nav" aria-label="メイン">${item('today', '今日', ICON.home)}${item('inbox', '受信箱', ICON.inbox)}${item('search', '検索', ICON.find)}${item('settings', '設定', ICON.gear)}</nav>`;
+  return `<nav class="nav" aria-label="メイン">${item('today', '今日', ICON.home)}${item('inbox', '受信箱', ICON.inbox)}${item('speak', '話す', ICON.speak)}${item('search', '検索', ICON.find)}${item('settings', '設定', ICON.gear)}</nav>`;
 }
+
+const speak = createSpeak({ app, esc, go, nav, store, todayStr: srs.todayStr, addDays: srs.addDays, ICON });
 
 function render() {
   const r = route();
-  const screens = { today: renderToday, review: renderReview, done: renderDone, inbox: renderInbox, search: renderSearch, card: renderDetail, family: renderFamily, settings: renderSettings };
+  const screens = { today: renderToday, review: renderReview, done: renderDone, inbox: renderInbox, speak: speak.renderSpeak, drill: speak.renderDrill, search: renderSearch, card: renderDetail, family: renderFamily, settings: renderSettings };
   (screens[r.name] || renderToday)(r.arg);
   refreshSyncBits();
 }
@@ -284,6 +289,10 @@ function renderToday() {
           <a class="row-link" href="#/inbox">
             <span class="t"><b>受信箱</b><span>毎日${S.settings.newPerDay}枚を優先度順・古い順で追加</span></span>
             <span class="n">${inboxCount}枚 ${ICON.chevron}</span>
+          </a>
+          <a class="row-link" href="#/speak">
+            <span class="t"><b>話す練習</b><span>場面から言う・読んで顔を上げる・詰まりメモ${speak.openCount() ? ` ${speak.openCount()}件` : ''}</span></span>
+            <span class="n">今日 ${speak.todayCount()}問 ${ICON.chevron}</span>
           </a>
           <section class="week" aria-label="今週の記録">
             <div class="week-head"><h2>今週の記録</h2><span>復習 ${reviews} · 職場で使えた ${usedWeek}</span></div>
@@ -878,7 +887,7 @@ function renderSettings() {
             <button class="outline quiet" data-act="${S.settings.demo ? 'demo-off' : 'demo-on'}">${S.settings.demo ? 'デモを終了' : 'デモデータで試す'}</button>
           </div>
         </section>
-        <p class="small" style="text-align:center">Grass v1.2.0</p>
+        <p class="small" style="text-align:center">Grass v1.3.0</p>
       </main>
       ${nav('settings')}
     </div>`;
@@ -968,6 +977,7 @@ const actions = {
     go('#/today');
   },
 };
+Object.assign(actions, speak.actions);
 
 app.addEventListener('click', e => {
   const fam = e.target.closest('a.fam-link');
@@ -996,8 +1006,11 @@ app.addEventListener('input', e => {
 });
 
 app.addEventListener('submit', e => {
-  const form = e.target.closest('[data-form="conn"]');
-  if (form) { e.preventDefault(); saveConnection(form); }
+  const form = e.target.closest('[data-form]');
+  if (!form) return;
+  e.preventDefault();
+  if (form.dataset.form === 'conn') saveConnection(form);
+  else speak.onSubmit(form);
 });
 
 window.addEventListener('hashchange', render);
@@ -1014,20 +1027,21 @@ document.addEventListener('visibilitychange', () => {
 
 (async function boot() {
   try {
-    await Promise.all([loadAll(), loadVisuals()]);
+    await Promise.all([loadAll(), loadVisuals(), speak.load()]);
   } catch (e) {
     app.innerHTML = `<div class="empty"><h2>データを開けません</h2><p>${esc(e.message)}</p></div>`;
     return;
   }
   const r = route().name;
   if (r === 'review' || r === 'done') location.replace('#/today');
+  if (r === 'drill') location.replace('#/speak');
   render();
   if (configured() && !S.settings.demo) runSync();
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     const hadController = !!navigator.serviceWorker.controller;
     let reloaded = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (!hadController || reloaded || route().name === 'review') return;   // 復習の途中では再読み込みしない
+      if (!hadController || reloaded || ['review', 'drill'].includes(route().name)) return;   // 復習・練習の途中では再読み込みしない
       reloaded = true;
       location.reload();
     });

@@ -1,7 +1,7 @@
 // オフラインでも開けるように、アプリ本体をキャッシュする。
 // アプリを更新したら VERSION を上げる（古いキャッシュは自動で消える）。
 
-const VERSION = 'grass-v1.2.0';
+const VERSION = 'grass-v1.3.0';
 const SHELL = [
   './',
   './index.html',
@@ -13,11 +13,14 @@ const SHELL = [
   './js/sync.js',
   './js/demo.js',
   './js/visual.js',
+  './js/speak.js',
   './data/visuals.json',
+  './data/chunks.json',
   './icons/icon-192.png',
   './icons/icon-512.png',
 ];
 const FONT_CACHE = 'grass-fonts';
+const AUDIO_CACHE = 'grass-audio';   // 話す練習の音声。アプリを更新しても残す（古いファイルはアプリ側が片付ける）
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -26,7 +29,7 @@ self.addEventListener('install', event => {
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== VERSION && k !== FONT_CACHE).map(k => caches.delete(k))))
+      .then(keys => Promise.all(keys.filter(k => k !== VERSION && k !== FONT_CACHE && k !== AUDIO_CACHE).map(k => caches.delete(k))))
       .then(() => self.clients.claim()),
   );
 });
@@ -51,6 +54,20 @@ self.addEventListener('fetch', event => {
   }
 
   if (url.origin !== self.location.origin) return;
+
+  // 音声：キャッシュ優先。ファイル名に文の記号が入っているので、一度取ったら取り直さない
+  if (/\/data\/audio\/[^/]+\.(mp3|wav)$/.test(url.pathname)) {
+    event.respondWith(
+      caches.open(AUDIO_CACHE).then(async cache => {
+        const hit = await cache.match(req, { ignoreSearch: true });
+        if (hit) return hit;
+        const res = await fetch(req);
+        if (res.ok && res.status === 200) cache.put(req, res.clone());
+        return res;
+      }),
+    );
+    return;
+  }
 
   // アプリ本体：まずネットから新しい版を取り、つながらないときはキャッシュを返す
   event.respondWith(

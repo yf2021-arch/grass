@@ -66,6 +66,34 @@ Claude（grass-card-extractor）──register──▶ Apps Script ◀──pul
 - 絵を直すときは `tools/build_visuals.py` を編集して `python3 tools/build_visuals.py` を実行します。
   `tools/gallery.html` で全部の絵を一覧できます
 
+## 話す練習（v1.3.0）
+
+下のナビの「話す」から使います。シートにも Apps Script にも変更はありません。記録と詰まりメモは、このスマホの中（IndexedDB の meta）にだけ保存されます。
+
+- **場面から言う**：場面の説明を見て、日本語で声に出して言う →「答えを見る」→ 型・説明・1か所だけ変えた言い換え3つを確かめる →「言えた／詰まった」
+  - 答えを見るまでの秒数を自動で記録します（「話す」画面に今週の回数と平均を表示）
+- **読んで、顔を上げて言う**（Read and Look Up）：文を読んで覚える →「顔を上げる」で文が隠れる → だれかに話すつもりで言う。
+  「ちらっと見る」は1.5秒だけ文を出し、見た回数を記録します
+- 出す順：まだ練習していないもの → 前回「詰まった」もの → 前回からいちばん時間がたったもの。機能（報告・確認・相談・依頼・お詫び・動作・状態・会議）で絞り込めます
+- **詰まりメモ**：言えなかったことを一行だけ記録（中国語・英語でも可）。分かった言い方を後から足せます。
+  「まとめてコピー」で `REGISTER:` の文になるので、Claude に貼って送ると grass-card-extractor がカードにします。送ったら「送った分を片付ける」
+- 素材は `data/chunks.json` の30個。場面はすべて架空・一般的なもので、会社の情報は入れないでください
+
+### 音声（AivisSpeech）
+
+答えと言い換えの 🔊 は、`data/audio/` の音声ファイルを再生します。ファイルがない文は端末の読み上げを使い、それもなければ案内を出します。
+
+1. PC で AivisSpeech を起動する
+2. `python tools/make_audio.py --list` で声の番号を調べる
+3. `python tools/make_audio.py --speaker 番号`（聞き取り練習なら `--speed 0.9` も）
+4. できた `data/audio/`（音声＋`manifest.json`）をリポジトリに入れて公開する
+
+- ファイル名に「文＋声＋速さ」の記号が付くので、文を直して作り直すと、その文だけが新しくなります（古いファイルは削除）
+- スマホでは、一度再生した音声を `grass-audio` キャッシュに保存し、次からは通信しません。アプリを更新しても消えません。
+  「話す」画面の「音声をまとめてダウンロード」で、Wi-Fi のときに全部入れておくこともできます
+- **声のモデルのライセンス（ACML／ACML-NC／CC0 など）を確認してください。** リポジトリは公開なので、音声の公開が認められているモデルを使います。
+  クレジットは `manifest.json` の `credit` に入り、「話す」画面に表示されます
+
 ## アプリを更新するとき
 
 ファイルを直したら、`sw.js` の `VERSION`（例：`grass-v1.1.0`）を上げてからアップロードしてください。
@@ -77,15 +105,18 @@ Claude（grass-card-extractor）──register──▶ Apps Script ◀──pul
 |---|---|
 | `index.html` | 入口 |
 | `css/app.css` | デザイン（キャンバス「Grass Japanese PWA」の色・文字・寸法。ダークモード対応） |
-| `js/app.js` | 8つの画面と操作（語の家族を含む） |
+| `js/app.js` | 10の画面と操作（語の家族・話すを含む） |
 | `js/srs.js` | 復習のルール、今日のセッションの組み立て |
 | `js/sync.js` | シートとの同期 |
 | `js/store.js` | スマホ内の保存（IndexedDB） |
 | `js/demo.js` | デモ用カード |
 | `js/visual.js` | イメージ図を描く（型ごとのテンプレート） |
+| `js/speak.js` | 話す練習（場面から言う・読んで顔を上げる・詰まりメモ・音声） |
+| `data/chunks.json` | 話す練習の素材（職場の決まった言い方30個） |
+| `data/audio/` | 話す練習の音声（`tools/make_audio.py` で作る） |
 | `data/visuals.json` | 既存カードのイメージ図と語の家族 |
 | `gas/ImportVisuals.gs` | 既存カードの「イメージ図」列（AC列）を埋める Apps Script |
-| `tools/` | イメージ図のデータ作成と一覧（開発用） |
+| `tools/` | イメージ図のデータ作成と一覧、`make_audio.py`（AivisSpeech で音声を作る） |
 | `sw.js` | オフライン対応（Service Worker） |
 | `manifest.webmanifest`, `icons/` | インストール用 |
 
