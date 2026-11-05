@@ -24,6 +24,11 @@ PC に残る .pack が、そのままバックアップになります。
   cN  … よく合う組み合わせ（｜ で区切った1つずつ）
   言語が en のカードは作りません（AivisSpeech は日本語専用）
 
+話すの自分の文（02_話すチャンク・ID は SP-xxxx。シートの API から読むときだけ）
+  say … 答えの文
+  vN  … 言い換え（1〜3）
+  アプリの「話す」で 🔊 を押すと、このパックの音声が鳴ります（公開の data/audio/ には入れません）
+
 オプション
   --speed 0.9      話す速さ
   --limit 10       先頭から N 枚だけ（試すとき）
@@ -61,7 +66,7 @@ def load_cards_api():
         data = json.loads(res.read().decode('utf-8'))
     if not data.get('ok'):
         sys.exit(f"シートから読めませんでした：{data.get('error', '不明なエラー')}")
-    return data['cards']
+    return data['cards'], data.get('chunks') or []
 
 
 def load_cards_csv(path):
@@ -105,6 +110,17 @@ def parts(card):
             yield f'c{i}', t
 
 
+def chunk_parts(chunk):
+    """話すチャンクから (キー, 文) を返す。キーはアプリの 🔊（say・v1〜v3）と合わせる"""
+    say = str(chunk.get('say') or '').strip()
+    if say:
+        yield 'say', say
+    for i, v in enumerate(chunk.get('v') or [], 1):
+        t = str((v or {}).get('t') or '').strip()
+        if t:
+            yield f'v{i}', t
+
+
 def main():
     ap = argparse.ArgumentParser(description='知識カードの音声パックを作る')
     ap.add_argument('--engine', default='http://127.0.0.1:10101')
@@ -123,11 +139,16 @@ def main():
     if name is None:
         sys.exit(f'番号 {args.speaker} の声が見つかりません')
 
-    cards = load_cards_csv(args.csv) if args.csv else load_cards_api()
+    if args.csv:
+        cards, chunks = load_cards_csv(args.csv), []
+    else:
+        cards, chunks = load_cards_api()
+    chunks = [c for c in chunks if str(c.get('id') or '').strip()]
     cards = [c for c in cards if val(c, 'ID') and val(c, '言語').lower() not in ('en', '英語')]
     ids = {x.strip() for x in args.ids.split(',') if x.strip()}
     if ids:
         cards = [c for c in cards if val(c, 'ID') in ids]
+        chunks = [c for c in chunks if c['id'] in ids]
     if args.limit:
         cards = cards[:args.limit]
 
@@ -138,9 +159,9 @@ def main():
     ext = 'mp3' if use_mp3 else 'wav'
 
     files, made, skipped = {}, 0, 0
-    jobs = [(c, k, t) for c in cards for k, t in parts(c)]
-    for n, (c, key, text) in enumerate(jobs, 1):
-        cid = val(c, 'ID')
+    jobs = [(val(c, 'ID'), k, t) for c in cards for k, t in parts(c)]
+    jobs += [(c['id'], k, t) for c in chunks for k, t in chunk_parts(c)]
+    for n, (cid, key, text) in enumerate(jobs, 1):
         tag = hashlib.sha1(f'{text}|{args.speaker}|{args.speed}'.encode('utf-8')).hexdigest()[:8]
         safe = re.sub(r'[^A-Za-z0-9_-]', '_', cid)
         fname = f'{safe}-{key}.{tag}.{ext}'
@@ -174,6 +195,7 @@ def main():
         'credit': f'音声：AivisSpeech（{name}）',
         'type': 'audio/mpeg' if use_mp3 else 'audio/wav',
         'cards': len(cards),
+        'chunks': len(chunks),
         'files': files,
     }
     hb = json.dumps(header, ensure_ascii=False).encode('utf-8')
@@ -182,7 +204,7 @@ def main():
         f.write(PACK_MAGIC + struct.pack('<I', len(hb)) + hb)
         for b in blobs:
             f.write(b)
-    print(f'\n完了：{len(cards)}枚・{len(files)}個（作成 {made}・そのまま {skipped}）')
+    print(f'\n完了：カード {len(cards)}枚・話すの自分の文 {len(chunks)}個・音声 {len(files)}個（作成 {made}・そのまま {skipped}）')
     print(f'音声パック：{pack}（{pack.stat().st_size / 1024 / 1024:.1f}MB）')
     print('このファイルをスマホに移し、アプリの「設定 > カードの音声 > 音声パックを読み込む」で読み込んでください。')
     print('※ 公開リポジトリには入れないでください（例文に職場の内容が入ることがあります）')

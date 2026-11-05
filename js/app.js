@@ -157,6 +157,7 @@ async function runSync() {
   await syncNow(S.settings);
   S.syncing = false;
   await loadAll();
+  await speak.reloadMine();
   const r = route().name;
   if (r === 'review') refreshSyncBits();   // 復習中は画面を作り直さない
   else render();
@@ -198,8 +199,8 @@ function nav(current) {
   return `<nav class="nav" aria-label="メイン">${item('today', '今日', ICON.home)}${item('inbox', '受信箱', ICON.inbox)}${item('speak', '話す', ICON.speak)}${item('search', '検索', ICON.find)}${item('settings', '設定', ICON.gear)}</nav>`;
 }
 
-const speak = createSpeak({ app, esc, go, nav, store, todayStr: srs.todayStr, addDays: srs.addDays, ICON });
 const cardAudio = createCardAudio({ store });
+const speak = createSpeak({ app, esc, go, nav, store, todayStr: srs.todayStr, addDays: srs.addDays, ICON, cardAudio });
 
 /** カードの音声ボタン（その音声がこのスマホにあるときだけ出す） */
 const playBtn = (id, key, extra = '') => cardAudio.has(id, key)
@@ -956,7 +957,9 @@ function cardAudioStatus() {
   const h = cardAudio.info();
   const msg = S.ui.caMsg ? `<p class="msg ${S.ui.caMsg.ok ? 'ok' : 'err'}">${esc(S.ui.caMsg.text)}</p>` : '';
   if (!h) return `<div class="kv"><span>音声</span><b>未読み込み</b></div>${msg}`;
-  const ids = [...new Set(Object.keys(h.files || {}).map(k => k.slice(0, k.lastIndexOf(':'))))];
+  const allIds = [...new Set(Object.keys(h.files || {}).map(k => k.slice(0, k.lastIndexOf(':'))))];
+  const ids = allIds.filter(id => !/^SP-/.test(id));          // 話すチャンク（SP-xxxx）はカードではないので別に数える
+  const spoken = allIds.length - ids.length;
   const matched = ids.map(id => byId(id)).filter(Boolean);
   const missing = ids.length - matched.length;
   const when = h.loadedAt ? timeLabel(h.loadedAt) : '';
@@ -969,6 +972,7 @@ function cardAudioStatus() {
   return `
     <div class="kv"><span>音声</span><b>${ids.length}枚・${cardAudio.count()}個</b></div>
     <div class="kv"><span>このスマホのカードと一致</span><b>${matched.length} / ${ids.length}枚</b></div>
+    ${spoken ? `<div class="kv"><span>話すの自分の文</span><b>${spoken}個</b></div>` : ''}
     ${missing ? `<p class="msg err">${missing}枚は、このスマホのカードに見つかりません（ID が違うか、まだ同期していないカードです）。同期してから開き直してください。</p>` : ''}
     <div class="kv"><span>声</span><b>${esc(h.speaker?.name || '—')}${h.speaker?.style ? ` / ${esc(h.speaker.style)}` : ''}</b></div>
     <div class="kv"><span>読み込み</span><b>${esc(when)}</b></div>

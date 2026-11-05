@@ -86,6 +86,8 @@ async function pull(settings) {
   const cards = data.cards.map(c => (pending.has(c.ID) ? { ...c, ...pending.get(c.ID) } : c));
   await store.replaceCards(cards);
   if (Array.isArray(data.intervals) && data.intervals.length) await store.put('meta', data.intervals, 'intervals');
+  // 話すチャンク（02_話すチャンク）：古いスクリプトは chunks を返さないので、そのときは前の値を残す
+  if (Array.isArray(data.chunks)) await store.put('meta', data.chunks, 'sheetChunks');
   return cards.length;
 }
 

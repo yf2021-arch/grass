@@ -77,10 +77,24 @@ Claude（grass-card-extractor）──register──▶ Apps Script ◀──pul
 - 出す順：まだ練習していないもの → 前回「詰まった」もの → 前回からいちばん時間がたったもの。機能（報告・確認・相談・依頼・お詫び・動作・状態・会議・説明）で絞り込めます
 - **詰まりメモ**：言えなかったことを一行だけ記録（中国語・英語でも可）。分かった言い方を後から足せます。
   「まとめてコピー」で `REGISTER:` の文になるので、Claude に貼って送ると grass-card-extractor がカードにします。送ったら「送った分を片付ける」
-- 素材は `data/chunks.json`。最初の30個は架空・一般的な場面です。会社名・顧客名・社内の固有名は入れないでください
-- **自分で拾った文を足す**：Claude に `SPEAK:` ＋文（関係する文は1つにまとめてよい）を送ると、場面・話し言葉の答え・型・説明・言い換え3つを作って
-  `chunks.json` の最後に追加します（`"src": "pickup"` が付きます）。`sw.js` の `VERSION` も上げます。
-  音声は PC で `python tools/make_audio.py --speaker 番号` をもう一度実行すれば、新しい文の分だけ作られます
+- 素材は2つ：`data/chunks.json` の架空の30個（公開）と、シート「02_話すチャンク」の自分の文（非公開）。
+  `data/chunks.json` には会社名・顧客名・社内の文は入れないでください。職場で拾った文はシートだけに置きます
+
+### 自分の文（v1.5.0）
+
+職場や動画で拾った文を、話す練習に足します。文はシートとスマホの中だけにあり、公開リポジトリには入りません。
+
+1. Claude に `SPEAK:` ＋文を送る（関係する文は1つにまとめてよい）。Claude が場面・話し言葉の答え・型・説明・言い換え3つを作り、
+   Drive の `Grass_Inbox` に JSON（`"chunks": [...]`）を置く
+2. 5分以内に Apps Script が「02_話すチャンク」に1行追加する（ID は `SP-0001` から。結果は 09_取込ログ）
+3. アプリで同期すると、「話す」に出る（フィルター「自分の文」で絞り込める）
+
+- 文を直すときはシートを直接書き換えて、アプリで同期する。出したくない行は「使う」列を × にする
+- 音声：`python tools/make_card_audio.py --speaker 番号` で作るカードの音声パックに、自分の文（`SP-xxxx:say`・`v1〜v3`）も入る。
+  パックを読み込み直すと、「話す」の 🔊 で鳴る。パックがなければ端末の読み上げ
+- Apps Script 側：`gas/SpeakChunks.gs`（シートの作成・登録・アプリへの受け渡し）。登録スクリプト本体には3か所だけ足してある
+  （`doPost` の `action === 'chunks'`、`pull_` の `chunks: pullChunks_()`、`processInbox` の `payload.chunks`）。
+  本体を直したら「デプロイ > デプロイを管理 > 編集 > 新バージョン」で公開し直す（URL は変わらない）
 
 ### 音声（AivisSpeech）
 
@@ -135,11 +149,12 @@ Claude（grass-card-extractor）──register──▶ Apps Script ◀──pul
 | `js/visual.js` | イメージ図を描く（型ごとのテンプレート） |
 | `js/speak.js` | 話す練習（場面から言う・読んで顔を上げる・詰まりメモ・音声） |
 | `js/cardaudio.js` | カードの音声パックの読み込みと再生（スマホの中だけ） |
-| `data/chunks.json` | 話す練習の素材（職場の決まった言い方。`src: pickup` は自分で拾った文） |
+| `data/chunks.json` | 話す練習の素材（架空の職場の決まった言い方30個。自分の文はシートの 02_話すチャンク） |
 | `data/audio/` | 話す練習の音声（`tools/make_audio.py` で作る） |
 | `data/visuals.json` | 既存カードのイメージ図と語の家族 |
 | `gas/ImportVisuals.gs` | 既存カードの「イメージ図」列（AC列）を埋める Apps Script |
-| `tools/` | イメージ図のデータ作成と一覧、`make_audio.py`（話す練習の音声）・`make_card_audio.py`（カードの音声パック） |
+| `gas/SpeakChunks.gs` | 話すの自分の文（02_話すチャンク）を登録・受け渡しする Apps Script |
+| `tools/` | イメージ図のデータ作成と一覧、`make_audio.py`（話す練習の音声）・`make_card_audio.py`（カードと自分の文の音声パック） |
 | `sw.js` | オフライン対応（Service Worker） |
 | `manifest.webmanifest`, `icons/` | インストール用 |
 

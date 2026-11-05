@@ -1,4 +1,4 @@
-// 話す練習（v1.3.0）
+// 話す練習（v1.3.0／自分の文は v1.5.0）
 //   #/speak … 話すのホーム：チャンク練習の入口と「詰まりメモ」
 //   #/drill … 1問ずつの練習（ナビを隠す）
 //
@@ -6,21 +6,27 @@
 //   scene … 場面を見て日本語で言う → 答えを見る（答えを見るまでの秒数を記録）
 //   look  … 文を読む → 顔を上げて言う（Read and Look Up。顔を上げてから「言えた」までの秒数と、見直した回数を記録）
 //
-// データ：素材は data/chunks.json（架空の職場場面）。記録と詰まりメモはスマホの中（meta ストア）にだけ保存し、シートには送らない。
+// データ：素材は data/chunks.json（架空の職場場面・公開）＋ シート「02_話すチャンク」の自分の文（同期で meta の sheetChunks に入る・非公開）。
+//   記録と詰まりメモはスマホの中（meta ストア）にだけ保存し、シートには送らない。
 // 詰まりメモは「まとめてコピー」で REGISTER: の文にして、Claude に貼るとカードになる。
 //
 // 音声：tools/make_audio.py（PC の AivisSpeech）で作った data/audio/ のファイルを再生する。
 //   一度取ったファイルは sw.js が grass-audio キャッシュに入れ、次からは通信しない（キャッシュ優先）。
-//   ファイル名に文の記号が入るので、作り直した文だけが新しく取られる。音声がない文は端末の読み上げ、それもなければ案内を出す。
+//   ファイル名に文の記号が入るので、作り直した文だけが新しく取られる。
+//   自分の文（SP-xxxx）の音声は、カードの音声パック（tools/make_card_audio.py・このスマホだけ）から鳴らす。
+//   どちらもない文は端末の読み上げ、それもなければ案内を出す。
 
 const DRILL_SIZE = 5;
 const LOG_MAX = 3000;
 const AUDIO_CACHE = 'grass-audio';
 const AUDIO_DIR = 'data/audio/';
+const MINE = '自分の文';
 
-export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON }) {
+export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON, cardAudio = null }) {
   const SP = {
     chunks: [],
+    base: [],       // data/chunks.json（公開の30個）
+    mine: [],       // シートの自分の文
     log: [],        // { date, id, mode, ms, peeks, ok, at }
     stuck: [],      // { id, text, answer, at, sent }
     filter: 'すべて',
@@ -39,10 +45,25 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON 
     SP.stuck = Array.isArray(stuck) ? stuck : [];
     try {
       const res = await fetch('data/chunks.json', { cache: 'no-cache' });
-      if (res.ok) SP.chunks = (await res.json()).chunks || [];
-    } catch (e) { /* オフラインで未キャッシュなら、詰まりメモだけ使える */ }
+      if (res.ok) SP.base = (await res.json()).chunks || [];
+    } catch (e) { /* オフラインで未キャッシュなら、自分の文と詰まりメモだけ使える */ }
+    await reloadMine();
     await loadAudio();
   }
+
+  /** 同期のあとにも呼ぶ：シートの自分の文を読み直し、公開の素材とまとめる */
+  async function reloadMine() {
+    const mine = await store.get('meta', 'sheetChunks');
+    SP.mine = (Array.isArray(mine) ? mine : [])
+      .filter(c => c && c.id && c.say)
+      .map(c => ({ ...c, mine: true, v: Array.isArray(c.v) ? c.v : [] }));
+    const seen = new Set(SP.mine.map(c => c.id));
+    SP.chunks = [...SP.base.filter(c => !seen.has(c.id)), ...SP.mine];
+    if (SP.filter !== 'すべて' && SP.filter !== MINE && !SP.chunks.some(c => c.fn === SP.filter)) SP.filter = 'すべて';
+    if (SP.filter === MINE && !SP.mine.length) SP.filter = 'すべて';
+  }
+
+  const inFilter = (c, fn) => fn === 'すべて' || (fn === MINE ? c.mine : c.fn === fn);
 
   /** data/audio/manifest.json を読み、キャッシュから古い音声を片付ける（音声がなくても動く） */
   async function loadAudio() {
@@ -96,7 +117,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON 
   function pick(n, fn) {
     const last = new Map();
     SP.log.forEach(e => last.set(e.id, e));
-    const pool = SP.chunks.filter(c => fn === 'すべて' || c.fn === fn);
+    const pool = SP.chunks.filter(c => inFilter(c, fn));
     const rank = c => {
       const e = last.get(c.id);
       if (!e) return [0, 0];
@@ -131,8 +152,14 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON 
         return true;
       } catch (e) { /* オフラインで未キャッシュなど → 端末の読み上げへ */ }
     }
+    if (cardAudio?.has(chunkId, key)) {
+      if (player) player.pause();
+      if (await cardAudio.play(chunkId, key)) return true;
+    }
     return say(text);
   }
+
+  const hasClip = (chunkId, key) => !!SP.audio.files[`${chunkId}:${key}`] || !!cardAudio?.has(chunkId, key);
 
   async function downloadAll() {
     const names = [...new Set(Object.values(SP.audio.files))];
@@ -183,16 +210,16 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON 
 
   function renderSpeak() {
     const st = weekStats();
-    const fns = ['すべて', ...new Set(SP.chunks.map(c => c.fn))];
+    const fns = ['すべて', ...(SP.mine.length ? [MINE] : []), ...new Set(SP.chunks.map(c => c.fn).filter(f => f && f !== MINE))];
     const chips = fns.map(f =>
       `<button class="chip" aria-pressed="${SP.filter === f}" data-act="sp-filter" data-v="${esc(f)}">${esc(f)}</button>`).join('');
-    const count = SP.chunks.filter(c => SP.filter === 'すべて' || c.fn === SP.filter).length;
+    const count = SP.chunks.filter(c => inFilter(c, SP.filter)).length;
     const n = Math.min(DRILL_SIZE, count);
 
     const drillBox = SP.chunks.length ? `
       <section class="card-box" aria-label="チャンク練習">
         <div style="display:flex;flex-direction:column;gap:6px">
-          <p class="label">チャンク練習 · 職場の決まった言い方 ${SP.chunks.length}個</p>
+          <p class="label">チャンク練習 · 職場の決まった言い方 ${SP.chunks.length}個${SP.mine.length ? `（自分の文 ${SP.mine.length}）` : ''}</p>
           <p class="scene" style="font-size:14px">先に日本語で言ってから、答えと言い換えを確かめる。</p>
         </div>
         <div class="tiles">
@@ -311,7 +338,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON 
         <div class="rv-bar">
           <button class="close" data-act="sp-quit" aria-label="練習をやめる">${ICON.close}</button>
           <span class="counter">${d.i + 1} / ${d.ids.length}</span>
-          <span style="display:flex;gap:4px;padding-right:8px"><span class="pill">${esc(c?.fn || '')}</span></span>
+          <span style="display:flex;gap:4px;padding-right:8px"><span class="pill">${esc(c?.fn || '')}</span>${c?.mine ? `<span class="pill">${MINE}</span>` : ''}</span>
         </div>
         <div class="progress" aria-hidden="true"><div style="width:${pct}%"></div></div>
       </header>`;
@@ -361,7 +388,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON 
     }
 
     // 答え
-    const playable = key => !!SP.audio.files[`${c.id}:${key}`] || 'speechSynthesis' in window;
+    const playable = key => hasClip(c.id, key) || 'speechSynthesis' in window;
     const vars = (c.v || []).map((x, k) => `
       <li><div class="v-row"><p>${esc(x.t)}</p>${playable(`v${k + 1}`) ? `<button class="mini quiet play" data-act="sp-tts" data-k="v${k + 1}" aria-label="読み上げる">${ICON.speaker}</button>` : ''}</div><small>${esc(x.n)}</small></li>`).join('');
     app.innerHTML = `
@@ -529,7 +556,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON 
       const text = key === 'say' ? c.say : c.v?.[Number(key.slice(1)) - 1]?.t;
       if (!text) return;
       const ok = await playClip(c.id, key, text);
-      const msg = ok ? null : (SP.audio.files[`${c.id}:${key}`]
+      const msg = ok ? null : (hasClip(c.id, key)
         ? '音声を取れませんでした（オフラインで、まだ保存していない音声です）'
         : 'この文の音声はまだありません。この端末には日本語の読み上げ音声もありません');
       if (msg !== SP.ui.ttsMsg) {
@@ -560,6 +587,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON 
 
   return {
     load,
+    reloadMine,
     renderSpeak,
     renderDrill,
     actions,
