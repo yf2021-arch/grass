@@ -8,6 +8,7 @@
 
   - data/chunks.json の「答え」と「言い換え3つ」を、1文ずつ音声にします（30個 × 4 = 120ファイル）
   - data/quiz/bjt.json の聴解の会話も、1問1ファイルにします（会話 → 少し間 → 質問）。
+    選択肢も「1番。〜」と読んだファイルを別に作ります（本番の聴解は選択肢も音声だけなので）。
     男の声は --speaker2 で選べます（なければ同じ声で読みます）
   - 出力は data/audio/。ファイル名に「文＋声＋速さ」から作った短い記号が付くので、
     文を直したり声を変えたりすると、その文だけ作り直されます（同じものはスキップ）
@@ -46,6 +47,7 @@ MANIFEST = OUT / 'manifest.json'
 QUIZ = ROOT / 'data' / 'quiz' / 'bjt.json'
 LINE_GAP = 0.3        # 会話の発言と発言のあいだに足す無音（秒）
 QUESTION_GAP = 1.0    # 会話のあと、質問を読むまでの無音（秒）
+OPTION_GAP = 0.8      # 選択肢と選択肢のあいだの無音（秒）
 
 
 def request(engine, path, params=None, body=None, raw=False, timeout=120):
@@ -198,13 +200,16 @@ def main():
         lines = [(voice.get(l.get('sp'), args.speaker), l['t'], LINE_GAP if i else 0) for i, l in enumerate(q['script'])]
         lines.append((args.speaker, q['question'], QUESTION_GAP))
         jobs.append((q['id'], 'q', ' / '.join(t for _, t, _ in lines), lines))
+        if len(q.get('options') or []) == 4:   # 本番の聴解は選択肢も音声で読まれる → 「1番。〜」を別ファイルに
+            opts = [(args.speaker, f'{i + 1}番。{o}', OPTION_GAP if i else 0) for i, o in enumerate(q['options'])]
+            jobs.append((q['id'], 'o', ' / '.join(t for _, t, _ in opts), opts))
     for n, (cid, key, text, lines) in enumerate(jobs, 1):
         ref = f'{cid}:{key}'
         if only and cid not in only:
             if ref in old:
                 files[ref] = old[ref]          # 対象外は前の結果をそのまま残す
             continue
-        sig = text if lines is None else '|'.join(f'{v}:{t}' for v, t, _ in lines) + f'|gap{LINE_GAP},{QUESTION_GAP}'
+        sig = text if lines is None else '|'.join(f'{v}:{t}' for v, t, _ in lines) + (f'|gap{LINE_GAP},{QUESTION_GAP}' if key == 'q' else f'|gap{OPTION_GAP}')
         tag = hashlib.sha1(f'{sig}|{args.speaker}|{args.speed}|{LEAD_TAG}'.encode('utf-8')).hexdigest()[:8]
         fname = f'{cid}-{key}.{tag}.{ext}'
         dest = OUT / fname

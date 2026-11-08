@@ -23,7 +23,7 @@ const LISTEN = ['聴解', '聴読解'];
 const BASIC = '基礎リスニング';
 const FILTERS = ['すべて', '聴解', '読解', BASIC];
 const SIZES = [5, 10];
-const LETTERS = ['A', 'B', 'C', 'D'];
+const LETTERS = ['1', '2', '3', '4'];
 
 export function createQuiz({ app, esc, store, todayStr, audio, causes, addMistake, rerender, keepScroll }) {
   const Q = {
@@ -32,7 +32,7 @@ export function createQuiz({ app, esc, store, todayStr, audio, causes, addMistak
     chunks: [],
     log: [],
     session: null,
-    ui: { filter: 'すべて', n: 5, once: true, mode: 'new', importMsg: null },
+    ui: { filter: 'すべて', n: 5, once: true, exam: true, mode: 'new', importMsg: null },
   };
 
   /* ---------------- 読み込み・保存 ---------------- */
@@ -82,6 +82,8 @@ export function createQuiz({ app, esc, store, todayStr, audio, causes, addMistak
       .map(c => ({ id: `L-${c.id}`, part: BASIC, author: '自動', status: 'auto', group: `L-${c.id}`, chunk: c }));
   }
 
+  /** 選択肢を音声で読むか（本番形式がオンで、選択肢の音声があるとき） */
+  const examOpts = x => Q.ui.exam && LISTEN.includes(x.part) && audio.has(x.id, 'o');
   const hasAudio = x => (x.part === BASIC ? true : !LISTEN.includes(x.part) || audio.has(x.id, 'q'));
   const inFilter = x => Q.ui.filter === 'すべて' || x.part === Q.ui.filter || (Q.ui.filter === '聴解' && x.part === '聴読解');
 
@@ -200,7 +202,11 @@ export function createQuiz({ app, esc, store, todayStr, audio, causes, addMistak
           ${chips(['new', 'wrong'], Q.ui.mode, 'quiz-mode', v => (v === 'new' ? 'まだ解いていない問題から' : `間違えた問題（${wrongN}）`))}
         </div>
         <div class="frow" role="group" aria-label="問題数">${chips(SIZES, Q.ui.n, 'quiz-n', v => `${v}問`)}</div>
-        <button class="chip toggle" aria-pressed="${Q.ui.once}" data-act="quiz-once">音声は1回だけ（本番と同じ）</button>
+        <div class="frow wrap" role="group" aria-label="本番形式">
+          <button class="chip toggle" aria-pressed="${Q.ui.once}" data-act="quiz-once">音声は1回だけ</button>
+          <button class="chip toggle" aria-pressed="${Q.ui.exam}" data-act="quiz-exam">聴解の選択肢も音声だけ</button>
+        </div>
+        <p class="caption" style="margin:0;text-align:left">本番の聴解は、選択肢も画面に出ず音声で読まれます。両方オンが本番に近い形です。</p>
         <button class="primary" data-act="quiz-start" ${avail ? '' : 'disabled'}>${avail ? `始める（${Math.min(avail, Q.ui.n)}問）` : 'この条件の問題はありません'}</button>
         ${listenWait ? `<p class="caption" style="margin:0">聴解の会話問題 ${listenWait}問は音声待ちです。PC の AivisSpeech で作ると解けるようになります（tools/make_audio.py）。</p>` : ''}
       </section>
@@ -227,6 +233,7 @@ export function createQuiz({ app, esc, store, todayStr, audio, causes, addMistak
     const answered = s.choice != null && s.answered;
     const listen = x.part === BASIC || LISTEN.includes(x.part);
     const lock = listen && Q.ui.once && s.played > 0 && !answered;
+    const hide = examOpts(x) && !answered;      // 選択肢の文を隠して、番号だけ出す
 
     const playBtn = listen ? `
       <button class="${answered ? 'outline' : 'primary'} listen-big" data-act="quiz-play" ${lock || s.playing ? 'disabled' : ''}>
@@ -239,7 +246,7 @@ export function createQuiz({ app, esc, store, todayStr, audio, causes, addMistak
       return `
         <li>
           <button class="opt ${cls}" data-act="quiz-pick" data-v="${i}" aria-pressed="${s.choice === i}" ${answered ? 'disabled' : ''}>
-            <span class="k">${LETTERS[i]}</span><span class="o">${esc(o)}</span>
+            <span class="k">${LETTERS[i]}</span><span class="o">${hide ? '<span class="muted">（音声で聞く）</span>' : esc(o)}</span>
           </button>
           ${answered && x.why?.[i] ? `<p class="why">${esc(x.why[i])}</p>` : ''}
         </li>`;
@@ -256,7 +263,7 @@ export function createQuiz({ app, esc, store, todayStr, audio, causes, addMistak
     const pick = s.causes || [];
     const causeChips = causes.map(c => `<button class="chip" aria-pressed="${pick.includes(c)}" data-act="quiz-cause" data-v="${esc(c)}">${esc(c)}</button>`).join('');
     const after = answered ? `
-      <p class="msg ${ok ? 'ok' : 'err'}">${ok ? '正解です。' : `不正解。正解は ${LETTERS[x.answer]} です。`}</p>
+      <p class="msg ${ok ? 'ok' : 'err'}">${ok ? '正解です。' : `不正解。正解は ${LETTERS[x.answer]}番です。`}</p>
       ${script}
       ${!ok ? `
         <div class="q-noteb">
@@ -329,12 +336,15 @@ export function createQuiz({ app, esc, store, todayStr, audio, causes, addMistak
     const x = s.items[s.i];
     if (Q.ui.once && s.played > 0 && !s.answered) return;
     const [id, key] = x.audioRef || [x.id, 'q'];
+    const withOpts = examOpts(x);
     s.playing = true;
     stay();
     s.audioError = '';
     let ok = false;
-    try { ok = await audio.play(id, key, x.part === BASIC ? x.scriptText : ''); }
-    catch (e) { /* Show a retryable error rather than count a failed play. */ }
+    try {
+      ok = await audio.play(id, key, x.part === BASIC ? x.scriptText : '', { wait: withOpts });
+      if (ok && withOpts && Q.session === s) ok = await audio.play(x.id, 'o', '', { wait: true });   // 会話と質問のあとに選択肢
+    } catch (e) { /* Show a retryable error rather than count a failed play. */ }
     s.playing = false;
     if (ok) s.played += 1;
     else s.audioError = '音声を再生できませんでした。接続や音声データを確認して、もう一度試すか「やめる」で戻ってください。';
@@ -387,6 +397,7 @@ export function createQuiz({ app, esc, store, todayStr, audio, causes, addMistak
     'quiz-mode': el => { Q.ui.mode = el.dataset.v; stay(); },
     'quiz-n': el => { Q.ui.n = Number(el.dataset.v); stay(); },
     'quiz-once': () => { Q.ui.once = !Q.ui.once; stay(); },
+    'quiz-exam': () => { Q.ui.exam = !Q.ui.exam; stay(); },
     'quiz-start': () => start(),
     'quiz-play': () => play(),
     'quiz-pick': el => { if (Q.session && !Q.session.answered) { Q.session.choice = Number(el.dataset.v); stay(); } },

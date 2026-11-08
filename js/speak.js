@@ -136,7 +136,8 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
 
   /** 音声ファイルを丸ごと取ってから鳴らす（<audio> の部分取得だとキャッシュとかみ合わないため）。
    *  ファイルがなければ端末の読み上げ。どちらもなければ false */
-  async function playClip(chunkId, key, text) {
+  /** wait: true なら、鳴り終わるまで待つ（聴解で、会話 → 選択肢と続けて鳴らすとき） */
+  async function playClip(chunkId, key, text, { wait = false } = {}) {
     const file = SP.audio.files[`${chunkId}:${key}`];
     if (file) {
       try {
@@ -146,10 +147,12 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
         if (player) player.pause();
         if (playerUrl) URL.revokeObjectURL(playerUrl);
         playerUrl = URL.createObjectURL(blob);
-        player = new Audio(playerUrl);
-        await player.play();
+        const p = new Audio(playerUrl);
+        player = p;
+        const done = wait ? new Promise(res => { p.onended = () => res(true); p.onpause = () => res(!p.ended ? false : true); p.onerror = () => res(false); }) : null;
+        await p.play();
         countCached().then(() => {});
-        return true;
+        return done ? await done : true;
       } catch (e) { /* オフラインで未キャッシュなど → 端末の読み上げへ */ }
     }
     if (cardAudio?.has(chunkId, key)) {

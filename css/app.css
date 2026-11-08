@@ -535,3 +535,4 @@ a { color: var(--accent); }
 .q-script p { margin: 4px 0; font-size: 14px; line-height: 1.7; }
 .q-script .label { margin: 0 0 4px; }
 .q-noteb { display: flex; flex-direction: column; gap: 10px; }
+.opt .muted { color: var(--muted); }

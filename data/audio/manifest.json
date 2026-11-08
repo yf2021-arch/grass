@@ -8,8 +8,11 @@
   "version": "1.0.0"
  },
  "speed": 1.0,
- "speaker2": null,
- "credit": "音声：AivisSpeech（まい）",
+ "speaker2": {
+  "id": 1310138976,
+  "name": "阿井田 茂"
+ },
+ "credit": "音声：AivisSpeech（まい・阿井田 茂）",
  "files": {
   "ch-01:say": "ch-01-say.65882ee5.mp3",
   "ch-01:v1": "ch-01-v1.960d354e.mp3",
@@ -131,10 +134,15 @@
   "ch-30:v1": "ch-30-v1.97c30a67.mp3",
   "ch-30:v2": "ch-30-v2.2245ca03.mp3",
   "ch-30:v3": "ch-30-v3.88065d90.mp3",
-  "K001:q": "K001-q.c0f0d427.mp3",
-  "R001:q": "R001-q.e58ee0ad.mp3",
-  "K002:q": "K002-q.cc2f542e.mp3",
-  "K003:q": "K003-q.61cb257a.mp3",
-  "K004:q": "K004-q.72361bcf.mp3"
+  "K001:q": "K001-q.cd0367b4.mp3",
+  "K001:o": "K001-o.a3730d56.mp3",
+  "R001:q": "R001-q.f783167e.mp3",
+  "R001:o": "R001-o.bf182973.mp3",
+  "K002:q": "K002-q.dccd2210.mp3",
+  "K002:o": "K002-o.25f91889.mp3",
+  "K003:q": "K003-q.b16bf786.mp3",
+  "K003:o": "K003-o.05ab9a74.mp3",
+  "K004:q": "K004-q.7f6f085f.mp3",
+  "K004:o": "K004-o.10608b31.mp3"
  }
 }
