@@ -7,6 +7,8 @@
   3. 声を選んで音声を作る：python tools/make_audio.py --speaker 番号
 
   - data/chunks.json の「答え」と「言い換え3つ」を、1文ずつ音声にします（30個 × 4 = 120ファイル）
+  - data/quiz/bjt.json の聴解の会話も、1問1ファイルにします（会話 → 少し間 → 質問）。
+    男の声は --speaker2 で選べます（なければ同じ声で読みます）
   - 出力は data/audio/。ファイル名に「文＋声＋速さ」から作った短い記号が付くので、
     文を直したり声を変えたりすると、その文だけ作り直されます（同じものはスキップ）
   - 使わなくなった古いファイルは削除します
@@ -16,7 +18,8 @@
 オプション
   --speed 0.9     話す速さ（1.0 が標準。聞き取り練習なら 0.9 前後もおすすめ）
   --engine URL    エンジンの場所（標準：http://127.0.0.1:10101）
-  --only ch-05    一部だけ作る（試すとき。カンマ区切りで複数可）
+  --only ch-05    一部だけ作る（試すとき。カンマ区切りで複数可。K001 など問題の ID も可）
+  --speaker2 番号 聴解の会話で「男」の役に使う声（--speaker は「女」の役と質問の読み上げ）
 
 音声モデルのライセンス（ACML / ACML-NC / CC0 など）は、モデルごとに確認してください。
 リポジトリは公開なので、音声の公開が認められているモデルを使います。
@@ -29,6 +32,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import wave
+from io import BytesIO
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -38,6 +43,9 @@ ROOT = Path(__file__).resolve().parent.parent
 CHUNKS = ROOT / 'data' / 'chunks.json'
 OUT = ROOT / 'data' / 'audio'
 MANIFEST = OUT / 'manifest.json'
+QUIZ = ROOT / 'data' / 'quiz' / 'bjt.json'
+LINE_GAP = 0.3        # 会話の発言と発言のあいだに足す無音（秒）
+QUESTION_GAP = 1.0    # 会話のあと、質問を読むまでの無音（秒）
 
 
 def request(engine, path, params=None, body=None, raw=False, timeout=120):
@@ -91,6 +99,36 @@ def synth(engine, text, style_id, speed):
     return request(engine, '/synthesis', params={'speaker': style_id}, body=query, raw=True)
 
 
+def join_wavs(parts):
+    """[(WAV, 前に入れる無音の秒数)] をつないで1つの WAV にする"""
+    out = BytesIO()
+    params = None
+    frames = []
+    for data, gap in parts:
+        with wave.open(BytesIO(data), 'rb') as w:
+            p = w.getparams()
+            if params is None:
+                params = p
+            elif (p.nchannels, p.sampwidth, p.framerate) != (params.nchannels, params.sampwidth, params.framerate):
+                sys.exit('声によって音声の形式が違うため、つなげません。同じ種類の声を選んでください。')
+            silence = b'\x00' * int(gap * p.framerate) * p.nchannels * p.sampwidth
+            frames.append(silence + w.readframes(w.getnframes()))
+    with wave.open(out, 'wb') as w:
+        w.setnchannels(params.nchannels)
+        w.setsampwidth(params.sampwidth)
+        w.setframerate(params.framerate)
+        w.writeframes(b''.join(frames))
+    return out.getvalue()
+
+
+def quiz_items():
+    """聴解（会話のある問題）だけ"""
+    if not QUIZ.exists():
+        return []
+    items = json.loads(QUIZ.read_text(encoding='utf-8')).get('items', [])
+    return [q for q in items if q.get('part') in ('聴解', '聴読解') and q.get('script')]
+
+
 def to_mp3(wav_bytes, dest):
     with tempfile.TemporaryDirectory() as tmp:
         src = Path(tmp) / 'in.wav'
@@ -107,6 +145,7 @@ def main():
     ap.add_argument('--engine', default='http://127.0.0.1:10101')
     ap.add_argument('--list', action='store_true', help='声（話者・スタイル）の一覧と番号を表示する')
     ap.add_argument('--speaker', type=int, help='使う声のスタイル番号（--list で確認）')
+    ap.add_argument('--speaker2', type=int, help='聴解の会話で「男」の役に使う声（なければ --speaker と同じ）')
     ap.add_argument('--speed', type=float, default=1.0)
     ap.add_argument('--only', default='', help='一部の ID だけ作る（例：ch-01,ch-05）')
     args = ap.parse_args()
@@ -126,7 +165,18 @@ def main():
     if name is None:
         sys.exit(f'番号 {args.speaker} の声が見つかりません。--list で確認してください。')
 
+    male = args.speaker2 if args.speaker2 is not None else args.speaker
+    male_name = name
+    if args.speaker2 is not None:
+        male_name, male_style, _ = style_name(sp_list, args.speaker2)
+        if male_name is None:
+            sys.exit(f'番号 {args.speaker2} の声が見つかりません。--list で確認してください。')
+    voice = {'男': male, '女': args.speaker}
+
     chunks = json.loads(CHUNKS.read_text(encoding='utf-8'))['chunks']
+    quiz = quiz_items()
+    if quiz and args.speaker2 is None:
+        print('※ 聴解の会話は、男女とも同じ声で読みます（男の声を使うなら --speaker2 番号）')
     only = {x.strip() for x in args.only.split(',') if x.strip()}
     OUT.mkdir(parents=True, exist_ok=True)
     use_mp3 = shutil.which('ffmpeg') is not None
@@ -143,22 +193,30 @@ def main():
 
     files = {}
     made = skipped = 0
-    jobs = [(c, k, t) for c in chunks for k, t in texts(c)]
-    for n, (c, key, text) in enumerate(jobs, 1):
-        ref = f"{c['id']}:{key}"
-        if only and c['id'] not in only:
+    jobs = [(c['id'], k, t, None) for c in chunks for k, t in texts(c)]
+    for q in quiz:                     # 聴解：会話の各発言（話し手の声で）＋ 質問
+        lines = [(voice.get(l.get('sp'), args.speaker), l['t'], LINE_GAP if i else 0) for i, l in enumerate(q['script'])]
+        lines.append((args.speaker, q['question'], QUESTION_GAP))
+        jobs.append((q['id'], 'q', ' / '.join(t for _, t, _ in lines), lines))
+    for n, (cid, key, text, lines) in enumerate(jobs, 1):
+        ref = f'{cid}:{key}'
+        if only and cid not in only:
             if ref in old:
                 files[ref] = old[ref]          # 対象外は前の結果をそのまま残す
             continue
-        tag = hashlib.sha1(f'{text}|{args.speaker}|{args.speed}|{LEAD_TAG}'.encode('utf-8')).hexdigest()[:8]
-        fname = f"{c['id']}-{key}.{tag}.{ext}"
+        sig = text if lines is None else '|'.join(f'{v}:{t}' for v, t, _ in lines) + f'|gap{LINE_GAP},{QUESTION_GAP}'
+        tag = hashlib.sha1(f'{sig}|{args.speaker}|{args.speed}|{LEAD_TAG}'.encode('utf-8')).hexdigest()[:8]
+        fname = f'{cid}-{key}.{tag}.{ext}'
         dest = OUT / fname
         files[ref] = fname
         if dest.exists():
             skipped += 1
             continue
         print(f'[{n}/{len(jobs)}] {text}')
-        wav = synth(args.engine, text, args.speaker, args.speed)
+        if lines is None:
+            wav = synth(args.engine, text, args.speaker, args.speed)
+        else:
+            wav = join_wavs([(synth(args.engine, t, v, args.speed), gap) for v, t, gap in lines])
         if use_mp3:
             to_mp3(wav, dest)
         else:
@@ -177,7 +235,8 @@ def main():
         'speaker': {'id': args.speaker, 'name': name, 'style': style,
                     'uuid': sp.get('speaker_uuid', ''), 'version': sp.get('version', '')},   # 使ったモデルを後から特定できるように
         'speed': args.speed,
-        'credit': f'音声：AivisSpeech（{name}）',
+        'speaker2': ({'id': args.speaker2, 'name': male_name} if args.speaker2 is not None else None),
+        'credit': f'音声：AivisSpeech（{name}{"・" + male_name if args.speaker2 is not None and male_name != name else ""}）',
         'files': files,
     }
     MANIFEST.write_text(json.dumps(manifest, ensure_ascii=False, indent=1) + '\n', encoding='utf-8')

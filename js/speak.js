@@ -156,7 +156,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
       if (player) player.pause();
       if (await cardAudio.play(chunkId, key)) return true;
     }
-    return say(text);
+    return text ? say(text) : false;
   }
 
   const hasClip = (chunkId, key) => !!SP.audio.files[`${chunkId}:${key}`] || !!cardAudio?.has(chunkId, key);
@@ -593,6 +593,8 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     actions,
     onSubmit,
     todayCount,
+    playClip,
+    hasClip,
     openCount: () => openStuck().length,
     inDrill: () => !!SP.drill,
     _state: SP,            // テスト用

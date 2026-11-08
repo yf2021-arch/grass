@@ -202,7 +202,7 @@ function nav(current) {
 
 const cardAudio = createCardAudio({ store });
 const speak = createSpeak({ app, esc, go, nav, store, todayStr: srs.todayStr, addDays: srs.addDays, ICON, cardAudio });
-const bjt = createBjt({ app, esc, go, nav, store, todayStr: srs.todayStr, ICON });
+const bjt = createBjt({ app, esc, go, nav, store, todayStr: srs.todayStr, ICON, audio: { has: speak.hasClip, play: speak.playClip } });
 
 /** カードの音声ボタン（その音声がこのスマホにあるときだけ出す） */
 const playBtn = (id, key, extra = '') => cardAudio.has(id, key)
@@ -305,7 +305,7 @@ function renderToday() {
             <span class="n">今日 ${speak.todayCount()}問 ${ICON.chevron}</span>
           </a>
           <a class="row-link" href="#/bjt">
-            <span class="t"><b>BJT 対策</b><span>結果の記録・間違いノート・ペースタイマー${bjt.timerRunning() ? '（計測中）' : ''}</span></span>
+            <span class="t"><b>BJT 対策</b><span>練習問題・結果の記録・間違いノート・ペースタイマー${bjt.timerRunning() ? '（計測中）' : ''}</span></span>
             <span class="n">${bjt.dueCount() ? `見直し ${bjt.dueCount()}件` : ''} ${ICON.chevron}</span>
           </a>
           <section class="week" aria-label="今週の記録">
@@ -953,7 +953,7 @@ function renderSettings() {
             <button class="outline quiet" data-act="${S.settings.demo ? 'demo-off' : 'demo-on'}">${S.settings.demo ? 'デモを終了' : 'デモデータで試す'}</button>
           </div>
         </section>
-        <p class="small" style="text-align:center">Grass v1.6.0</p>
+        <p class="small" style="text-align:center">Grass v1.7.0</p>
       </main>
       ${nav('settings')}
     </div>`;

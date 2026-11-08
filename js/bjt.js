@@ -1,5 +1,6 @@
-// BJT 対策（v1.6.0）
-//   #/bjt … 3つのタブ
+// BJT 対策（v1.6.0・練習は v1.7.0）
+//   #/bjt … 4つのタブ
+//     練習     … アプリの中で解ける非公式の問題集（js/quiz.js）
 //     記録     … 模試・練習の結果（部ごとの正解・未回答・時間）を残し、部ごとの推移を見る
 //     間違い   … 間違えた問題の原因を記録し、次の日に見直す。分からなかった表現は REGISTER: でカードにする
 //     タイマー … 紙の問題集で解くときのペース計。1問ごとの時間を測り、目安を超えたら知らせる
@@ -7,6 +8,8 @@
 // データはこのスマホの中（meta の bjtScores・bjtMistakes）だけ。公式問題の本文は入れない（問題番号と短い表現だけ）。
 // 「バックアップ」で全部を JSON にしてコピーでき、「復元」で戻せる。
 // 正解率は点数に換算しない（BJT は 0〜800 点の尺度得点で、正解率から点数は出せない）。
+
+import { createQuiz } from './quiz.js';
 
 const PARTS = [
   { k: '聴解', n: 25, min: 45 },
@@ -16,15 +19,31 @@ const PARTS = [
 const CAUSES = ['聞き取れない語', '意図・言外の意味', '条件・期限・担当', '図表・資料', '敬語・場面', '語彙・文法', '時間切れ', 'その他'];
 const LIMITS = [60, 90, 120];
 
-export function createBjt({ app, esc, go, nav, store, todayStr, ICON }) {
+export function createBjt({ app, esc, go, nav, store, todayStr, ICON, audio = { has: () => false, play: async () => false } }) {
   const B = {
     scores: [],     // { id, date, src, part, ok, n, blank, min, at }
     mistakes: [],   // { id, date, part, q, causes:[], expr, memo, at, reviewedAt, sent }
-    tab: 'log',
+    tab: 'quiz',
     ui: { part: '読解', notePart: 'すべて', copied: null, backup: null, restoreMsg: null, prefill: null, timerPart: '読解', limit: 90 },
     timer: null,    // { part, n, min, limit, start, qStart, times:[], paused, pausedAt, done }
   };
   let tick = null;
+
+  const keepScroll = fn => {
+    const top = app.querySelector('.scroll')?.scrollTop || 0;
+    fn();
+    app.querySelector('.scroll')?.scrollTo(0, top);
+  };
+
+  const quiz = createQuiz({
+    app, esc, store, todayStr, audio, causes: CAUSES, keepScroll,
+    rerender: () => renderBjt(),
+    addMistake: async m => {
+      B.mistakes.push({ id: newId('mi'), date: todayStr(), ...m, at: Date.now(), reviewedAt: null, sent: false });
+      B.ui.copied = null;
+      await saveMistakes();
+    },
+  });
 
   /* ---------------- 読み込み・保存 ---------------- */
 
@@ -32,6 +51,7 @@ export function createBjt({ app, esc, go, nav, store, todayStr, ICON }) {
     const [s, m] = await Promise.all([store.get('meta', 'bjtScores'), store.get('meta', 'bjtMistakes')]);
     B.scores = Array.isArray(s) ? s : [];
     B.mistakes = Array.isArray(m) ? m : [];
+    await quiz.load();
   }
   const saveScores = () => store.put('meta', B.scores, 'bjtScores');
   const saveMistakes = () => store.put('meta', B.mistakes, 'bjtMistakes');
@@ -44,9 +64,9 @@ export function createBjt({ app, esc, go, nav, store, todayStr, ICON }) {
   /* ---------------- 画面 ---------------- */
 
   function renderBjt() {
-    const tabs = [['log', '記録'], ['note', `間違い${dueReview().length ? ` · ${dueReview().length}` : ''}`], ['timer', 'タイマー']]
+    const tabs = [['quiz', '練習'], ['log', '記録'], ['note', `間違い${dueReview().length ? ` · ${dueReview().length}` : ''}`], ['timer', 'タイマー']]
       .map(([k, l]) => `<button class="seg-btn" role="tab" aria-selected="${B.tab === k}" data-act="bjt-tab" data-v="${k}">${esc(l)}</button>`).join('');
-    const body = B.tab === 'log' ? logTab() : B.tab === 'note' ? noteTab() : timerTab();
+    const body = B.tab === 'quiz' ? quiz.render() : B.tab === 'log' ? logTab() : B.tab === 'note' ? noteTab() : timerTab();
     app.innerHTML = `
       <div class="screen">
         <div class="scroll">
@@ -129,7 +149,7 @@ export function createBjt({ app, esc, go, nav, store, todayStr, ICON }) {
     const bk = B.ui.backup;
     return `
       <section class="group" aria-label="バックアップ">
-        <div class="kv"><span>バックアップ</span><b>記録 ${B.scores.length}・間違い ${B.mistakes.length}</b></div>
+        <div class="kv"><span>バックアップ</span><b>記録 ${B.scores.length}・間違い ${B.mistakes.length}・練習 ${quiz.exportData().quizLog.length}</b></div>
         <p class="small">この画面のデータはスマホの中だけにあります。ときどきバックアップをコピーして、メモや Google ドライブに貼っておいてください。</p>
         <button class="outline quiet" data-act="bjt-backup">バックアップをコピー</button>
         ${bk ? `<p class="msg ${bk.ok ? 'ok' : 'err'}">${bk.ok ? 'コピーしました。' : '自動でコピーできません。下の文を長押ししてコピーしてください。'}</p>${bk.ok ? '' : `<textarea class="export" readonly rows="5">${esc(bk.text)}</textarea>`}` : ''}
@@ -347,6 +367,7 @@ export function createBjt({ app, esc, go, nav, store, todayStr, ICON }) {
       renderBjt();
       return true;
     }
+    if (f === 'bjt-quiz-import') return quiz.onImport(form);
     if (f === 'bjt-restore') {
       const text = String(new FormData(form).get('json') || '').trim();
       try {
@@ -360,7 +381,8 @@ export function createBjt({ app, esc, go, nav, store, todayStr, ICON }) {
         B.mistakes.push(...m);
         B.mistakes.sort((a, b) => a.at - b.at);
         await Promise.all([saveScores(), saveMistakes()]);
-        B.ui.restoreMsg = { ok: true, text: `記録 ${s.length}件・間違い ${m.length}件を追加しました（同じものは追加しません）` };
+        const q = await quiz.importData(data);
+        B.ui.restoreMsg = { ok: true, text: `記録 ${s.length}件・間違い ${m.length}件・練習の記録 ${q.logs}件を追加しました（同じものは追加しません）` };
       } catch (e) {
         B.ui.restoreMsg = { ok: false, text: e instanceof SyntaxError ? '貼り付けた文が読めません。バックアップの文を全部貼ってください' : e.message };
       }
@@ -379,13 +401,8 @@ export function createBjt({ app, esc, go, nav, store, todayStr, ICON }) {
 
   /* ---------------- 操作 ---------------- */
 
-  const keepScroll = fn => {
-    const top = app.querySelector('.scroll')?.scrollTop || 0;
-    fn();
-    app.querySelector('.scroll')?.scrollTo(0, top);
-  };
-
   const actions = {
+    ...quiz.actions,
     'bjt-tab': el => { B.tab = el.dataset.v; renderBjt(); },
     'bjt-part': el => {                           // 部を変えたら、問題数と時間の初期値も変える
       B.ui.part = el.value;
@@ -422,7 +439,7 @@ export function createBjt({ app, esc, go, nav, store, todayStr, ICON }) {
       keepScroll(renderBjt);
     },
     'bjt-backup': async () => {
-      const text = JSON.stringify({ app: 'grass-bjt', version: 1, exportedAt: new Date().toISOString(), scores: B.scores, mistakes: B.mistakes });
+      const text = JSON.stringify({ app: 'grass-bjt', version: 1, exportedAt: new Date().toISOString(), scores: B.scores, mistakes: B.mistakes, ...quiz.exportData() });
       const ok = await copyText(text);
       B.ui.backup = { ok, text };
       keepScroll(renderBjt);
@@ -481,6 +498,7 @@ export function createBjt({ app, esc, go, nav, store, todayStr, ICON }) {
     onSubmit,
     dueCount: () => dueReview().length,
     timerRunning: () => !!B.timer && !B.timer.done,
+    quizActive: () => quiz.inSession(),
     _state: B,
   };
 }
