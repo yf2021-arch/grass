@@ -53,6 +53,8 @@ PC に残る .pack が、そのままバックアップになります。
   --limit 10       先頭から N 枚だけ（試すとき）
   --ids A,B        指定した ID だけ
   --out フォルダ   出力先（標準：./grass-card-audio。リポジトリの外がおすすめ）
+
+  - 同じ文（例文・組み合わせなど）は、カードが違っても音声ファイルを1つだけ作って共有します（パックにも1回だけ入ります）
 """
 
 import argparse
@@ -312,7 +314,12 @@ def main():
     except (OSError, ValueError):
         salts = {}
     stamp = time.strftime('%Y%m%d%H%M%S')
-    files, made, skipped, switched_words = {}, 0, 0, []
+    prev = {}
+    try:
+        prev = json.loads((out / 'last.json').read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        pass
+    files, made, skipped, shared, switched_words = {}, 0, 0, 0, []
     jobs = [(val(c, 'ID'), k, t, y) for c in cards for k, t, y in parts(c)]
     jobs += [(c['id'], k, t, y) for c in chunks for k, t, y in chunk_parts(c)]
     for n, (cid, key, text, yomi) in enumerate(jobs, 1):
@@ -327,12 +334,20 @@ def main():
             salts[ref] = stamp
         if ref in salts:
             src += f'|redo{salts[ref]}'
-        tag = hashlib.sha1(src.encode('utf-8')).hexdigest()[:8]
-        safe = re.sub(r'[^A-Za-z0-9_-]', '_', cid)
-        fname = f'{safe}-{key}.{tag}.{ext}'
+        tag = hashlib.sha1(src.encode('utf-8')).hexdigest()[:12]
+        # 名前は「読む文＋声＋速さ」だけで決める（カード ID を入れない）。
+        # 同じ例文を複数のカードに登録しても、音声ファイルは1つを共有する（作るのも1回、パックにも1回だけ入る）
+        fname = f'a-{tag}.{ext}'
         files[f'{cid}:{key}'] = {'name': fname, 'text': text, **({'spoken': spoken} if spoken != text else {})}
         dest = clips / fname
         if dest.exists():
+            if any(i['name'] == fname for r, i in files.items() if r != ref):
+                shared += 1
+            skipped += 1
+            continue
+        old = clips / prev.get(ref, '')
+        if prev.get(ref) and old.is_file() and old.name.rsplit('.', 2)[-2] == tag[:8]:
+            shutil.copy2(old, dest)            # 前の名前の形（ID-キー.記号8桁）の同じ音声は、作り直さずに使う
             skipped += 1
             continue
         print(f'[{n}/{len(jobs)}] {cid} {key}: {spoken}')
@@ -360,11 +375,6 @@ def main():
                 removed_clips += 1
 
     # 前回のパックからの変化
-    prev = {}
-    try:
-        prev = json.loads((out / 'last.json').read_text(encoding='utf-8'))
-    except (OSError, ValueError):
-        pass
     now = {ref: info['name'] for ref, info in files.items()}
     added = [r for r in now if r not in prev]
     changed = [r for r in now if r in prev and prev[r] != now[r]]
@@ -372,12 +382,14 @@ def main():
     (out / 'last.json').write_text(json.dumps(now, ensure_ascii=False, indent=0), encoding='utf-8')
 
     # パックを作る：マジック 8バイト ＋ ヘッダ長（4バイト）＋ ヘッダ JSON ＋ 音声データを順に連結
-    offset, blobs = 0, []
+    offset, blobs, placed = 0, [], {}
     for ref, info in files.items():
-        data = (clips / info['name']).read_bytes()
-        info['off'], info['len'] = offset, len(data)
-        offset += len(data)
-        blobs.append(data)
+        if info['name'] not in placed:          # 同じ音声はパックに1回だけ入れ、ほかのカードはそこを指す
+            data = (clips / info['name']).read_bytes()
+            placed[info['name']] = (offset, len(data))
+            offset += len(data)
+            blobs.append(data)
+        info['off'], info['len'] = placed[info['name']]
     header = {
         'version': 1,
         'made': time.strftime('%Y-%m-%d %H:%M'),
@@ -397,7 +409,8 @@ def main():
         f.write(PACK_MAGIC + struct.pack('<I', len(hb)) + hb)
         for b in blobs:
             f.write(b)
-    print(f'\n完了：カード {len(cards)}枚・話すの自分の文 {len(chunks)}個・音声 {len(files)}個（作成 {made}・そのまま {skipped}・古い音声の削除 {removed_clips}）')
+    print(f'\n完了：カード {len(cards)}枚・話すの自分の文 {len(chunks)}個・音声 {len(files)}個（作成 {made}・そのまま {skipped}・古い音声の削除 {removed_clips}）'
+          + (f'。同じ文を共有：{shared}個' if shared else ''))
     if switched_words:
         print(f'漢字の読みが「読み」列と違ったので、かなで作った語：{"、".join(switched_words[:20])}{" ほか" if len(switched_words) > 20 else ""}')
     if readings:
