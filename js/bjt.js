@@ -499,6 +499,7 @@ export function createBjt({ app, esc, go, nav, store, todayStr, ICON, audio = { 
     dueCount: () => dueReview().length,
     timerRunning: () => !!B.timer && !B.timer.done,
     quizActive: () => quiz.inSession(),
+    walkItems: () => quiz.walkItems(),
     _state: B,
   };
 }

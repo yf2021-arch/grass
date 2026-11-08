@@ -8,6 +8,7 @@ import { demoCards } from './demo.js';
 import { parseVisual, visualHtml } from './visual.js';
 import { createSpeak } from './speak.js';
 import { createBjt } from './bjt.js';
+import { createWalk } from './walk.js';
 import { createCardAudio } from './cardaudio.js';
 
 const app = document.getElementById('app');
@@ -203,6 +204,10 @@ function nav(current) {
 const cardAudio = createCardAudio({ store });
 const speak = createSpeak({ app, esc, go, nav, store, todayStr: srs.todayStr, addDays: srs.addDays, ICON, cardAudio });
 const bjt = createBjt({ app, esc, go, nav, store, todayStr: srs.todayStr, ICON, audio: { has: speak.hasClip, play: speak.playClip, stop: speak.stopClip } });
+const walk = createWalk({
+  app, esc, nav, store, todayStr: srs.todayStr, ICON, cardAudio,
+  cards: () => S.cards, isDue: c => srs.isDue(c), clipUrl: speak.clipUrl, chunks: speak.chunks, quizItems: bjt.walkItems,
+});
 
 /** カードの音声ボタン（その音声がこのスマホにあるときだけ出す） */
 const playBtn = (id, key, extra = '') => cardAudio.has(id, key)
@@ -211,7 +216,7 @@ const playBtn = (id, key, extra = '') => cardAudio.has(id, key)
 
 function render() {
   const r = route();
-  const screens = { today: renderToday, review: renderReview, done: renderDone, inbox: renderInbox, speak: speak.renderSpeak, drill: speak.renderDrill, bjt: bjt.renderBjt, search: renderSearch, card: renderDetail, family: renderFamily, settings: renderSettings };
+  const screens = { today: renderToday, review: renderReview, done: renderDone, inbox: renderInbox, speak: speak.renderSpeak, drill: speak.renderDrill, bjt: bjt.renderBjt, walk: walk.render, search: renderSearch, card: renderDetail, family: renderFamily, settings: renderSettings };
   (screens[r.name] || renderToday)(r.arg);
   refreshSyncBits();
 }
@@ -303,6 +308,10 @@ function renderToday() {
           <a class="row-link" href="#/speak">
             <span class="t"><b>話す練習</b><span>場面から言う・読んで顔を上げる・詰まりメモ${speak.openCount() ? ` ${speak.openCount()}件` : ''}</span></span>
             <span class="n">今日 ${speak.todayCount()}問 ${ICON.chevron}</span>
+          </a>
+          <a class="row-link" href="#/walk">
+            <span class="t"><b>散歩モード</b><span>画面を見ずに聞く：単語（例文→表現→例文）・話す・答えた聴解${walk.active() ? '（再生中）' : ''}</span></span>
+            <span class="n">${walk.todayMin() ? `今日 ${walk.todayMin()}分` : ''} ${ICON.chevron}</span>
           </a>
           <a class="row-link" href="#/bjt">
             <span class="t"><b>BJT 対策</b><span>練習問題・結果の記録・間違いノート・ペースタイマー${bjt.timerRunning() ? '（計測中）' : ''}</span></span>
@@ -953,7 +962,7 @@ function renderSettings() {
             <button class="outline quiet" data-act="${S.settings.demo ? 'demo-off' : 'demo-on'}">${S.settings.demo ? 'デモを終了' : 'デモデータで試す'}</button>
           </div>
         </section>
-        <p class="small" style="text-align:center">Grass v1.8.1</p>
+        <p class="small" style="text-align:center">Grass v1.9.0</p>
       </main>
       ${nav('settings')}
     </div>`;
@@ -1086,7 +1095,7 @@ const actions = {
     go('#/today');
   },
 };
-Object.assign(actions, speak.actions, bjt.actions, {
+Object.assign(actions, speak.actions, bjt.actions, walk.actions, {
   'ca-play': async el => {
     const ok = await cardAudio.play(el.dataset.id, el.dataset.k);
     const ss = S.session;
@@ -1166,7 +1175,7 @@ document.addEventListener('visibilitychange', () => {
 
 (async function boot() {
   try {
-    await Promise.all([loadAll(), loadVisuals(), speak.load(), cardAudio.load(), bjt.load()]);
+    await Promise.all([loadAll(), loadVisuals(), speak.load(), cardAudio.load(), bjt.load(), walk.load()]);
   } catch (e) {
     app.innerHTML = `<div class="empty"><h2>データを開けません</h2><p>${esc(e.message)}</p></div>`;
     return;
@@ -1180,7 +1189,7 @@ document.addEventListener('visibilitychange', () => {
     const hadController = !!navigator.serviceWorker.controller;
     let reloaded = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (!hadController || reloaded || ['review', 'drill', 'bjt'].includes(route().name)) return;   // 復習・練習の途中では再読み込みしない
+      if (!hadController || reloaded || ['review', 'drill', 'bjt', 'walk'].includes(route().name) || walk.active()) return;   // 復習・練習の途中では再読み込みしない
       reloaded = true;
       location.reload();
     });

@@ -87,5 +87,17 @@ export function createCardAudio({ store }) {
     }
   }
 
-  return { load, has, count, info, importPack, clear, play };
+  /** 散歩モード用：音声の一時 URL（使い終わったら呼び出し側で revoke する）。なければ null */
+  async function url(id, key) {
+    const f = A.header?.files?.[`${id}:${key}`];
+    if (!f || !('caches' in window)) return null;
+    try {
+      const res = await (await caches.open(CACHE)).match(PREFIX + encodeURIComponent(f.name));
+      return res ? URL.createObjectURL(await res.blob()) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  return { load, has, count, info, importPack, clear, play, url };
 }

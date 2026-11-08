@@ -203,13 +203,17 @@ def main():
         if q.get('part') == '聴解' and len(q.get('options') or []) == 4:   # 本番の聴解は選択肢も音声 → 「1番。〜」を別ファイルに（聴読解は文字）
             opts = [(args.speaker, f'{i + 1}番。{o}', OPTION_GAP if i else 0) for i, o in enumerate(q['options'])]
             jobs.append((q['id'], 'o', ' / '.join(t for _, t, _ in opts), opts))
+        if q.get('part') == '聴解' and isinstance(q.get('answer'), int):   # 散歩モードで流す「正解は2番。〜」
+            a = q['answer']
+            ans = [(args.speaker, f"正解は{a + 1}番。{q['options'][a]}", 0)]
+            jobs.append((q['id'], 'a', ans[0][1], ans))
     for n, (cid, key, text, lines) in enumerate(jobs, 1):
         ref = f'{cid}:{key}'
         if only and cid not in only:
             if ref in old:
                 files[ref] = old[ref]          # 対象外は前の結果をそのまま残す
             continue
-        sig = text if lines is None else '|'.join(f'{v}:{t}' for v, t, _ in lines) + (f'|gap{LINE_GAP},{QUESTION_GAP}' if key == 'q' else f'|gap{OPTION_GAP}')
+        sig = text if lines is None else '|'.join(f'{v}:{t}' for v, t, _ in lines) + {'q': f'|gap{LINE_GAP},{QUESTION_GAP}', 'o': f'|gap{OPTION_GAP}'}.get(key, '')
         tag = hashlib.sha1(f'{sig}|{args.speaker}|{args.speed}|{LEAD_TAG}'.encode('utf-8')).hexdigest()[:8]
         fname = f'{cid}-{key}.{tag}.{ext}'
         dest = OUT / fname

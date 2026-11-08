@@ -548,3 +548,10 @@ a { color: var(--accent); }
 .q-table th, .q-table td { padding: 8px 7px; border-top: 1px solid var(--divider); text-align: left; white-space: nowrap; color: var(--text); }
 .q-table thead th { background: var(--tile); font-weight: 600; color: var(--text-2); }
 .q-table tbody th { font-weight: 600; }
+
+/* ---------- 散歩モード（v1.9.0） ---------- */
+.walk-now { gap: 16px; }
+.walk-title { margin: 0; font-size: 22px; font-weight: 700; line-height: 1.5; overflow-wrap: anywhere; }
+.walk-sub { margin: 0; overflow-wrap: anywhere; }
+.walk-ctrl { display: grid; grid-template-columns: 1fr 1.4fr 1fr; gap: 8px; }
+.walk-ctrl button { min-width: 0; }

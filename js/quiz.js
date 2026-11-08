@@ -584,5 +584,11 @@ export function createQuiz({ app, esc, store, todayStr, audio, causes, addMistak
     return { logs: logs.length, items: items.length, dicts: dicts.length };
   }
 
-  return { load, render, actions, onImport, exportData, importData, inSession: () => !!Q.session, _state: Q };
+  /** 散歩モード用：一度でも答えた聴解問題（まだ解いていない問題は渡さない） */
+  function walkItems() {
+    const done = new Set(Q.log.map(e => e.id));
+    return allItems().filter(x => x.part === '聴解' && done.has(x.id));
+  }
+
+  return { load, render, actions, onImport, exportData, importData, walkItems, inSession: () => !!Q.session, _state: Q };
 }
