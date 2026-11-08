@@ -7,6 +7,7 @@ import { syncNow, testConnection, cleanUrl, cleanToken } from './sync.js';
 import { demoCards } from './demo.js';
 import { parseVisual, visualHtml } from './visual.js';
 import { createSpeak } from './speak.js';
+import { createBjt } from './bjt.js';
 import { createCardAudio } from './cardaudio.js';
 
 const app = document.getElementById('app');
@@ -201,6 +202,7 @@ function nav(current) {
 
 const cardAudio = createCardAudio({ store });
 const speak = createSpeak({ app, esc, go, nav, store, todayStr: srs.todayStr, addDays: srs.addDays, ICON, cardAudio });
+const bjt = createBjt({ app, esc, go, nav, store, todayStr: srs.todayStr, ICON });
 
 /** カードの音声ボタン（その音声がこのスマホにあるときだけ出す） */
 const playBtn = (id, key, extra = '') => cardAudio.has(id, key)
@@ -209,7 +211,7 @@ const playBtn = (id, key, extra = '') => cardAudio.has(id, key)
 
 function render() {
   const r = route();
-  const screens = { today: renderToday, review: renderReview, done: renderDone, inbox: renderInbox, speak: speak.renderSpeak, drill: speak.renderDrill, search: renderSearch, card: renderDetail, family: renderFamily, settings: renderSettings };
+  const screens = { today: renderToday, review: renderReview, done: renderDone, inbox: renderInbox, speak: speak.renderSpeak, drill: speak.renderDrill, bjt: bjt.renderBjt, search: renderSearch, card: renderDetail, family: renderFamily, settings: renderSettings };
   (screens[r.name] || renderToday)(r.arg);
   refreshSyncBits();
 }
@@ -301,6 +303,10 @@ function renderToday() {
           <a class="row-link" href="#/speak">
             <span class="t"><b>話す練習</b><span>場面から言う・読んで顔を上げる・詰まりメモ${speak.openCount() ? ` ${speak.openCount()}件` : ''}</span></span>
             <span class="n">今日 ${speak.todayCount()}問 ${ICON.chevron}</span>
+          </a>
+          <a class="row-link" href="#/bjt">
+            <span class="t"><b>BJT 対策</b><span>結果の記録・間違いノート・ペースタイマー${bjt.timerRunning() ? '（計測中）' : ''}</span></span>
+            <span class="n">${bjt.dueCount() ? `見直し ${bjt.dueCount()}件` : ''} ${ICON.chevron}</span>
           </a>
           <section class="week" aria-label="今週の記録">
             <div class="week-head"><h2>今週の記録</h2><span>復習 ${reviews} · 職場で使えた ${usedWeek}</span></div>
@@ -947,7 +953,7 @@ function renderSettings() {
             <button class="outline quiet" data-act="${S.settings.demo ? 'demo-off' : 'demo-on'}">${S.settings.demo ? 'デモを終了' : 'デモデータで試す'}</button>
           </div>
         </section>
-        <p class="small" style="text-align:center">Grass v1.4.1</p>
+        <p class="small" style="text-align:center">Grass v1.6.0</p>
       </main>
       ${nav('settings')}
     </div>`;
@@ -1080,7 +1086,7 @@ const actions = {
     go('#/today');
   },
 };
-Object.assign(actions, speak.actions, {
+Object.assign(actions, speak.actions, bjt.actions, {
   'ca-play': async el => {
     const ok = await cardAudio.play(el.dataset.id, el.dataset.k);
     const ss = S.session;
@@ -1113,6 +1119,7 @@ app.addEventListener('click', e => {
 });
 
 app.addEventListener('change', async e => {
+  if (e.target.dataset.act === 'bjt-part') { bjt.actions['bjt-part'](e.target); return; }
   if (e.target.id === 'ca-file') {
     const file = e.target.files?.[0];
     e.target.value = '';
@@ -1141,6 +1148,7 @@ app.addEventListener('submit', e => {
   if (!form) return;
   e.preventDefault();
   if (form.dataset.form === 'conn') saveConnection(form);
+  else if (form.dataset.form.startsWith('bjt-')) bjt.onSubmit(form);
   else speak.onSubmit(form);
 });
 
@@ -1158,7 +1166,7 @@ document.addEventListener('visibilitychange', () => {
 
 (async function boot() {
   try {
-    await Promise.all([loadAll(), loadVisuals(), speak.load(), cardAudio.load()]);
+    await Promise.all([loadAll(), loadVisuals(), speak.load(), cardAudio.load(), bjt.load()]);
   } catch (e) {
     app.innerHTML = `<div class="empty"><h2>データを開けません</h2><p>${esc(e.message)}</p></div>`;
     return;
