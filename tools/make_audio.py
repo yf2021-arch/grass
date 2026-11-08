@@ -77,9 +77,16 @@ def texts(chunk):
         yield f'v{i}', v['t']
 
 
+# 音声の頭に入れる無音（秒）。スマホやイヤホンは再生の最初が少し切れることがあるので、
+# 切れても言葉が欠けないように余白を入れる（エンジンの標準は 0.1 秒）
+LEAD_SILENCE = 0.4
+LEAD_TAG = 'lead40'          # 余白を変えたら、ここも変えると全部作り直す
+
+
 def synth(engine, text, style_id, speed):
     query = request(engine, '/audio_query', params={'text': text, 'speaker': style_id})
     query['speedScale'] = speed
+    query['prePhonemeLength'] = max(float(query.get('prePhonemeLength') or 0), LEAD_SILENCE)
     query['outputStereo'] = False
     return request(engine, '/synthesis', params={'speaker': style_id}, body=query, raw=True)
 
@@ -143,7 +150,7 @@ def main():
             if ref in old:
                 files[ref] = old[ref]          # 対象外は前の結果をそのまま残す
             continue
-        tag = hashlib.sha1(f'{text}|{args.speaker}|{args.speed}'.encode('utf-8')).hexdigest()[:8]
+        tag = hashlib.sha1(f'{text}|{args.speaker}|{args.speed}|{LEAD_TAG}'.encode('utf-8')).hexdigest()[:8]
         fname = f"{c['id']}-{key}.{tag}.{ext}"
         dest = OUT / fname
         files[ref] = fname

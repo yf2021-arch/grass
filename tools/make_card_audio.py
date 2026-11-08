@@ -59,7 +59,7 @@ import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from make_audio import request, speakers, style_name, to_mp3  # noqa: E402
+from make_audio import LEAD_SILENCE, LEAD_TAG, request, speakers, style_name, to_mp3  # noqa: E402
 
 PACK_MAGIC = b'GRASSPK1'
 SEP = '｜'
@@ -202,6 +202,7 @@ def make_query(engine, text, style_id, speed, yomi=''):
         q = request(engine, '/audio_query', params={'text': yomi, 'speaker': style_id})
         switched = True
     q['speedScale'] = speed
+    q['prePhonemeLength'] = max(float(q.get('prePhonemeLength') or 0), LEAD_SILENCE)   # 再生の頭が切れても言葉が欠けないように
     q['outputStereo'] = False
     return q, switched
 
@@ -265,7 +266,7 @@ def main():
         spoken = apply_readings(text, readings)
         if spoken != text:
             yomi = ''                     # 読み替えを書いた語は、そちらを優先する
-        src = f'{spoken}|{args.speaker}|{args.speed}'
+        src = f'{spoken}|{args.speaker}|{args.speed}|{LEAD_TAG}'
         if key == 'w':
             src += f'|{yomi}|w2'              # 表現は「漢字で作り、読みが違えばかな」に変えたので作り直す
         tag = hashlib.sha1(src.encode('utf-8')).hexdigest()[:8]
