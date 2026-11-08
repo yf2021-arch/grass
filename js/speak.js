@@ -63,7 +63,9 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     if (SP.filter === MINE && !SP.mine.length) SP.filter = 'すべて';
   }
 
-  const inFilter = (c, fn) => fn === 'すべて' || (fn === MINE ? c.mine : c.fn === fn);
+  // deck の付いた素材（例：アプリ紹介）は「すべて」に混ぜず、自分のチップで選んだときだけ、最初から順に通しで出す
+  const inFilter = (c, fn) => (fn === 'すべて' ? !c.deck : fn === MINE ? c.mine : c.fn === fn);
+  const isDeck = fn => fn !== 'すべて' && fn !== MINE && SP.chunks.some(c => c.deck && c.fn === fn);
 
   /** data/audio/manifest.json を読み、キャッシュから古い音声を片付ける（音声がなくても動く） */
   async function loadAudio() {
@@ -118,6 +120,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     const last = new Map();
     SP.log.forEach(e => last.set(e.id, e));
     const pool = SP.chunks.filter(c => inFilter(c, fn));
+    if (isDeck(fn)) return pool.map(c => c.id);          // 発表の練習：順番どおり全部
     const rank = c => {
       const e = last.get(c.id);
       if (!e) return [0, 0];
@@ -219,7 +222,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     const chips = fns.map(f =>
       `<button class="chip" aria-pressed="${SP.filter === f}" data-act="sp-filter" data-v="${esc(f)}">${esc(f)}</button>`).join('');
     const count = SP.chunks.filter(c => inFilter(c, SP.filter)).length;
-    const n = Math.min(DRILL_SIZE, count);
+    const n = isDeck(SP.filter) ? count : Math.min(DRILL_SIZE, count);
 
     const drillBox = SP.chunks.length ? `
       <section class="card-box" aria-label="チャンク練習">
