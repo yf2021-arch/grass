@@ -70,7 +70,7 @@ export function createQuiz({ app, esc, store, todayStr, audio, causes, addMistak
     for (const x of Q.builtin) map.set(x.id, { ...x, src: 'app' });
     for (const x of Q.user) {
       const have = map.get(x.id);
-      if (!have || (Number(x.rev) || 1) >= (Number(have.rev) || 1)) map.set(x.id, { ...x, src: 'mine' });
+      if (!have || (Number(x.rev) || 1) > (Number(have.rev) || 1)) map.set(x.id, { ...x, src: 'mine' });   // 同じ rev ならアプリの問題
     }
     return [...map.values()].map(x => ({ ...x, group: x.group || x.id, status: x.status === 'reviewed' ? 'reviewed' : 'draft' }));
   }
@@ -399,12 +399,12 @@ export function createQuiz({ app, esc, store, todayStr, audio, causes, addMistak
     'quiz-retry': () => { Q.ui.mode = 'wrong'; start(); },
   };
 
-  /** 「問題を読み込む」：{app:'grass-quiz', items:[…]} か、問題の配列か、1問だけ */
+  /** 「問題を読み込む」：{app:'grass-quiz', items:[…]}（questions:[…] も可）か、問題の配列か、1問だけ */
   async function onImport(form) {
     const text = String(new FormData(form).get('json') || '').trim();
     try {
       const data = JSON.parse(text);
-      const list = Array.isArray(data) ? data : Array.isArray(data.items) ? data.items : [data];
+      const list = Array.isArray(data) ? data : Array.isArray(data.items) ? data.items : Array.isArray(data.questions) ? data.questions : [data];
       const good = list.filter(valid);
       const bad = list.length - good.length;
       if (!good.length) throw new Error('使える問題がありませんでした（4つの選択肢・answer・本文かスクリプトが必要です）');
