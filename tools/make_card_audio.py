@@ -22,6 +22,10 @@ PC に残る .pack が、そのままバックアップになります。
   PC でそのまま聞いて、次にスマホ（スピーカー・イヤホン）でも聞き比べます。
   PC の 1 ですでに間違っていれば合成の問題、PC では正しくスマホでだけ欠けるなら再生の問題です
 
+1枚だけ作り直す（文は同じだが、音声がたまたま崩れていたとき）
+  python tools/make_card_audio.py --redo JP-0064,JP-0004
+  → その ID の音声だけ消して作り直します（AivisSpeech は毎回わずかに違う音声を作るので、作り直すと直ることがあります）
+
 読み間違いを直す（grass-card-audio/読み替え.txt）
   A01 = エーゼロイチ   のように「書き方 = 読み（かな）」を1行ずつ書くと、音声を作る前に置き換えます。
   直した文だけ作り直します。職場の言葉が入るので、このファイルも公開しないでください
@@ -251,6 +255,7 @@ def main():
     ap.add_argument('--ids', default='')
     ap.add_argument('--out', default='grass-card-audio')
     ap.add_argument('--sample', action='append', default=[], help='聞き比べ用のサンプルを作る文（何度でも指定可）')
+    ap.add_argument('--redo', default='', help='この ID の音声だけ作り直す（カンマ区切り）')
     args = ap.parse_args()
 
     out = Path(args.out).resolve()
@@ -299,6 +304,14 @@ def main():
     ext = 'mp3' if use_mp3 else 'wav'
 
     readings = load_readings(out)
+    redo = {x.strip() for x in args.redo.split(',') if x.strip()}
+    # 作り直した音声は名前を変える（同じ名前だとスマホが古い音声を使い続けるため）。印は redo.json に覚える
+    salts_path = out / 'redo.json'
+    try:
+        salts = json.loads(salts_path.read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        salts = {}
+    stamp = time.strftime('%Y%m%d%H%M%S')
     files, made, skipped, switched_words = {}, 0, 0, []
     jobs = [(val(c, 'ID'), k, t, y) for c in cards for k, t, y in parts(c)]
     jobs += [(c['id'], k, t, y) for c in chunks for k, t, y in chunk_parts(c)]
@@ -309,6 +322,11 @@ def main():
         src = f'{spoken}|{args.speaker}|{args.speed}|{LEAD_TAG}'
         if key == 'w':
             src += f'|{yomi}|w2'              # 表現は「漢字で作り、読みが違えばかな」に変えたので作り直す
+        ref = f'{cid}:{key}'
+        if cid in redo:
+            salts[ref] = stamp
+        if ref in salts:
+            src += f'|redo{salts[ref]}'
         tag = hashlib.sha1(src.encode('utf-8')).hexdigest()[:8]
         safe = re.sub(r'[^A-Za-z0-9_-]', '_', cid)
         fname = f'{safe}-{key}.{tag}.{ext}'
@@ -327,6 +345,10 @@ def main():
         else:
             dest.write_bytes(wav)
         made += 1
+
+    if redo:
+        salts_path.write_text(json.dumps(salts, ensure_ascii=False, indent=0), encoding='utf-8')
+        print(f'作り直し：{", ".join(sorted(redo))}')
 
     # 使わなくなった音声を片付ける（今回のパックに入らないもの）
     keep = {info['name'] for info in files.values()}
