@@ -542,3 +542,9 @@ a { color: var(--accent); }
 .q-dict-mine { padding: 12px 14px; border-radius: 14px; background: var(--tile); }
 .q-dict-mine p { margin: 4px 0; font-size: 14px; line-height: 1.7; overflow-wrap: anywhere; }
 .q-dict-mine .label { margin: 0 0 4px; }
+.q-table { overflow-x: auto; border-radius: 12px; border: 1px solid var(--border); }
+.q-table table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.q-table caption { text-align: left; padding: 10px 12px 6px; font-weight: 700; font-size: 14px; color: var(--text); }
+.q-table th, .q-table td { padding: 8px 7px; border-top: 1px solid var(--divider); text-align: left; white-space: nowrap; color: var(--text); }
+.q-table thead th { background: var(--tile); font-weight: 600; color: var(--text-2); }
+.q-table tbody th { font-weight: 600; }

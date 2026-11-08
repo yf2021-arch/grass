@@ -26,7 +26,7 @@ const QUIZ_URL = 'data/quiz/bjt.json';
 const LOG_MAX = 5000;
 const LISTEN = ['聴解', '聴読解'];
 const BASIC = '基礎リスニング';
-const FILTERS = ['すべて', '聴解', '読解', BASIC];
+const FILTERS = ['すべて', '聴解', '聴読解', '読解', BASIC];
 const SIZES = [5, 10];
 const LETTERS = ['1', '2', '3', '4'];
 // 書き取りのあとに自分で付ける目印（原因の決めつけではなく、どこで崩れたかのメモ）
@@ -93,9 +93,9 @@ export function createQuiz({ app, esc, store, todayStr, audio, causes, addMistak
   }
 
   /** 選択肢を音声で読むか（本番形式がオンで、選択肢の音声があるとき） */
-  const examOpts = x => Q.ui.exam && LISTEN.includes(x.part) && audio.has(x.id, 'o');
+  const examOpts = x => Q.ui.exam && x.part === '聴解' && audio.has(x.id, 'o');   // 聴読解の選択肢は本番でも文字
   const hasAudio = x => (x.part === BASIC ? true : !LISTEN.includes(x.part) || audio.has(x.id, 'q'));
-  const inFilter = x => Q.ui.filter === 'すべて' || x.part === Q.ui.filter || (Q.ui.filter === '聴解' && x.part === '聴読解');
+  const inFilter = x => Q.ui.filter === 'すべて' || x.part === Q.ui.filter;
 
   function lastById() {
     const m = new Map();
@@ -241,6 +241,13 @@ export function createQuiz({ app, esc, store, todayStr, audio, causes, addMistak
     return top.length ? ` · 多い目印：${top.map(([t, c]) => `${esc(t)}（${c}）`).join('・')}` : '';
   }
 
+  /** 聴読解・読解の資料（表）：{ caption, head:[…], rows:[[…]] } */
+  function tableHtml(t) {
+    const head = (t.head || []).map(h => `<th scope="col">${esc(h)}</th>`).join('');
+    const rows = (t.rows || []).map(r => `<tr>${r.map((c, i) => (i === 0 ? `<th scope="row">${esc(c)}</th>` : `<td>${esc(c)}</td>`)).join('')}</tr>`).join('');
+    return `<div class="q-table"><table>${t.caption ? `<caption>${esc(t.caption)}</caption>` : ''}${head ? `<thead><tr>${head}</tr></thead>` : ''}<tbody>${rows}</tbody></table></div>`;
+  }
+
   function badge(x) {
     if (x.status === 'auto') return '<em class="qb">自動</em>';
     return x.status === 'reviewed' ? '<em class="qb ok">審査済み</em>' : '<em class="qb">審査前</em>';
@@ -337,6 +344,7 @@ export function createQuiz({ app, esc, store, todayStr, audio, causes, addMistak
         ${x.situation ? `<p class="scene">${esc(x.situation)}</p>` : ''}
         ${playBtn}
         ${s.audioError ? `<p class="msg err" role="alert">${esc(s.audioError)}</p>` : ''}
+        ${x.table ? tableHtml(x.table) : ''}
         ${x.part === '読解' ? `<div class="passage">${esc(x.passage)}</div>` : ''}
         <p class="q-text">${esc(x.question)}</p>
         <ol class="opts">${opts}</ol>
@@ -393,15 +401,17 @@ export function createQuiz({ app, esc, store, todayStr, audio, causes, addMistak
     if (!s || s.playing) return;
     const x = s.items[s.i];
     const [id, key] = x.audioRef || [x.id, 'q'];
+    const my = (s.seq = (s.seq || 0) + 1);
     s.playing = true;
     s.rate = rate;
     s.audioError = '';
     stay();
     let ok = false;
     try { ok = await audio.play(id, key, x.part === BASIC ? x.scriptText : '', { wait: true, rate }); } catch (e) { /* 下で案内 */ }
+    if (Q.session !== s || s.seq !== my) return;          // 途中で次の問題・やめるに進んだ：古い再生の結果は捨てる
     s.playing = false;
     if (!ok) s.audioError = '音声を再生できませんでした。もう一度試してください。';
-    if (Q.session === s) stay();
+    stay();
   }
 
   async function play(el) {
@@ -412,14 +422,17 @@ export function createQuiz({ app, esc, store, todayStr, audio, causes, addMistak
     if (Q.ui.once && s.played > 0 && !s.answered) return;
     const [id, key] = x.audioRef || [x.id, 'q'];
     const withOpts = examOpts(x);
+    const my = (s.seq = (s.seq || 0) + 1);
+    const live = () => Q.session === s && s.seq === my;
     s.playing = true;
     stay();
     s.audioError = '';
     let ok = false;
     try {
-      ok = await audio.play(id, key, x.part === BASIC ? x.scriptText : '', { wait: withOpts });
-      if (ok && withOpts && Q.session === s) ok = await audio.play(x.id, 'o', '', { wait: true });   // 会話と質問のあとに選択肢
+      ok = await audio.play(id, key, x.part === BASIC ? x.scriptText : '', { wait: true });   // 鳴り終わるまで答えられない
+      if (ok && withOpts && live()) ok = await audio.play(x.id, 'o', '', { wait: true });   // 会話と質問のあとに選択肢
     } catch (e) { /* Show a retryable error rather than count a failed play. */ }
+    if (!live()) return;                                   // 古い再生の結果で、今の問題の状態を変えない
     s.playing = false;
     if (ok) s.played += 1;
     else s.audioError = '音声を再生できませんでした。接続や音声データを確認して、もう一度試すか「やめる」で戻ってください。';
@@ -495,6 +508,8 @@ export function createQuiz({ app, esc, store, todayStr, audio, causes, addMistak
   function next() {
     const s = Q.session;
     if (!s) return;
+    s.seq = (s.seq || 0) + 1;                             // 再生中の音声の結果を無効にして、止める
+    audio.stop?.();
     if (s.i + 1 >= s.items.length) s.finished = true;
     else Object.assign(s, { i: s.i + 1, choice: null, answered: false, revealed: false, firstOk: null, dict: '', dictId: null, rate: 1, played: 0, playing: false, audioError: '', causes: [] });
     rerender();
@@ -522,7 +537,7 @@ export function createQuiz({ app, esc, store, todayStr, audio, causes, addMistak
     },
     'quiz-note': () => note(),
     'quiz-next': () => next(),
-    'quiz-quit': () => { Q.session = null; rerender(); scrollTop(); },
+    'quiz-quit': () => { audio.stop?.(); Q.session = null; rerender(); scrollTop(); },
     'quiz-again': () => { Q.ui.mode = 'new'; start(); },
     'quiz-retry': () => { Q.ui.mode = 'wrong'; start(); },
   };

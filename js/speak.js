@@ -600,6 +600,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     todayCount,
     playClip,
     hasClip,
+    stopClip: () => { if (player) player.pause(); if ('speechSynthesis' in window) speechSynthesis.cancel(); },
     openCount: () => openStuck().length,
     inDrill: () => !!SP.drill,
     _state: SP,            // テスト用

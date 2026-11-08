@@ -200,7 +200,7 @@ def main():
         lines = [(voice.get(l.get('sp'), args.speaker), l['t'], LINE_GAP if i else 0) for i, l in enumerate(q['script'])]
         lines.append((args.speaker, q['question'], QUESTION_GAP))
         jobs.append((q['id'], 'q', ' / '.join(t for _, t, _ in lines), lines))
-        if len(q.get('options') or []) == 4:   # 本番の聴解は選択肢も音声で読まれる → 「1番。〜」を別ファイルに
+        if q.get('part') == '聴解' and len(q.get('options') or []) == 4:   # 本番の聴解は選択肢も音声 → 「1番。〜」を別ファイルに（聴読解は文字）
             opts = [(args.speaker, f'{i + 1}番。{o}', OPTION_GAP if i else 0) for i, o in enumerate(q['options'])]
             jobs.append((q['id'], 'o', ' / '.join(t for _, t, _ in opts), opts))
     for n, (cid, key, text, lines) in enumerate(jobs, 1):
