@@ -13,7 +13,12 @@ PC に残る .pack が、そのままバックアップになります。
        python tools/make_card_audio.py
      または tools/音声を更新.bat（Windows）／ tools/音声を更新.command（Mac）をダブルクリック
      → 新しい文・直した文だけ音声を作り、パックを作り直します。前回からの変化も表示します
-  試すときは --limit 10（先頭から10枚だけ）
+    試すときは --limit 10（先頭から10枚だけ）
+
+読み間違いを直す（grass-card-audio/読み替え.txt）
+  A01 = エーゼロイチ   のように「書き方 = 読み（かな）」を1行ずつ書くと、音声を作る前に置き換えます。
+  直した文だけ作り直します。職場の言葉が入るので、このファイルも公開しないでください
+  表現（w）の音声は、まず漢字のまま作り、エンジンの読みが「読み」列と違うときだけ、かなで作り直します
 
 カードの読み込み元（どちらか）
   - シートの API（標準）：URL と TOKEN を聞かれるので、10_API設定 から貼る。
@@ -54,7 +59,7 @@ import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from make_audio import speakers, style_name, synth, to_mp3  # noqa: E402
+from make_audio import request, speakers, style_name, to_mp3  # noqa: E402
 
 PACK_MAGIC = b'GRASSPK1'
 SEP = '｜'
@@ -101,41 +106,104 @@ def strip_note(s):
 
 
 def word_text(card):
-    yomi = re.split(r'[／/、,・\s]', val(card, '読み'))[0].strip()
-    if yomi:
-        return yomi
-    return re.split(r'[／/]', re.sub(r'^[～〜~]', '', val(card, '表現')))[0].strip()
+    """表現（漢字のまま）と、その読み（かな）を返す"""
+    surface = re.split(r'[／/]', re.sub(r'^[～〜~]', '', val(card, '表現')))[0].strip()
+    yomi = re.sub(r'^[～〜~]', '', re.split(r'[／/、,・\s]', val(card, '読み'))[0].strip())
+    return surface or yomi, yomi
 
 
 def parts(card):
     """カードから (キー, 文) を順に返す。キーはアプリの表示順と合わせる"""
-    w = word_text(card)
+    w, yomi = word_text(card)
     if w:
-        yield 'w', w
+        yield 'w', w, yomi
     ex = val(card, '自分の例文')
     if ex:
-        yield 'ex', ex
+        yield 'ex', ex, ''
     for i, item in enumerate([x.strip() for x in val(card, '合わない使い方').split(SEP) if x.strip()], 1):
         if '→' not in item:
             continue                      # 正しい言い方がない行は作らない（✕ だけの行）
         right = strip_note(item.split('→', 1)[1].strip())
         if right:
-            yield f'ok{i}', right
+            yield f'ok{i}', right, ''
     for i, item in enumerate([x.strip() for x in val(card, 'よく合う組み合わせ').split(SEP) if x.strip()], 1):
         t = re.sub(r'^[～〜~]', '', item).strip()
         if t:
-            yield f'c{i}', t
+            yield f'c{i}', t, ''
 
 
 def chunk_parts(chunk):
     """話すチャンクから (キー, 文) を返す。キーはアプリの 🔊（say・v1〜v3）と合わせる"""
     say = str(chunk.get('say') or '').strip()
     if say:
-        yield 'say', say
+        yield 'say', say, ''
     for i, v in enumerate(chunk.get('v') or [], 1):
         t = str((v or {}).get('t') or '').strip()
         if t:
-            yield f'v{i}', t
+            yield f'v{i}', t, ''
+
+
+READING_FILE = '読み替え.txt'
+READING_TEMPLATE = '''# 読み替え：音声を作る前に、左の書き方を右の読みに置き換えます（「書き方 = 読み」を1行ずつ）
+# 読みは ひらがな か カタカナ で書きます。# で始まる行は無視します。長いものから先に置き換えます。
+# 直したら、もう一度「音声を更新」を実行すると、その語が入った音声だけ作り直します。
+# 例（先頭の # を消すと有効になります）：
+# A01 = エーゼロイチ
+# 対象月 = たいしょうづき
+# 生成型 = せいせいがた
+'''
+
+
+def load_readings(out):
+    p = out / READING_FILE
+    if not p.exists():
+        p.write_text(READING_TEMPLATE, encoding='utf-8')
+        return []
+    pairs = []
+    for line in p.read_text(encoding='utf-8-sig').splitlines():
+        line = line.strip()
+        if not line or line.startswith('#') or '=' not in line:
+            continue
+        a, b = (x.strip() for x in line.split('=', 1))
+        if a and b:
+            pairs.append((a, b))
+    return sorted(pairs, key=lambda x: -len(x[0]))
+
+
+def apply_readings(text, pairs):
+    for a, b in pairs:
+        text = text.replace(a, b)
+    return text
+
+
+def to_kata(s):
+    return ''.join(chr(ord(c) + 0x60) if '\u3041' <= c <= '\u3096' else c for c in s)
+
+
+def query_kana(q):
+    """audio_query の結果から、エンジンが読んだ音（カタカナ）を取り出す"""
+    out = []
+    for ph in q.get('accent_phrases') or []:
+        for m in ph.get('moras') or []:
+            out.append(m.get('text', ''))
+    return ''.join(out)
+
+
+def norm_kana(s):
+    return re.sub(r'[^\u30a1-\u30f6]', '', to_kata(s))          # 長音・記号は比べない
+
+
+def make_query(engine, text, style_id, speed, yomi=''):
+    """文の audio_query を作る。yomi があれば、エンジンの読みが違うときだけ、かなで作り直す。
+    返り値：(query, かなに切り替えたか)"""
+    q = request(engine, '/audio_query', params={'text': text, 'speaker': style_id})
+    switched = False
+    if yomi and norm_kana(query_kana(q)) != norm_kana(yomi):
+        q = request(engine, '/audio_query', params={'text': yomi, 'speaker': style_id})
+        switched = True
+    q['speedScale'] = speed
+    q['outputStereo'] = False
+    return q, switched
 
 
 def main():
@@ -189,20 +257,30 @@ def main():
     use_mp3 = shutil.which('ffmpeg') is not None
     ext = 'mp3' if use_mp3 else 'wav'
 
-    files, made, skipped = {}, 0, 0
-    jobs = [(val(c, 'ID'), k, t) for c in cards for k, t in parts(c)]
-    jobs += [(c['id'], k, t) for c in chunks for k, t in chunk_parts(c)]
-    for n, (cid, key, text) in enumerate(jobs, 1):
-        tag = hashlib.sha1(f'{text}|{args.speaker}|{args.speed}'.encode('utf-8')).hexdigest()[:8]
+    readings = load_readings(out)
+    files, made, skipped, switched_words = {}, 0, 0, []
+    jobs = [(val(c, 'ID'), k, t, y) for c in cards for k, t, y in parts(c)]
+    jobs += [(c['id'], k, t, y) for c in chunks for k, t, y in chunk_parts(c)]
+    for n, (cid, key, text, yomi) in enumerate(jobs, 1):
+        spoken = apply_readings(text, readings)
+        if spoken != text:
+            yomi = ''                     # 読み替えを書いた語は、そちらを優先する
+        src = f'{spoken}|{args.speaker}|{args.speed}'
+        if key == 'w':
+            src += f'|{yomi}|w2'              # 表現は「漢字で作り、読みが違えばかな」に変えたので作り直す
+        tag = hashlib.sha1(src.encode('utf-8')).hexdigest()[:8]
         safe = re.sub(r'[^A-Za-z0-9_-]', '_', cid)
         fname = f'{safe}-{key}.{tag}.{ext}'
-        files[f'{cid}:{key}'] = {'name': fname, 'text': text}
+        files[f'{cid}:{key}'] = {'name': fname, 'text': text, **({'spoken': spoken} if spoken != text else {})}
         dest = clips / fname
         if dest.exists():
             skipped += 1
             continue
-        print(f'[{n}/{len(jobs)}] {cid} {key}: {text}')
-        wav = synth(args.engine, text, args.speaker, args.speed)
+        print(f'[{n}/{len(jobs)}] {cid} {key}: {spoken}')
+        q, sw = make_query(args.engine, spoken, args.speaker, args.speed, yomi)
+        if sw:
+            switched_words.append(f'{text}（{yomi}）')
+        wav = request(args.engine, '/synthesis', params={'speaker': args.speaker}, body=q, raw=True)
         if use_mp3:
             to_mp3(wav, dest)
         else:
@@ -257,6 +335,10 @@ def main():
         for b in blobs:
             f.write(b)
     print(f'\n完了：カード {len(cards)}枚・話すの自分の文 {len(chunks)}個・音声 {len(files)}個（作成 {made}・そのまま {skipped}・古い音声の削除 {removed_clips}）')
+    if switched_words:
+        print(f'漢字の読みが「読み」列と違ったので、かなで作った語：{"、".join(switched_words[:20])}{" ほか" if len(switched_words) > 20 else ""}')
+    if readings:
+        print(f'読み替え：{len(readings)}件を使いました（{out / READING_FILE}）')
     if prev:
         new_ids = sorted({r.rsplit(':', 1)[0] for r in added})
         print(f'前回からの変化：追加 {len(added)}・変更 {len(changed)}・削除 {len(gone)}' + (f'（新しい ID：{", ".join(new_ids[:15])}{" ほか" if len(new_ids) > 15 else ""}）' if new_ids else ''))
