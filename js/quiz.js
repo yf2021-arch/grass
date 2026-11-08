@@ -1,4 +1,9 @@
-// BJT 対策の「練習」タブ（v1.7.0）：アプリの中で解ける問題集
+// BJT 対策の「練習」タブ（v1.7.0・書き取りは v1.8.0）：アプリの中で解ける問題集
+//
+// 聴解の流れ（v1.8.0）：聞く（本番形式）→ 答える（初回の結果はここで記録・もう変えられない）
+//   → 書き取り（ひらがなOK・スキップ可・練習の聞き直しは何回でも）→ 答え合わせ（正誤・選択肢・スクリプト）
+//   → スクリプトと比べて目印を付ける（原因の決めつけはしない）→ 0.8倍／原速で聞き直し・シャドーイング
+//   書き取りは meta の bjtDictLog（このスマホだけ・バックアップに入る）
 //
 // 問題
 //   data/quiz/bjt.json … Robert と Kairos が作ったオリジナルの非公式問題（公開）。BJT の過去問・本番の問題ではない
@@ -24,6 +29,8 @@ const BASIC = '基礎リスニング';
 const FILTERS = ['すべて', '聴解', '読解', BASIC];
 const SIZES = [5, 10];
 const LETTERS = ['1', '2', '3', '4'];
+// 書き取りのあとに自分で付ける目印（原因の決めつけではなく、どこで崩れたかのメモ）
+const DTAGS = ['聞き取れない語があった', '条件・否定を落とした', '誰が・いつを取り違えた', '聞き取れたが意味が分からない', '速くて追いつかなかった'];
 
 export function createQuiz({ app, esc, store, todayStr, audio, causes, addMistake, rerender, keepScroll }) {
   const Q = {
@@ -31,6 +38,7 @@ export function createQuiz({ app, esc, store, todayStr, audio, causes, addMistak
     user: [],
     chunks: [],
     log: [],
+    dict: [],       // 書き取り：{ id, at, date, text, tags:[], firstOk }
     session: null,
     ui: { filter: 'すべて', n: 5, once: true, exam: true, mode: 'new', importMsg: null },
   };
@@ -38,9 +46,10 @@ export function createQuiz({ app, esc, store, todayStr, audio, causes, addMistak
   /* ---------------- 読み込み・保存 ---------------- */
 
   async function load() {
-    const [u, l] = await Promise.all([store.get('meta', 'bjtQuizUser'), store.get('meta', 'bjtQuizLog')]);
+    const [u, l, d] = await Promise.all([store.get('meta', 'bjtQuizUser'), store.get('meta', 'bjtQuizLog'), store.get('meta', 'bjtDictLog')]);
     Q.user = Array.isArray(u) ? u.filter(valid) : [];
     Q.log = Array.isArray(l) ? l : [];
+    Q.dict = Array.isArray(d) ? d : [];
     try {
       const res = await fetch(QUIZ_URL, { cache: 'no-cache' });
       if (res.ok) Q.builtin = ((await res.json()).items || []).filter(valid);
@@ -52,6 +61,7 @@ export function createQuiz({ app, esc, store, todayStr, audio, causes, addMistak
   }
   const saveLog = () => store.put('meta', Q.log.slice(-LOG_MAX), 'bjtQuizLog');
   const saveUser = () => store.put('meta', Q.user, 'bjtQuizUser');
+  const saveDict = () => store.put('meta', Q.dict.slice(-LOG_MAX), 'bjtDictLog');
 
   /** 1問として使えるか（足りない項目があれば読み込まない） */
   function valid(x) {
@@ -214,12 +224,21 @@ export function createQuiz({ app, esc, store, todayStr, audio, causes, addMistak
       <section class="group" aria-label="問題集">
         <div class="kv"><span>問題集</span><b>${items.length}問＋基礎リスニング ${basicItems().length}問</b></div>
         <p class="small">${byAuthor || 'まだ問題がありません'}${draftN ? ` · 審査前 ${draftN}問（解けますが、正解率には入れません）` : ''}</p>
+        ${Q.dict.length ? `<p class="small" style="margin:0">書き取りの記録 ${Q.dict.length}件${dictTagSummary()}</p>` : ''}
         <form data-form="bjt-quiz-import" class="stuck-answer">
           <label class="field">問題を読み込む（JSON を貼り付け）<textarea name="json" rows="2" class="export" placeholder='{"app":"grass-quiz","items":[…]}'></textarea></label>
           <button class="outline quiet" type="submit">読み込む（同じ ID は rev が新しいほうに）</button>
         </form>
         ${msg ? `<p class="msg ${msg.ok ? 'ok' : 'err'}">${esc(msg.text)}</p>` : ''}
       </section>`;
+  }
+
+  /** 書き取りで付けた目印の多い順（上位2つ） */
+  function dictTagSummary() {
+    const n = new Map();
+    Q.dict.forEach(d => (d.tags || []).forEach(t => n.set(t, (n.get(t) || 0) + 1)));
+    const top = [...n].sort((a, b) => b[1] - a[1]).slice(0, 2);
+    return top.length ? ` · 多い目印：${top.map(([t, c]) => `${esc(t)}（${c}）`).join('・')}` : '';
   }
 
   function badge(x) {
@@ -230,32 +249,65 @@ export function createQuiz({ app, esc, store, todayStr, audio, causes, addMistak
   function questionView() {
     const s = Q.session;
     const x = s.items[s.i];
-    const answered = s.choice != null && s.answered;
+    const locked = s.choice != null && s.answered;        // 答えた（初回の答えは記録済み・もう変えられない）
     const listen = x.part === BASIC || LISTEN.includes(x.part);
-    const lock = listen && Q.ui.once && s.played > 0 && !answered;
+    const answered = locked && s.revealed;                // 答え合わせ済み（正誤・選択肢・スクリプトを出す）
+    const dictPhase = locked && !s.revealed;              // 聴解：答えたあと、答え合わせの前に書き取る
+    const lock = listen && Q.ui.once && s.played > 0 && !locked;
     const hide = examOpts(x) && !answered;      // 選択肢の文を隠して、番号だけ出す
 
-    const playBtn = listen ? `
-      <button class="${answered ? 'outline' : 'primary'} listen-big" data-act="quiz-play" ${lock || s.playing ? 'disabled' : ''}>
-        ${s.playing ? '再生中…' : lock ? '再生しました（1回だけ）' : answered ? 'もう一度聞く' : s.played ? 'もう一度聞く' : '▶ 音声を聞く'}
-      </button>` : '';
+    let playBtn = '';
+    if (listen && !locked) {
+      playBtn = `
+      <button class="primary listen-big" data-act="quiz-play" ${lock || s.playing ? 'disabled' : ''}>
+        ${s.playing ? '再生中…' : lock ? '再生しました（1回だけ）' : s.played ? 'もう一度聞く' : '▶ 音声を聞く'}
+      </button>`;
+    } else if (listen && dictPhase) {
+      playBtn = `
+      <button class="outline listen-big" data-act="quiz-play" data-v="1" ${s.playing ? 'disabled' : ''}>${s.playing ? '再生中…' : '音声をもう一度聞く（練習・何回でも）'}</button>`;
+    } else if (listen) {
+      playBtn = `
+      <div class="grid2">
+        <button class="outline" data-act="quiz-play" data-v="1" ${s.playing ? 'disabled' : ''}>${s.playing && s.rate === 1 ? '再生中…' : '原速で聞く'}</button>
+        <button class="outline" data-act="quiz-play" data-v="0.8" ${s.playing ? 'disabled' : ''}>${s.playing && s.rate === 0.8 ? '再生中…' : '0.8倍で聞く'}</button>
+      </div>`;
+    }
 
     const opts = x.options.map((o, i) => {
       let cls = '';
       if (answered) cls = i === x.answer ? 'right' : i === s.choice ? 'wrong' : 'dim';
       return `
         <li>
-          <button class="opt ${cls}" data-act="quiz-pick" data-v="${i}" aria-pressed="${s.choice === i}" ${answered ? 'disabled' : ''}>
+          <button class="opt ${cls}" data-act="quiz-pick" data-v="${i}" aria-pressed="${s.choice === i}" ${locked ? 'disabled' : ''}>
             <span class="k">${LETTERS[i]}</span><span class="o">${hide ? '<span class="muted">（音声で聞く）</span>' : esc(o)}</span>
           </button>
           ${answered && x.why?.[i] ? `<p class="why">${esc(x.why[i])}</p>` : ''}
         </li>`;
     }).join('');
 
+    const rec = s.dictId ? Q.dict.find(d => d.at === s.dictId) : null;
+    const prev = Q.dict.filter(d => d.id === x.id && d.at !== s.dictId && d.text).slice(-1)[0];
+    const tags = rec?.tags || [];
     const script = answered && listen ? `
+      ${rec?.text ? `<div class="q-dict-mine"><p class="label">あなたの書き取り</p><p>${esc(rec.text)}</p></div>` : ''}
       <div class="q-script" aria-label="スクリプト">
         <p class="label">スクリプト</p>
         ${x.part === BASIC ? `<p>${esc(x.scriptText)}</p>` : x.script.map(l => `<p>${l.sp ? `<b>${esc(l.sp)}：</b>` : ''}${esc(l.t)}</p>`).join('')}
+      </div>
+      ${prev ? `<p class="small" style="margin:0">前回の書き取り（${esc(prev.date)}）：${esc(prev.text)}</p>` : ''}
+      <div class="q-noteb">
+        <p class="small" style="margin:0">スクリプトと比べて、当てはまるもの（いくつでも）</p>
+        <div class="frow wrap" role="group" aria-label="どこで崩れたか">${DTAGS.map(t => `<button class="chip" aria-pressed="${tags.includes(t)}" data-act="quiz-dtag" data-v="${esc(t)}">${esc(t)}</button>`).join('')}</div>
+        <p class="caption" style="margin:0;text-align:left">意味が分かったら、スクリプトを見ながら音声に重ねて小さく言ってみましょう（シャドーイング）。0.8倍から始めて、原速へ。</p>
+      </div>` : '';
+
+    const dictBox = dictPhase ? `
+      <div class="q-dict">
+        <p class="label">書き取り（ひらがなでOK・スキップできます）</p>
+        <p class="small" style="margin:0">大事だと思った1文か、聞き取れた要点を書いてください。何回聞き直しても、さっきの答え（初回の結果）は変わりません。</p>
+        <textarea data-q="dict" rows="3" class="export" placeholder="例：きんがくはまだかくにんちゅうなので…" autocomplete="off">${esc(s.dict || '')}</textarea>
+        <button class="primary ink" data-act="quiz-reveal">答え合わせ</button>
+        <button class="text-btn" data-act="quiz-reveal" data-v="skip">書かずに答えを見る</button>
       </div>` : '';
 
     const ok = answered && s.choice === x.answer;
@@ -273,7 +325,7 @@ export function createQuiz({ app, esc, store, todayStr, audio, causes, addMistak
             <label class="field">分からなかった表現（あれば）<input data-q="expr" autocomplete="off" placeholder="例：差し支えなければ"></label>
             <button class="outline" data-act="quiz-note">間違いノートに入れる</button>`}
         </div>` : ''}
-      <button class="primary ink" data-act="quiz-next">${s.i + 1 < s.items.length ? '次へ' : '結果を見る'}</button>` : `
+      <button class="primary ink" data-act="quiz-next">${s.i + 1 < s.items.length ? '次へ' : '結果を見る'}</button>` : dictPhase ? dictBox : `
       <button class="primary ink" data-act="quiz-submit" ${s.choice == null || s.playing || (listen && s.played === 0) ? 'disabled' : ''}>答える</button>`;
 
     return `
@@ -320,19 +372,42 @@ export function createQuiz({ app, esc, store, todayStr, audio, causes, addMistak
   /* ---------------- 操作 ---------------- */
 
   const scrollTop = () => app.querySelector('.scroll')?.scrollTo(0, 0);
-  const stay = () => keepScroll(rerender);
+  /** 書き取り中の文は、画面を描き直す前に拾っておく（再生ボタンを押しても消えないように） */
+  const keepDraft = () => {
+    const ta = app.querySelector('[data-q="dict"]');
+    if (ta && Q.session) Q.session.dict = ta.value;
+  };
+  const stay = () => { keepDraft(); keepScroll(rerender); };
 
   function start() {
     const items = pickSession();
     if (!items.length) return;
-    Q.session = { items, i: 0, choice: null, answered: false, played: 0, playing: false, results: [], noted: new Set(), causes: [] };
+    Q.session = { items, i: 0, choice: null, answered: false, revealed: false, firstOk: null, dict: '', dictId: null, rate: 1, played: 0, playing: false, results: [], noted: new Set(), causes: [] };
     rerender();
     scrollTop();
   }
 
-  async function play() {
+  /** 答えたあとの練習の再生：会話（と質問）だけ。速さを選べる。初回の結果には関係しない */
+  async function replay(rate) {
     const s = Q.session;
     if (!s || s.playing) return;
+    const x = s.items[s.i];
+    const [id, key] = x.audioRef || [x.id, 'q'];
+    s.playing = true;
+    s.rate = rate;
+    s.audioError = '';
+    stay();
+    let ok = false;
+    try { ok = await audio.play(id, key, x.part === BASIC ? x.scriptText : '', { wait: true, rate }); } catch (e) { /* 下で案内 */ }
+    s.playing = false;
+    if (!ok) s.audioError = '音声を再生できませんでした。もう一度試してください。';
+    if (Q.session === s) stay();
+  }
+
+  async function play(el) {
+    const s = Q.session;
+    if (!s || s.playing) return;
+    if (s.answered) return replay(Number(el?.dataset.v) || 1);
     const x = s.items[s.i];
     if (Q.ui.once && s.played > 0 && !s.answered) return;
     const [id, key] = x.audioRef || [x.id, 'q'];
@@ -362,8 +437,42 @@ export function createQuiz({ app, esc, store, todayStr, audio, causes, addMistak
     Q.log.push(entry);
     s.results.push({ ...entry, question: x.question });
     s.answered = true;
+    s.firstOk = ok;
+    s.revealed = !(x.part === BASIC || LISTEN.includes(x.part));   // 聴解は書き取りのあとで答え合わせ
     s.causes = x.cause && causes.includes(x.cause) ? [x.cause] : [];
     await saveLog();
+    stay();
+    if (!s.revealed) app.querySelector('.q-dict')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
+
+  async function reveal(skip) {
+    const s = Q.session;
+    if (!s || !s.answered || s.revealed) return;
+    keepDraft();
+    const x = s.items[s.i];
+    const text = skip ? '' : String(s.dict || '').trim();
+    if (text) {
+      const at = Date.now();
+      Q.dict.push({ id: x.id, at, date: todayStr(), text, tags: [], firstOk: !!s.firstOk });
+      s.dictId = at;
+      await saveDict();
+    }
+    s.revealed = true;
+    stay();
+  }
+
+  async function dtag(t) {
+    const s = Q.session;
+    if (!s || !s.revealed) return;
+    const x = s.items[s.i];
+    let rec = s.dictId ? Q.dict.find(d => d.at === s.dictId) : null;
+    if (!rec) {                                           // 書き取らなかったときも、目印だけ残せる
+      rec = { id: x.id, at: Date.now(), date: todayStr(), text: '', tags: [], firstOk: !!s.firstOk };
+      Q.dict.push(rec);
+      s.dictId = rec.at;
+    }
+    rec.tags = rec.tags.includes(t) ? rec.tags.filter(v => v !== t) : [...rec.tags, t];
+    await saveDict();
     stay();
   }
 
@@ -387,7 +496,7 @@ export function createQuiz({ app, esc, store, todayStr, audio, causes, addMistak
     const s = Q.session;
     if (!s) return;
     if (s.i + 1 >= s.items.length) s.finished = true;
-    else Object.assign(s, { i: s.i + 1, choice: null, answered: false, played: 0, playing: false, audioError: '', causes: [] });
+    else Object.assign(s, { i: s.i + 1, choice: null, answered: false, revealed: false, firstOk: null, dict: '', dictId: null, rate: 1, played: 0, playing: false, audioError: '', causes: [] });
     rerender();
     scrollTop();
   }
@@ -399,7 +508,9 @@ export function createQuiz({ app, esc, store, todayStr, audio, causes, addMistak
     'quiz-once': () => { Q.ui.once = !Q.ui.once; stay(); },
     'quiz-exam': () => { Q.ui.exam = !Q.ui.exam; stay(); },
     'quiz-start': () => start(),
-    'quiz-play': () => play(),
+    'quiz-play': el => play(el),
+    'quiz-reveal': el => reveal(el.dataset.v === 'skip'),
+    'quiz-dtag': el => dtag(el.dataset.v),
     'quiz-pick': el => { if (Q.session && !Q.session.answered) { Q.session.choice = Number(el.dataset.v); stay(); } },
     'quiz-submit': () => submit(),
     'quiz-cause': el => {
@@ -441,7 +552,7 @@ export function createQuiz({ app, esc, store, todayStr, audio, causes, addMistak
   }
 
   /** バックアップ用 */
-  const exportData = () => ({ quizLog: Q.log, quizItems: Q.user });
+  const exportData = () => ({ quizLog: Q.log, quizItems: Q.user, dictLog: Q.dict });
   async function importData(data) {
     const haveLog = new Set(Q.log.map(e => `${e.id}|${e.at}`));
     const logs = (data.quizLog || []).filter(e => e && e.id && !haveLog.has(`${e.id}|${e.at}`));
@@ -450,8 +561,12 @@ export function createQuiz({ app, esc, store, todayStr, audio, causes, addMistak
     const haveItem = new Set(Q.user.map(x => x.id));
     const items = (data.quizItems || []).filter(x => valid(x) && !haveItem.has(x.id));
     Q.user.push(...items);
-    await Promise.all([saveLog(), saveUser()]);
-    return { logs: logs.length, items: items.length };
+    const haveDict = new Set(Q.dict.map(d => `${d.id}|${d.at}`));
+    const dicts = (Array.isArray(data.dictLog) ? data.dictLog : []).filter(d => d && d.id && d.at && !haveDict.has(`${d.id}|${d.at}`));
+    Q.dict.push(...dicts);
+    Q.dict.sort((a, b) => a.at - b.at);
+    await Promise.all([saveLog(), saveUser(), saveDict()]);
+    return { logs: logs.length, items: items.length, dicts: dicts.length };
   }
 
   return { load, render, actions, onImport, exportData, importData, inSession: () => !!Q.session, _state: Q };

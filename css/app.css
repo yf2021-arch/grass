@@ -536,3 +536,9 @@ a { color: var(--accent); }
 .q-script .label { margin: 0 0 4px; }
 .q-noteb { display: flex; flex-direction: column; gap: 10px; }
 .opt .muted { color: var(--muted); }
+.q-dict { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 14px; background: var(--tile); }
+.q-dict .label { margin: 0; }
+.q-dict textarea { font-size: 16px; }
+.q-dict-mine { padding: 12px 14px; border-radius: 14px; background: var(--tile); }
+.q-dict-mine p { margin: 4px 0; font-size: 14px; line-height: 1.7; overflow-wrap: anywhere; }
+.q-dict-mine .label { margin: 0 0 4px; }

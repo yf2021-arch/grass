@@ -382,7 +382,7 @@ export function createBjt({ app, esc, go, nav, store, todayStr, ICON, audio = { 
         B.mistakes.sort((a, b) => a.at - b.at);
         await Promise.all([saveScores(), saveMistakes()]);
         const q = await quiz.importData(data);
-        B.ui.restoreMsg = { ok: true, text: `記録 ${s.length}件・間違い ${m.length}件・練習の記録 ${q.logs}件を追加しました（同じものは追加しません）` };
+        B.ui.restoreMsg = { ok: true, text: `記録 ${s.length}件・間違い ${m.length}件・練習の記録 ${q.logs}件・書き取り ${q.dicts}件を追加しました（同じものは追加しません）` };
       } catch (e) {
         B.ui.restoreMsg = { ok: false, text: e instanceof SyntaxError ? '貼り付けた文が読めません。バックアップの文を全部貼ってください' : e.message };
       }
