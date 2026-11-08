@@ -962,7 +962,7 @@ function renderSettings() {
             <button class="outline quiet" data-act="${S.settings.demo ? 'demo-off' : 'demo-on'}">${S.settings.demo ? 'デモを終了' : 'デモデータで試す'}</button>
           </div>
         </section>
-        <p class="small" style="text-align:center">Grass v1.9.2</p>
+        <p class="small" style="text-align:center">Grass v1.9.3</p>
       </main>
       ${nav('settings')}
     </div>`;
@@ -1162,6 +1162,50 @@ app.addEventListener('submit', e => {
 });
 
 window.addEventListener('hashchange', render);
+
+/* ============================== 「戻る」2回で終了 ==============================
+   Android の「戻る」で「今日」まで戻ったら、1回目は「もう一度押すと終了します」と出すだけ。
+   2秒以内にもう一度押すとアプリを閉じる（うっかり閉じないように）。
+   しくみ：履歴のいちばん下に「起点」、その上に同じ「今日」の「止め」を置く。
+   「止め」から戻って「起点」に来たら案内を出して「止め」を積み直す。2秒以内ならそのまま起点から戻る＝終了。 */
+
+let lastBack = 0;
+let toastTimer = null;
+
+function toast(text, ms = 2000) {
+  let el = document.getElementById('toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'toast';
+    el.className = 'toast';
+    el.setAttribute('role', 'status');
+    el.setAttribute('aria-live', 'polite');
+    document.body.appendChild(el);
+  }
+  el.textContent = text;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), ms);
+}
+
+function setupBackToExit() {
+  const start = location.hash || '#/today';
+  history.replaceState({ grassRoot: true }, '', '#/today');
+  history.pushState({ grassTrap: true }, '', '#/today');
+  if (start !== '#/today') history.pushState(null, '', start);
+  window.addEventListener('popstate', e => {
+    if (!e.state?.grassRoot) return;
+    if (Date.now() - lastBack < 2000) {
+      document.getElementById('toast')?.classList.remove('show');
+      history.back();                                   // 起点からさらに戻る＝アプリを閉じる
+      return;
+    }
+    lastBack = Date.now();
+    toast(walk.active() ? 'もう一度「戻る」で終了します（散歩モードも止まります）' : 'もう一度「戻る」で終了します');
+    history.pushState({ grassTrap: true }, '', '#/today');
+    if (route().name !== 'today') render();
+  });
+}
 window.addEventListener('online', () => runSync());
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') return;
@@ -1183,6 +1227,7 @@ document.addEventListener('visibilitychange', () => {
   const r = route().name;
   if (r === 'review' || r === 'done') location.replace('#/today');
   if (r === 'drill') location.replace('#/speak');
+  setupBackToExit();
   render();
   if (configured() && !S.settings.demo) runSync();
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {

@@ -555,3 +555,13 @@ a { color: var(--accent); }
 .walk-sub { margin: 0; overflow-wrap: anywhere; }
 .walk-ctrl { display: grid; grid-template-columns: 1fr 1.4fr 1fr; gap: 8px; }
 .walk-ctrl button { min-width: 0; }
+
+/* ---------- 「戻る」2回で終了の案内 ---------- */
+.toast {
+  position: fixed; left: 50%; bottom: calc(84px + env(safe-area-inset-bottom, 0px)); z-index: 50;
+  transform: translate(-50%, 12px); width: max-content; max-width: calc(100vw - 32px);
+  padding: 10px 16px; border-radius: 20px; background: var(--ink); color: var(--on-ink);
+  font-size: 14px; line-height: 1.4; text-align: center; box-shadow: 0 4px 16px rgba(0, 0, 0, .18);
+  opacity: 0; pointer-events: none; transition: opacity .18s ease, transform .18s ease;
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
