@@ -1180,7 +1180,7 @@ document.addEventListener('visibilitychange', () => {
     const hadController = !!navigator.serviceWorker.controller;
     let reloaded = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (!hadController || reloaded || ['review', 'drill'].includes(route().name)) return;   // 復習・練習の途中では再読み込みしない
+      if (!hadController || reloaded || ['review', 'drill', 'bjt'].includes(route().name)) return;   // 復習・練習の途中では再読み込みしない
       reloaded = true;
       location.reload();
     });
