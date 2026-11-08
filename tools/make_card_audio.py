@@ -15,6 +15,13 @@ PC に残る .pack が、そのままバックアップになります。
      → 新しい文・直した文だけ音声を作り、パックを作り直します。前回からの変化も表示します
     試すときは --limit 10（先頭から10枚だけ）
 
+原因を切り分けるサンプル（パックは変えません）
+  python tools/make_card_audio.py --sample "ビデオモデルは…" --sample "彼は世界記録を塗り替えた"
+  → grass-card-audio/samples/ に1文ずつ4種類を作ります：
+     1_元の設定（無音 0.1 秒・読み替えなし）／2_無音だけ（0.4 秒）／3_読み替えだけ／4_両方
+  PC でそのまま聞いて、次にスマホ（スピーカー・イヤホン）でも聞き比べます。
+  PC の 1 ですでに間違っていれば合成の問題、PC では正しくスマホでだけ欠けるなら再生の問題です
+
 読み間違いを直す（grass-card-audio/読み替え.txt）
   A01 = エーゼロイチ   のように「書き方 = 読み（かな）」を1行ずつ書くと、音声を作る前に置き換えます。
   直した文だけ作り直します。職場の言葉が入るので、このファイルも公開しないでください
@@ -207,6 +214,33 @@ def make_query(engine, text, style_id, speed, yomi=''):
     return q, switched
 
 
+def make_samples(args, out, readings):
+    """同じ文を「元の設定／無音だけ／読み替えだけ／両方」の4種類で作り、聞き比べられるようにする"""
+    d = out / 'samples'
+    d.mkdir(parents=True, exist_ok=True)
+    use_mp3 = shutil.which('ffmpeg') is not None
+    ext = 'mp3' if use_mp3 else 'wav'
+    for n, text in enumerate(args.sample, 1):
+        spoken = apply_readings(text, readings)
+        variants = [('1_元の設定', text, 0.1), ('2_無音だけ', text, LEAD_SILENCE),
+                    ('3_読み替えだけ', spoken, 0.1), ('4_両方', spoken, LEAD_SILENCE)]
+        for label, t, lead in variants:
+            q = request(args.engine, '/audio_query', params={'text': t, 'speaker': args.speaker})
+            q['speedScale'] = args.speed
+            q['outputStereo'] = False
+            q['prePhonemeLength'] = lead
+            wav = request(args.engine, '/synthesis', params={'speaker': args.speaker}, body=q, raw=True)
+            dest = d / f'{n:02d}_{label}.{ext}'
+            if use_mp3:
+                to_mp3(wav, dest)
+            else:
+                dest.write_bytes(wav)
+        same = '（読み替えの対象なし：3・4 は 1・2 と同じ文）' if spoken == text else f'（読み替え後：{spoken}）'
+        print(f'{n:02d}：{text} {same}')
+    print(f'\nサンプル：{d}')
+    print('PC で 1〜4 を聞き、次にスマホ（スピーカー／イヤホン）でも聞いてください。パックやスマホのカード音声は変わりません。')
+
+
 def main():
     ap = argparse.ArgumentParser(description='知識カードの音声パックを作る')
     ap.add_argument('--engine', default='http://127.0.0.1:10101')
@@ -216,6 +250,7 @@ def main():
     ap.add_argument('--limit', type=int, default=0)
     ap.add_argument('--ids', default='')
     ap.add_argument('--out', default='grass-card-audio')
+    ap.add_argument('--sample', action='append', default=[], help='聞き比べ用のサンプルを作る文（何度でも指定可）')
     args = ap.parse_args()
 
     out = Path(args.out).resolve()
@@ -227,6 +262,11 @@ def main():
         args.speed = conf.get('speed', 1.0)
 
     sp_list = speakers(args.engine)
+    if args.sample:
+        if args.speaker is None:
+            sys.exit('--speaker 番号 を指定してください')
+        make_samples(args, out, load_readings(out))
+        return
     if args.speaker is None:
         sys.exit('初めてのときは --speaker 番号 を指定してください（python tools/make_audio.py --list で一覧）')
     name, style, sp = style_name(sp_list, args.speaker)
