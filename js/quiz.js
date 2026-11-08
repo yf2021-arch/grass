@@ -267,7 +267,7 @@ export function createQuiz({ app, esc, store, todayStr, audio, causes, addMistak
             <button class="outline" data-act="quiz-note">間違いノートに入れる</button>`}
         </div>` : ''}
       <button class="primary ink" data-act="quiz-next">${s.i + 1 < s.items.length ? '次へ' : '結果を見る'}</button>` : `
-      <button class="primary ink" data-act="quiz-submit" ${s.choice == null ? 'disabled' : ''}>答える</button>`;
+      <button class="primary ink" data-act="quiz-submit" ${s.choice == null || s.playing || (listen && s.played === 0) ? 'disabled' : ''}>答える</button>`;
 
     return `
       <section class="card-box quiz" aria-label="問題">
@@ -277,6 +277,7 @@ export function createQuiz({ app, esc, store, todayStr, audio, causes, addMistak
         </div>
         ${x.situation ? `<p class="scene">${esc(x.situation)}</p>` : ''}
         ${playBtn}
+        ${s.audioError ? `<p class="msg err" role="alert">${esc(s.audioError)}</p>` : ''}
         ${x.part === '読解' ? `<div class="passage">${esc(x.passage)}</div>` : ''}
         <p class="q-text">${esc(x.question)}</p>
         <ol class="opts">${opts}</ol>
@@ -330,16 +331,21 @@ export function createQuiz({ app, esc, store, todayStr, audio, causes, addMistak
     const [id, key] = x.audioRef || [x.id, 'q'];
     s.playing = true;
     stay();
-    const ok = await audio.play(id, key, x.part === BASIC ? x.scriptText : '');
+    s.audioError = '';
+    let ok = false;
+    try { ok = await audio.play(id, key, x.part === BASIC ? x.scriptText : ''); }
+    catch (e) { /* Show a retryable error rather than count a failed play. */ }
     s.playing = false;
     if (ok) s.played += 1;
-    stay();
+    else s.audioError = '音声を再生できませんでした。接続や音声データを確認して、もう一度試すか「やめる」で戻ってください。';
+    if (Q.session === s) stay();
   }
 
   async function submit() {
     const s = Q.session;
     if (!s || s.choice == null || s.answered) return;
     const x = s.items[s.i];
+    if (s.playing || ((x.part === BASIC || LISTEN.includes(x.part)) && s.played === 0)) return;
     const ok = s.choice === x.answer;
     const first = !Q.log.some(e => e.group === x.group);
     const entry = { id: x.id, group: x.group, rev: x.rev || 1, part: x.part, status: x.status, ok, first, date: todayStr(), at: Date.now() };
@@ -371,7 +377,7 @@ export function createQuiz({ app, esc, store, todayStr, audio, causes, addMistak
     const s = Q.session;
     if (!s) return;
     if (s.i + 1 >= s.items.length) s.finished = true;
-    else Object.assign(s, { i: s.i + 1, choice: null, answered: false, played: 0, playing: false, causes: [] });
+    else Object.assign(s, { i: s.i + 1, choice: null, answered: false, played: 0, playing: false, audioError: '', causes: [] });
     rerender();
     scrollTop();
   }
