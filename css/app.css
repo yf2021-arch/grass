@@ -565,3 +565,16 @@ a { color: var(--accent); }
   opacity: 0; pointer-events: none; transition: opacity .18s ease, transform .18s ease;
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* ---------- 生の日本語（v1.10.0） ---------- */
+button.row-link { width: 100%; border: 0; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.raw-head { gap: 6px; }
+.raw-title { margin: 0; font-size: 18px; font-weight: 700; line-height: 1.5; }
+.raw-qs { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 15px; line-height: 1.6; }
+.raw-qs.ans li b { font-weight: 600; }
+.raw-ex { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 10px; }
+.raw-ex b { font-size: 16px; }
+.raw-ex .small { margin: 2px 0 0; }
+.raw-player { width: 100%; aspect-ratio: 16 / 9; border-radius: 12px; overflow: hidden; background: var(--tile); }
+.raw-player:empty { display: none; }
+.raw-player iframe { width: 100%; height: 100%; border: 0; }

@@ -337,6 +337,14 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     go('#/drill');
   }
 
+  /** ほかの画面から、決まった文だけで練習を始める（生の日本語 → 話す） */
+  function startWith(ids, mode = 'scene') {
+    const list = ids.filter(id => chunkById(id));
+    if (!list.length) return;
+    SP.drill = { mode, ids: list, i: 0, phase: 'front', t0: 0, ms: 0, peeks: 0, peeking: false, results: [], startedAt: Date.now() };
+    go('#/drill');
+  }
+
   function drillHead() {
     const d = SP.drill;
     const pct = Math.round((d.i / d.ids.length) * 1000) / 10;
@@ -603,6 +611,8 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     todayCount,
     playClip,
     hasClip,
+    startWith,
+    chunkSay: id => chunkById(id)?.say || '',
     clipUrl: (id, key) => (SP.audio.files[`${id}:${key}`] ? AUDIO_DIR + encodeURIComponent(SP.audio.files[`${id}:${key}`]) : null),
     chunks: () => SP.chunks,
     stopClip: () => { if (player) player.pause(); if ('speechSynthesis' in window) speechSynthesis.cancel(); },

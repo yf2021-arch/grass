@@ -19,7 +19,7 @@ const PARTS = [
 const CAUSES = ['聞き取れない語', '意図・言外の意味', '条件・期限・担当', '図表・資料', '敬語・場面', '語彙・文法', '時間切れ', 'その他'];
 const LIMITS = [60, 90, 120];
 
-export function createBjt({ app, esc, go, nav, store, todayStr, ICON, audio = { has: () => false, play: async () => false } }) {
+export function createBjt({ app, esc, go, nav, store, todayStr, ICON, audio = { has: () => false, play: async () => false }, extraBackup = [] }) {
   const B = {
     scores: [],     // { id, date, src, part, ok, n, blank, min, at }
     mistakes: [],   // { id, date, part, q, causes:[], expr, memo, at, reviewedAt, sent }
@@ -382,6 +382,7 @@ export function createBjt({ app, esc, go, nav, store, todayStr, ICON, audio = { 
         B.mistakes.sort((a, b) => a.at - b.at);
         await Promise.all([saveScores(), saveMistakes()]);
         const q = await quiz.importData(data);
+        for (const x of extraBackup) await x.importData(data);
         B.ui.restoreMsg = { ok: true, text: `記録 ${s.length}件・間違い ${m.length}件・練習の記録 ${q.logs}件・書き取り ${q.dicts}件を追加しました（同じものは追加しません）` };
       } catch (e) {
         B.ui.restoreMsg = { ok: false, text: e instanceof SyntaxError ? '貼り付けた文が読めません。バックアップの文を全部貼ってください' : e.message };
@@ -439,7 +440,7 @@ export function createBjt({ app, esc, go, nav, store, todayStr, ICON, audio = { 
       keepScroll(renderBjt);
     },
     'bjt-backup': async () => {
-      const text = JSON.stringify({ app: 'grass-bjt', version: 1, exportedAt: new Date().toISOString(), scores: B.scores, mistakes: B.mistakes, ...quiz.exportData() });
+      const text = JSON.stringify({ app: 'grass-bjt', version: 1, exportedAt: new Date().toISOString(), scores: B.scores, mistakes: B.mistakes, ...quiz.exportData(), ...Object.assign({}, ...extraBackup.map(x => x.exportData())) });
       const ok = await copyText(text);
       B.ui.backup = { ok, text };
       keepScroll(renderBjt);
