@@ -578,3 +578,7 @@ button.row-link { width: 100%; border: 0; text-align: left; font: inherit; color
 .raw-player { width: 100%; aspect-ratio: 16 / 9; border-radius: 12px; overflow: hidden; background: var(--tile); }
 .raw-player:empty { display: none; }
 .raw-player iframe { width: 100%; height: 100%; border: 0; }
+.raw-cues { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.raw-cue { width: 100%; display: flex; gap: 10px; align-items: flex-start; text-align: left; padding: 8px 10px; border: 0; border-radius: 10px; background: transparent; color: var(--text); font: inherit; font-size: 15px; line-height: 1.6; cursor: pointer; }
+.raw-cue:active, .raw-cue:focus-visible { background: var(--tile); }
+.raw-cue .k { flex-shrink: 0; font-size: 12px; color: var(--muted); padding-top: 3px; font-variant-numeric: tabular-nums; }

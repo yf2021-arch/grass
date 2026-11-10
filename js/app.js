@@ -968,7 +968,7 @@ function renderSettings() {
             <button class="outline quiet" data-act="${S.settings.demo ? 'demo-off' : 'demo-on'}">${S.settings.demo ? 'デモを終了' : 'デモデータで試す'}</button>
           </div>
         </section>
-        <p class="small" style="text-align:center">Grass v1.10.1</p>
+        <p class="small" style="text-align:center">Grass v1.11.0</p>
       </main>
       ${nav('settings')}
     </div>`;
@@ -1230,6 +1230,7 @@ document.addEventListener('visibilitychange', () => {
     app.innerHTML = `<div class="empty"><h2>データを開けません</h2><p>${esc(e.message)}</p></div>`;
     return;
   }
+  raw.takeShare();                                     // YouTube アプリの「共有 → Grass」で開かれたとき
   const r = route().name;
   if (r === 'review' || r === 'done') location.replace('#/today');
   if (r === 'drill') location.replace('#/speak');
