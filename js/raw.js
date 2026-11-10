@@ -133,7 +133,7 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay }) {
       <section class="card-box" aria-label="確認後">
         <p class="label">3. 字幕・スクリプトで確かめたあと</p>
         <div class="frow wrap" role="group" aria-label="確認後の理解度">${SCORES.map(([v, l]) => `<button class="chip" aria-pressed="${cs === v}" data-act="raw-cscore" data-v="${v}">${v} ${esc(l)}</button>`).join('')}</div>
-        <label class="field">聞き取れなかったところ（あれば）<input data-raw="cnote" autocomplete="off" placeholder="例：「なるべく」が聞こえなかった"></label>
+        <label class="field">聞き取れなかったところ（あれば）<input data-raw="cnote" autocomplete="off" placeholder="例：「なるべく」が聞こえなかった" value="${esc(R.ui.cnote || '')}"></label>
         <button class="outline" data-act="raw-check" data-id="${esc(c.id)}" ${cs == null ? 'disabled' : ''}>確認後の理解度を記録する</button>
       </section>`;
 
@@ -151,9 +151,9 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay }) {
   }
 
   function render(arg) {
-    stopYt();
+    stopYt();                                          // 画面を作り直すときだけ（点数を選ぶ・字幕スイッチは作り直さない）
     const id = arg ? decodeURIComponent(arg) : '';
-    if (id && R.ui.id !== id) R.ui = { id, score: null, checkScore: null };
+    if (id && R.ui.id !== id) R.ui = { id, score: null, checkScore: null, cnote: '' };
     app.innerHTML = `
       <div class="screen">
         <div class="scroll">
@@ -181,21 +181,38 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay }) {
     return R.ytReady;
   }
 
-  async function playYt(c) {
-    const box = document.getElementById('raw-yt');
+  const showYtMsg = text => {
     const err = document.getElementById('raw-yt-err');
-    if (!box) return;
+    if (err) { err.textContent = text; err.hidden = false; }
+  };
+
+  async function playYt(c) {
+    const here = () => location.hash === `#/raw/${encodeURIComponent(c.id)}` && document.getElementById('raw-yt')?.isConnected;
+    if (!here()) return;
     const ok = await loadYtApi();
-    if (!ok || !window.YT?.Player) { R.ytReady = null; if (err) err.hidden = false; return; }
+    if (!here()) return;                                // 読み込みを待つあいだに画面を離れた
+    if (!ok || !window.YT?.Player) {
+      R.ytReady = null;
+      showYtMsg('プレーヤーを読み込めませんでした（通信を確認してください）。「YouTube で開く」から見られます。');
+      return;
+    }
     if (R.yt) { R.yt.seekTo(c.startSec, true); R.yt.playVideo(); return; }
+    const box = document.getElementById('raw-yt');
+    let started = false;
     R.yt = new window.YT.Player(box, {
       videoId: c.videoId,
       playerVars: { start: c.startSec, end: c.endSec, playsinline: 1, rel: 0, cc_load_policy: 0 },
       events: {
         onReady: e => e.target.playVideo(),
-        onError: () => { if (err) err.hidden = false; },
+        onStateChange: e => { if (e.data === 1) started = true; },   // 1 = 再生中
+        onError: e => showYtMsg([101, 150].includes(e.data)
+          ? 'この動画は、ほかのサイトでの再生が許可されていません。「YouTube で開く」から見てください。'
+          : 'プレーヤーでエラーが起きました。「YouTube で開く」から見られます。'),
       },
     });
+    setTimeout(() => {                                  // 自動再生が止められたとき：プレーヤーの ▶ を押してもらう
+      if (!started && here() && R.yt) showYtMsg('再生が始まらないときは、プレーヤーの ▶ を直接押してください。');
+    }, 5000);
   }
 
   function stopYt() {
@@ -208,6 +225,7 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay }) {
   /** 書きかけの要点は、打つたびに保存（公式サイトへ行って戻っても、再読み込みしても続きから） */
   let saveTimer = null;
   app.addEventListener('input', e => {
+    if (e.target.dataset?.raw === 'cnote') { R.ui.cnote = e.target.value; return; }
     if (e.target.dataset?.raw !== 'gist') return;
     rec(e.target.dataset.id).draft = e.target.value;
     clearTimeout(saveTimer);
@@ -220,6 +238,11 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay }) {
     app.querySelector('.scroll')?.scrollTo(0, top);
   };
   const again = () => keepTop(() => render(R.ui.id));
+  const pick = (act, el, btnSel) => {
+    app.querySelectorAll(`[data-act="${act}"]`).forEach(b => b.setAttribute('aria-pressed', String(b === el)));
+    const btn = app.querySelector(btnSel);
+    if (btn) btn.disabled = false;
+  };
   const clip = id => R.clips.find(x => x.id === id);
 
   const actions = {
@@ -243,9 +266,10 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay }) {
       if (r.first) { r.replays += 1; save(); }
       playYt(c);
     },
-    'raw-score': el => { R.ui.score = Number(el.dataset.v); again(); },
-    'raw-cscore': el => { R.ui.checkScore = Number(el.dataset.v); again(); },
-    'raw-subs': async el => { const r = rec(el.dataset.id); r.subs = !r.subs; await save(); again(); },
+    // 点数と字幕スイッチは、その場で表示だけ変える（画面を作り直さないので、再生中のプレーヤーも入力中の文も消えない）
+    'raw-score': el => { R.ui.score = Number(el.dataset.v); pick('raw-score', el, '[data-act="raw-first"]'); },
+    'raw-cscore': el => { R.ui.checkScore = Number(el.dataset.v); pick('raw-cscore', el, '[data-act="raw-check"]'); },
+    'raw-subs': async el => { const r = rec(el.dataset.id); r.subs = !r.subs; el.setAttribute('aria-pressed', String(r.subs)); await save(); },
     'raw-first': async el => {
       const r = rec(el.dataset.id);
       if (r.first || R.ui.score == null) return;       // 初回は1回だけ
