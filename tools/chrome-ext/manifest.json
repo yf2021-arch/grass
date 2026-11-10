@@ -1,0 +1,8 @@
+{
+  "manifest_version": 3,
+  "name": "Grass 字幕助手",
+  "version": "0.1.0",
+  "description": "YouTube の文字起こしパネルから、選んだ30〜90秒の字幕を学習パック（grass-rawpack）にして保存する",
+  "permissions": ["activeTab", "scripting"],
+  "action": { "default_title": "Grass 字幕助手", "default_popup": "popup.html" }
+}

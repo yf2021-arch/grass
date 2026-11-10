@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<style>
+  body { width: 340px; margin: 0; padding: 12px; font: 13px/1.5 system-ui, "Hiragino Sans", "Noto Sans JP", sans-serif; color: #1b1d21; background: #f6f6f3; }
+  h1 { font-size: 15px; margin: 0 0 8px; }
+  .box { background: #fff; border: 1px solid #e3e3de; border-radius: 10px; padding: 10px; margin-bottom: 8px; }
+  .row { display: flex; gap: 6px; align-items: center; margin: 4px 0; }
+  input { width: 70px; padding: 4px 6px; border: 1px solid #ccc; border-radius: 6px; font: inherit; }
+  button { padding: 6px 10px; border: 1px solid #2b57c8; border-radius: 8px; background: #fff; color: #2b57c8; font: inherit; cursor: pointer; }
+  button.main { background: #2b57c8; color: #fff; }
+  button:disabled { opacity: .4; cursor: default; }
+  .muted { color: #6b6f76; font-size: 12px; }
+  .err { color: #b3261e; }
+  ol { margin: 6px 0 0; padding-left: 18px; max-height: 160px; overflow: auto; }
+</style>
+</head>
+<body>
+  <h1>Grass 字幕助手</h1>
+  <div class="box" id="info"><span class="muted">YouTube の動画ページで開いてください。</span></div>
+  <div class="box">
+    <p class="muted" style="margin:0 0 6px">先に、動画の下の「…」→「文字起こしを表示」でパネルを開いてください（字幕のない動画では使えません）。</p>
+    <div class="row">始まり <input id="s" placeholder="1:23"> <button id="ns">今の時間</button></div>
+    <div class="row">終わり <input id="e" placeholder="2:30"> <button id="ne">今の時間</button></div>
+    <div class="row"><button class="main" id="read">字幕を読む</button><span class="muted" id="len"></span></div>
+  </div>
+  <div class="box" id="prev" hidden></div>
+  <div class="row"><button class="main" id="save" disabled>学習パックを保存</button><button id="copy" disabled>コピー</button></div>
+  <p class="muted">読むのは、押したときに画面に見えている文字起こしだけです。選んだ範囲の外は保存しません。保存したファイルを Drive などでスマホに送り、Grass の「生の日本語 → 学習パックを読み込む」で開きます。</p>
+  <script src="popup.js"></script>
+</body>
+</html>
