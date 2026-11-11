@@ -218,6 +218,7 @@ const playBtn = (id, key, extra = '') => cardAudio.has(id, key)
 
 function render() {
   const r = route();
+  if (r.name !== 'drill') speak.releaseMic();          // 練習の外ではマイクを閉じる（「戻る」で抜けたときも）
   const screens = { today: renderToday, review: renderReview, done: renderDone, inbox: renderInbox, speak: speak.renderSpeak, drill: speak.renderDrill, bjt: bjt.renderBjt, walk: walk.render, raw: raw.render, search: renderSearch, card: renderDetail, family: renderFamily, settings: renderSettings };
   (screens[r.name] || renderToday)(r.arg);
   refreshSyncBits();
@@ -968,7 +969,7 @@ function renderSettings() {
             <button class="outline quiet" data-act="${S.settings.demo ? 'demo-off' : 'demo-on'}">${S.settings.demo ? 'デモを終了' : 'デモデータで試す'}</button>
           </div>
         </section>
-        <p class="small" style="text-align:center">Grass v1.11.2</p>
+        <p class="small" style="text-align:center">Grass v1.12.0</p>
       </main>
       ${nav('settings')}
     </div>`;
@@ -1134,6 +1135,7 @@ app.addEventListener('click', e => {
 });
 
 app.addEventListener('change', async e => {
+  if (e.target.dataset.act === 'sp-voice' || e.target.dataset.act === 'sp-sr') { speak.onChange(e.target); return; }
   if (e.target.dataset.act === 'bjt-part') { bjt.actions['bjt-part'](e.target); return; }
   if (e.target.id === 'ca-file') {
     const file = e.target.files?.[0];

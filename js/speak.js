@@ -15,12 +15,31 @@
 //   ファイル名に文の記号が入るので、作り直した文だけが新しく取られる。
 //   自分の文（SP-xxxx）の音声は、カードの音声パック（tools/make_card_audio.py・このスマホだけ）から鳴らす。
 //   どちらもない文は端末の読み上げ、それもなければ案内を出す。
+//
+// 声で答える（v1.12.0・look モードだけ）：js/voice.js
+//   顔を上げたらマイクが聞き始め、黙ったら自動で答えへ進む。話し始めまでの秒数（onset）も記録する。
+//   ふだんは録音して「自分の声 → お手本」で聞き比べる（どの端末でも動く）。
+//   「文字でも確かめる」をオンにすると音声認識（Google の音声サービスが必要）。失敗したら理由を覚えて録音に戻す。
+//   録音はメモリの中だけ。保存も送信もしない。
+
+import { createVoice, compareSay, srSupported, micSupported } from './voice.js';
 
 const DRILL_SIZE = 5;
 const LOG_MAX = 3000;
 const AUDIO_CACHE = 'grass-audio';
 const AUDIO_DIR = 'data/audio/';
 const MINE = '自分の文';
+
+const SR_MSG = {
+  'network': 'Google の音声サービスにつながりません',
+  'service-not-allowed': '音声認識のサービスがありません',
+  'no-service': '音声認識のサービスがありません',
+  'not-allowed': 'マイクか音声認識が許可されていません',
+  'language-not-supported': '日本語の音声認識がありません',
+  'audio-capture': 'マイクを使えません',
+  'timeout': '音声認識が始まりません',
+  'unsupported': 'このブラウザには音声認識がありません',
+};
 
 export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON, cardAudio = null }) {
   const SP = {
@@ -33,16 +52,19 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     drill: null,
     ui: { open: null, copied: null, showSent: false, ttsMsg: null, dl: null },
     audio: { files: {}, credit: '', cached: 0 },
+    voice: { on: false, sr: false, srState: null, micErr: null },   // srState: { ok, reason, at }
   };
+  const voice = createVoice();
   let player = null;
   let playerUrl = null;
 
   /* ---------------- 読み込み・保存 ---------------- */
 
   async function load() {
-    const [log, stuck] = await Promise.all([store.get('meta', 'speakLog'), store.get('meta', 'stuck')]);
+    const [log, stuck, vo] = await Promise.all([store.get('meta', 'speakLog'), store.get('meta', 'stuck'), store.get('meta', 'speakVoice')]);
     SP.log = Array.isArray(log) ? log : [];
     SP.stuck = Array.isArray(stuck) ? stuck : [];
+    if (vo && typeof vo === 'object') SP.voice = { ...SP.voice, on: !!vo.on, sr: !!vo.sr && srSupported(), srState: vo.srState || null };
     try {
       const res = await fetch('data/chunks.json', { cache: 'no-cache' });
       if (res.ok) SP.base = (await res.json()).chunks || [];
@@ -100,6 +122,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
 
   const saveLog = () => store.put('meta', SP.log.slice(-LOG_MAX), 'speakLog');
   const saveStuck = () => store.put('meta', SP.stuck, 'stuck');
+  const saveVoice = () => store.put('meta', { on: SP.voice.on, sr: SP.voice.sr, srState: SP.voice.srState }, 'speakVoice');
   const chunkById = id => SP.chunks.find(c => c.id === id);
 
   /* ---------------- 集計 ---------------- */
@@ -217,6 +240,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
   /* ---------------- 話すのホーム ---------------- */
 
   function renderSpeak() {
+    voice.release();
     const st = weekStats();
     const fns = ['すべて', ...(SP.mine.length ? [MINE] : []), ...new Set(SP.chunks.map(c => c.fn).filter(f => f && f !== MINE))];
     const chips = fns.map(f =>
@@ -237,6 +261,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
         <div class="frow" role="group" aria-label="機能で選ぶ">${chips}</div>
         <button class="primary" data-act="sp-start" data-mode="scene" ${n ? '' : 'disabled'}>場面から言う（${n}問）</button>
         <button class="outline" data-act="sp-start" data-mode="look" ${n ? '' : 'disabled'}>読んで、顔を上げて言う（${n}問）</button>
+        ${voiceSwitches()}
         <p class="caption" style="margin:-6px 0 0">まだ練習していないもの → 前回詰まったもの → 久しぶりのもの、の順に出ます</p>
       </section>`
       : `<section class="card-box"><p class="scene">練習の素材を読み込めませんでした。電波のあるところで一度開いてください。</p></section>`;
@@ -303,6 +328,42 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
         </div>
         ${nav('speak')}
       </div>`;
+  }
+
+  function voiceSwitches() {
+    if (!micSupported()) return '';
+    const v = SP.voice;
+    const st = v.srState;
+    let srNote = 'Google の音声サービスが必要です。最初の1問で、この端末で使えるか確かめます（録音の聞き比べはなくなります）';
+    if (st && st.ok) srNote = 'この端末で使えます。聞き取った文を答えと比べます（録音の聞き比べはなくなります）';
+    if (st && !st.ok) srNote = `この端末では使えませんでした（${SR_MSG[st.reason] || st.reason}）。録音で聞き比べます。オンにすると、もう一度試します`;
+    return `
+        <div class="group flush voice-box">
+          <label class="line">
+            <span class="t"><b>声で答える</b><span>顔を上げたらマイクが聞き、黙ると自動で答えへ。録音して、お手本と聞き比べます</span></span>
+            <span class="switch"><input type="checkbox" data-act="sp-voice" ${v.on ? 'checked' : ''}><span></span></span>
+          </label>
+          ${v.on && srSupported() ? `
+          <label class="line">
+            <span class="t"><b>文字でも確かめる（音声認識）</b><span>${esc(srNote)}</span></span>
+            <span class="switch"><input type="checkbox" data-act="sp-sr" ${v.sr ? 'checked' : ''}><span></span></span>
+          </label>` : ''}
+          ${v.micErr ? `<p class="msg err voice-err">${esc(v.micErr)}</p>` : ''}
+        </div>`;
+  }
+
+  async function onChange(el) {
+    if (el.dataset.act === 'sp-voice') {
+      SP.voice.on = el.checked;
+      SP.voice.micErr = null;
+      if (!el.checked) voice.release();
+    } else if (el.dataset.act === 'sp-sr') {
+      SP.voice.sr = el.checked;
+      if (el.checked && SP.voice.srState && !SP.voice.srState.ok) SP.voice.srState = null;   // もう一度試す
+    } else return false;
+    await saveVoice();
+    renderSpeak();
+    return true;
   }
 
   function audioRow() {
@@ -393,6 +454,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
             <div class="lookup-box" aria-live="polite">
               ${d.peeking ? `<p class="look-text">${esc(c.say)}</p>` : `<p class="lookup-say">顔を上げて、<br>だれかに話すつもりで言う</p>`}
             </div>
+            ${micRow(d)}
             <p class="small" style="text-align:center">言えなかったら、一度だけ見てもう一度${d.peeks ? `（見た回数 ${d.peeks}）` : ''}</p>
           </main>
           <footer class="rv-foot">
@@ -416,7 +478,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
             ${playable('say') ? `<button class="icon-btn" data-act="sp-tts" data-k="say" aria-label="読み上げる">${ICON.speaker}</button>` : ''}
           </div>
           ${SP.ui.ttsMsg ? `<p class="small">${esc(SP.ui.ttsMsg)}</p>` : ''}
-          <p class="timer">${d.mode === 'scene' ? '答えを見るまで' : '顔を上げてから'} <b>${secLabel(d.ms)}</b>${d.mode === 'look' && d.peeks ? ` · 見た回数 ${d.peeks}` : ''}</p>
+          ${d.rec ? voiceResult(d) : `<p class="timer">${d.mode === 'scene' ? '答えを見るまで' : '顔を上げてから'} <b>${secLabel(d.ms)}</b>${d.mode === 'look' && d.peeks ? ` · 見た回数 ${d.peeks}` : ''}</p>`}
           ${c.pattern ? `<section class="panel fit"><h3>型</h3><p class="pattern">${esc(c.pattern)}</p></section>` : ''}
           ${c.note ? `<p class="scene" style="font-size:15px">${esc(c.note)}</p>` : ''}
           ${vars ? `<section class="sec"><h2>1か所変えて、言い直す</h2><ul class="variants">${vars}</ul></section>` : ''}
@@ -430,12 +492,152 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
       </div>`;
   }
 
+  /* ---------------- 声で答える ---------------- */
+
+  function micRow(d) {
+    if (!d.vstate) return d.voiceMsg ? `<p class="msg err" style="text-align:center">${esc(d.voiceMsg)}</p>` : '';
+    const label = d.vstate === 'opening' ? 'マイクを準備中…'
+      : d.vkind === 'sr' ? '聞いています（音声認識）'
+      : '聞いています · 言い終わって少し黙ると、答えへ';
+    return `
+      <div class="mic ${d.vkind === 'sr' ? 'sr' : ''}" aria-live="off">
+        <span class="mic-dot" aria-hidden="true"></span>
+        ${d.vkind === 'rec' ? '<span class="mic-meter" aria-hidden="true"><i></i></span>' : ''}
+        <span class="mic-t">${esc(label)}</span>
+      </div>
+      ${d.vkind === 'sr' ? `<p class="heard-live">${esc(d.heardLive || '')}</p>` : ''}
+      ${d.voiceMsg ? `<p class="small" style="text-align:center">${esc(d.voiceMsg)}</p>` : ''}`;
+  }
+
+  const useSr = () => SP.voice.sr && srSupported() && !(SP.voice.srState && !SP.voice.srState.ok);
+
+  /** 「顔を上げる」のタップの中で呼ぶ（音声認識はタップの中で始める必要がある） */
+  function beginVoice(d) {
+    voice.prepare();
+    d.vstate = 'opening';
+    if (useSr()) {
+      d.vkind = 'sr';
+      d.vstate = 'on';
+      d.take = voice.recognize({
+        onText: t => {
+          if (SP.drill !== d) return;
+          d.heardLive = t;
+          const el = app.querySelector('.heard-live');
+          if (el) el.textContent = t;
+        },
+        onEnd: res => {
+          if (!SP.voice.srState?.ok) { SP.voice.srState = { ok: true, at: Date.now() }; saveVoice(); }
+          finishVoice(d, res);
+        },
+        onFail: reason => {
+          SP.voice.srState = { ok: false, reason, at: Date.now() };
+          SP.voice.sr = false;
+          saveVoice();
+          if (SP.drill !== d || d.phase !== 'hidden') return;
+          d.voiceMsg = `音声認識を使えません（${SR_MSG[reason] || reason}）。録音に切り替えました`;
+          startRecording(d);
+        },
+      });
+      return;
+    }
+    startRecording(d);
+  }
+
+  async function startRecording(d) {
+    d.vkind = 'rec';
+    d.vstate = 'opening';
+    d.take = null;
+    if (SP.drill === d && d.phase === 'hidden') renderDrill();
+    try {
+      const take = await voice.record({
+        onLevel: lv => {
+          const el = app.querySelector('.mic-meter i');
+          if (el) el.style.transform = `scaleX(${Math.max(0.04, lv).toFixed(3)})`;
+        },
+        onEnd: res => finishVoice(d, res),
+      });
+      if (SP.drill !== d || d.phase !== 'hidden') { take.cancel(); return; }
+      d.take = take;
+      d.vstate = 'on';
+      if (!take.hasAnalyser) d.voiceMsg = '言い終わったら「言えた」を押してください';
+    } catch (e) {
+      d.vstate = null;
+      d.take = null;
+      d.voiceMsg = e?.name === 'NotAllowedError'
+        ? 'マイクが許可されていません。Chrome とスマホの設定で、マイクを許可してください'
+        : `マイクを使えません（${e?.name || e}）`;
+      SP.voice.micErr = d.voiceMsg;
+    }
+    if (SP.drill === d && d.phase === 'hidden') renderDrill();
+  }
+
+  function finishVoice(d, res) {
+    if (SP.drill !== d || d.phase !== 'hidden') { if (res?.url) URL.revokeObjectURL(res.url); return; }
+    const c = chunkById(d.ids[d.i]);
+    d.take = null;
+    d.vstate = null;
+    d.ms = Math.max(0, (res.endAt || performance.now()) - d.t0);
+    d.onset = res.onsetAt ? Math.max(0, res.onsetAt - d.t0) : null;
+    d.rec = { kind: res.kind, url: res.url || null, text: res.text || '' };
+    if (res.kind === 'sr') d.rec.cmp = compareSay(c?.say || '', res.text || '');
+    SP.voice.micErr = null;
+    d.peeking = false;
+    d.phase = 'back';
+    renderDrill();
+    app.querySelector('.scroll')?.scrollTo(0, 0);
+  }
+
+  function voiceResult(d) {
+    const r = d.rec;
+    if (!r) return '';
+    const times = d.onset != null
+      ? `<p class="timer">話し始めまで <b>${secLabel(d.onset)}</b> · 言い終わるまで <b>${secLabel(d.ms)}</b>${d.peeks ? ` · 見た回数 ${d.peeks}` : ''}</p>`
+      : `<p class="timer">声を聞き取れませんでした · ${secLabel(d.ms)}${d.peeks ? ` · 見た回数 ${d.peeks}` : ''}</p>`;
+    let body = '';
+    if (r.kind === 'sr') {
+      body = r.text
+        ? `<p class="heard"><span>聞き取り</span>${esc(r.text)}</p>
+           <p class="diff" aria-label="答えの文で、聞き取れなかった文字に印">${r.cmp.marks.map(m => (m.ok ? esc(m.ch) : `<mark>${esc(m.ch)}</mark>`)).join('')}</p>
+           <p class="small">一致 ${Math.round(r.cmp.score * 100)}% · 印は聞き取りになかった文字。漢字とかなの違いでも印が付くので、目安です</p>`
+        : '<p class="small">文字にできませんでした</p>';
+    } else if (r.url) {
+      body = `
+        <div class="cmp-row">
+          <button class="outline quiet" data-act="sp-mine">${ICON.speaker}自分の声</button>
+          <button class="outline" data-act="sp-cmp">自分 → お手本</button>
+        </div>`;
+    }
+    return `<section class="voice-res">${times}${body}</section>`;
+  }
+
+  let minePlayer = null;
+  function playMine(url) {
+    return new Promise(res => {
+      if (player) player.pause();
+      if ('speechSynthesis' in window) speechSynthesis.cancel();
+      minePlayer?.pause();
+      const p = new Audio(url);
+      minePlayer = p;
+      p.onended = () => res(true);
+      p.onerror = () => res(false);
+      p.onpause = () => res(p.ended);
+      p.play().catch(() => res(false));
+    });
+  }
+
+  function dropRec(d) {
+    minePlayer?.pause();
+    if (d?.rec?.url) URL.revokeObjectURL(d.rec.url);
+    if (d) { d.rec = null; d.take?.cancel(); d.take = null; d.vstate = null; d.voiceMsg = null; d.heardLive = ''; d.onset = null; }
+  }
+
   async function rateDrill(ok) {
     const d = SP.drill;
     if (!d || d.busy) return;
     d.busy = true;
     const c = chunkById(d.ids[d.i]);
     const entry = { date: todayStr(), id: c.id, mode: d.mode, ms: Math.round(d.ms), peeks: d.peeks, ok, at: Date.now() };
+    if (d.rec) { entry.voice = d.rec.kind; if (d.onset != null) entry.onset = Math.round(d.onset); if (d.rec.cmp) entry.match = Math.round(d.rec.cmp.score * 100) / 100; }
     SP.log.push(entry);
     d.results.push(entry);
     try { await saveLog(); } catch (e) { /* 保存に失敗しても練習は続ける */ }
@@ -446,6 +648,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     d.ms = 0;
     d.peeks = 0;
     d.peeking = false;
+    dropRec(d);
     SP.ui.ttsMsg = null;
     renderDrill();
     app.querySelector('.scroll')?.scrollTo(0, 0);
@@ -453,6 +656,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
 
   function renderDrillDone() {
     const d = SP.drill;
+    voice.release();
     const ok = d.results.filter(r => r.ok);
     const avg = ok.length ? ok.reduce((s, r) => s + r.ms, 0) / ok.length : 0;
     const sec = Math.round((Date.now() - d.startedAt) / 1000);
@@ -531,8 +735,8 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     'sp-filter': el => { SP.filter = el.dataset.v; renderSpeak(); },
     'sp-start': el => startDrill(el.dataset.mode),
     'sp-again': () => startDrill(SP.drill?.mode || 'scene'),
-    'sp-home': () => { SP.drill = null; go('#/speak'); },
-    'sp-quit': () => { SP.drill = null; go('#/speak'); },
+    'sp-home': () => { dropRec(SP.drill); SP.drill = null; voice.release(); go('#/speak'); },
+    'sp-quit': () => { dropRec(SP.drill); SP.drill = null; voice.release(); go('#/speak'); },
     'sp-reveal': () => {
       const d = SP.drill;
       d.ms = performance.now() - d.t0;
@@ -544,6 +748,8 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
       const d = SP.drill;
       d.phase = 'hidden';
       d.t0 = performance.now();      // 顔を上げてから計る
+      dropRec(d);
+      if (SP.voice.on && micSupported()) beginVoice(d);
       renderDrill();
     },
     'sp-peek': () => {
@@ -551,6 +757,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
       if (d.peeking) return;
       d.peeks += 1;
       d.peeking = true;
+      d.take?.hold(1500 + 1200);     // 見ている間と見たあと少しは、黙っていても終わらせない
       renderDrill();
       setTimeout(() => {
         if (SP.drill === d && d.phase === 'hidden') { d.peeking = false; renderDrill(); }
@@ -558,6 +765,8 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     },
     'sp-said': () => {
       const d = SP.drill;
+      if (d.take) { d.take.stop(); return; }          // 録音・認識を止める → finishVoice が答えへ進める
+      if (d.vstate === 'opening') { dropRec(d); }
       d.ms = performance.now() - d.t0;
       d.peeking = false;
       d.phase = 'back';
@@ -565,6 +774,22 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
       app.querySelector('.scroll')?.scrollTo(0, 0);
     },
     'sp-rate': el => rateDrill(el.dataset.ok === '1'),
+    'sp-mine': () => { const u = SP.drill?.rec?.url; if (u) playMine(u); },
+    'sp-cmp': async () => {
+      const d = SP.drill;
+      const c = chunkById(d?.ids[d.i]);
+      if (!d?.rec?.url || !c) return;
+      const done = await playMine(d.rec.url);
+      if (!done || SP.drill !== d || d.phase !== 'back') return;
+      await new Promise(r => setTimeout(r, 350));
+      const ok = await playClip(c.id, 'say', c.say);
+      if (!ok && SP.ui.ttsMsg == null) {
+        SP.ui.ttsMsg = 'この文のお手本の音声がまだありません';
+        const top = app.querySelector('.scroll')?.scrollTop || 0;
+        renderDrill();
+        app.querySelector('.scroll')?.scrollTo(0, top);
+      }
+    },
     'sp-tts': async el => {
       const c = chunkById(SP.drill?.ids[SP.drill.i]);
       if (!c) return;
@@ -608,6 +833,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     renderDrill,
     actions,
     onSubmit,
+    onChange,
     todayCount,
     playClip,
     hasClip,
@@ -615,7 +841,8 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     chunkSay: id => chunkById(id)?.say || '',
     clipUrl: (id, key) => (SP.audio.files[`${id}:${key}`] ? AUDIO_DIR + encodeURIComponent(SP.audio.files[`${id}:${key}`]) : null),
     chunks: () => SP.chunks,
-    stopClip: () => { if (player) player.pause(); if ('speechSynthesis' in window) speechSynthesis.cancel(); },
+    stopClip: () => { if (player) player.pause(); minePlayer?.pause(); if ('speechSynthesis' in window) speechSynthesis.cancel(); },
+    releaseMic: () => voice.release(),
     openCount: () => openStuck().length,
     inDrill: () => !!SP.drill,
     _state: SP,            // テスト用

@@ -411,6 +411,23 @@ a { color: var(--accent); }
 .lookup-box { min-height: 180px; border: 1px dashed var(--dash); border-radius: 20px; padding: 24px 20px; display: flex; align-items: center; justify-content: center; text-align: center; }
 .lookup-say { margin: 0; font-size: 18px; line-height: 1.8; color: var(--muted); }
 .rv-foot .outline { height: 52px; }
+.voice-box { margin-top: -6px; }
+.voice-box .line { padding: 12px 14px; }
+.voice-err { padding: 0 14px 12px; }
+.mic { display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 13px; color: var(--muted); }
+.mic-dot { width: 10px; height: 10px; border-radius: 5px; background: var(--bad); flex-shrink: 0; animation: mic-pulse 1.2s ease-in-out infinite; }
+.mic-meter { width: 72px; height: 6px; border-radius: 3px; background: var(--divider); overflow: hidden; flex-shrink: 0; }
+.mic-meter i { display: block; height: 100%; background: var(--accent); transform-origin: left center; transform: scaleX(0.04); transition: transform 60ms linear; }
+@keyframes mic-pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .mic-dot { animation: none; } }
+.heard-live { margin: 0; min-height: 1.7em; text-align: center; font-size: 16px; line-height: 1.7; color: var(--text-2); }
+.voice-res { display: flex; flex-direction: column; gap: 10px; }
+.heard { margin: 0; font-size: 16px; line-height: 1.7; }
+.heard span { display: block; font-size: 12px; color: var(--muted); }
+.diff { margin: 0; font-size: 16px; line-height: 1.8; background: var(--tile); border-radius: 14px; padding: 10px 14px; }
+.diff mark { background: var(--wrong-tint); color: var(--wrong); border-radius: 3px; padding: 0 1px; }
+.cmp-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.cmp-row .outline { height: 48px; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 14px; }
 .drill-back > * { flex-shrink: 0; }
 .say-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
 .say { margin: 0; font-family: var(--serif); font-size: 26px; font-weight: 600; line-height: 1.6; letter-spacing: 0.02em; }
