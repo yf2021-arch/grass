@@ -21,8 +21,11 @@
 //   ふだんは録音して「自分の声 → お手本」で聞き比べる（どの端末でも動く）。
 //   「文字でも確かめる」をオンにすると音声認識（Google の音声サービスが必要）。失敗したら理由を覚えて録音に戻す。
 //   録音はメモリの中だけ。保存も送信もしない。
+//   Whisper（v1.13.0・js/whisper.js）：録音をスマホの中で文字にして、答えの文と比べる。聞き比べと両方使える。
+//     モデルは「話す」画面からダウンロード（初回だけ）。音声認識（Google）より優先する。
 
 import { createVoice, compareSay, srSupported, micSupported } from './voice.js';
+import { createWhisper, decodeForWhisper, WH_MODELS } from './whisper.js';
 
 const DRILL_SIZE = 5;
 const LOG_MAX = 3000;
@@ -52,9 +55,11 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     drill: null,
     ui: { open: null, copied: null, showSent: false, ttsMsg: null, dl: null },
     audio: { files: {}, credit: '', cached: 0 },
-    voice: { on: false, sr: false, srState: null, micErr: null },   // srState: { ok, reason, at }
+    voice: { on: false, sr: false, srState: null, micErr: null,   // srState: { ok, reason, at }
+      wh: false, whModel: 'base', whBytes: 0, whDl: null, whErr: null },  // whDl: { loaded, total }
   };
   const voice = createVoice();
+  const whisper = createWhisper();
   let player = null;
   let playerUrl = null;
 
@@ -64,7 +69,11 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     const [log, stuck, vo] = await Promise.all([store.get('meta', 'speakLog'), store.get('meta', 'stuck'), store.get('meta', 'speakVoice')]);
     SP.log = Array.isArray(log) ? log : [];
     SP.stuck = Array.isArray(stuck) ? stuck : [];
-    if (vo && typeof vo === 'object') SP.voice = { ...SP.voice, on: !!vo.on, sr: !!vo.sr && srSupported(), srState: vo.srState || null };
+    if (vo && typeof vo === 'object') {
+      SP.voice = { ...SP.voice, on: !!vo.on, sr: !!vo.sr && srSupported(), srState: vo.srState || null,
+        wh: !!vo.wh, whModel: WH_MODELS[vo.whModel] ? vo.whModel : 'base' };
+    }
+    whisper.cachedBytes(SP.voice.whModel).then(b => { SP.voice.whBytes = b; if (location.hash.startsWith('#/speak')) renderSpeak(); });
     try {
       const res = await fetch('data/chunks.json', { cache: 'no-cache' });
       if (res.ok) SP.base = (await res.json()).chunks || [];
@@ -122,7 +131,8 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
 
   const saveLog = () => store.put('meta', SP.log.slice(-LOG_MAX), 'speakLog');
   const saveStuck = () => store.put('meta', SP.stuck, 'stuck');
-  const saveVoice = () => store.put('meta', { on: SP.voice.on, sr: SP.voice.sr, srState: SP.voice.srState }, 'speakVoice');
+  const saveVoice = () => store.put('meta', { on: SP.voice.on, sr: SP.voice.sr, srState: SP.voice.srState, wh: SP.voice.wh, whModel: SP.voice.whModel }, 'speakVoice');
+  const whReady = () => SP.voice.on && SP.voice.wh && SP.voice.whBytes > 0;
   const chunkById = id => SP.chunks.find(c => c.id === id);
 
   /* ---------------- 集計 ---------------- */
@@ -343,7 +353,8 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
             <span class="t"><b>声で答える</b><span>顔を上げたらマイクが聞き、黙ると自動で答えへ。録音して、お手本と聞き比べます</span></span>
             <span class="switch"><input type="checkbox" data-act="sp-voice" ${v.on ? 'checked' : ''}><span></span></span>
           </label>
-          ${v.on && srSupported() ? `
+          ${v.on ? whLine() : ''}
+          ${v.on && !v.wh && srSupported() ? `
           <label class="line">
             <span class="t"><b>文字でも確かめる（音声認識）</b><span>${esc(srNote)}</span></span>
             <span class="switch"><input type="checkbox" data-act="sp-sr" ${v.sr ? 'checked' : ''}><span></span></span>
@@ -352,17 +363,82 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
         </div>`;
   }
 
+  const mb = n => `${Math.round(n / 1e6)}MB`;
+
+  function whLine() {
+    const v = SP.voice;
+    const m = WH_MODELS[v.whModel];
+    let panel = '';
+    if (v.wh) {
+      const chips = Object.entries(WH_MODELS).map(([k, x]) =>
+        `<button class="chip" aria-pressed="${v.whModel === k}" data-act="sp-wh-model" data-v="${k}" ${v.whDl ? 'disabled' : ''}>${esc(x.name)}</button>`).join('');
+      let state;
+      if (v.whDl) {
+        const pct = v.whDl.total ? Math.round((v.whDl.loaded / v.whDl.total) * 100) : 0;
+        state = `<p class="small wh-prog">ダウンロード中… ${pct}%${v.whDl.total ? `（${mb(v.whDl.loaded)} / ${mb(v.whDl.total)}）` : ''}。この画面を離れても続きます</p>`;
+      } else if (v.whBytes > 0) {
+        state = `<p class="msg ok">このスマホに入っています${v.whBytes > 1 ? `（${mb(v.whBytes)}）` : ''}。オフラインでも使えます · ${esc(m.note)}</p>
+          <button class="text-btn" data-act="sp-wh-del">このモデルをスマホから消す</button>`;
+      } else {
+        state = `<button class="outline" data-act="sp-wh-dl">モデルをダウンロード（${esc(m.approx)}・Wi-Fi で）</button>
+          <p class="small">初回だけです。${esc(m.note)}</p>`;
+      }
+      panel = `
+          <div class="wh-panel">
+            <div class="frow" role="group" aria-label="モデル">${chips}</div>
+            ${state}
+            ${v.whErr ? `<p class="msg err">${esc(v.whErr)}</p>` : ''}
+          </div>`;
+    }
+    return `
+          <label class="line">
+            <span class="t"><b>文字でも確かめる（Whisper）</b><span>録音をスマホの中で文字にして、答えの文と比べます。Google のサービスはいりません</span></span>
+            <span class="switch"><input type="checkbox" data-act="sp-wh" ${v.wh ? 'checked' : ''}><span></span></span>
+          </label>${panel}`;
+  }
+
+  async function downloadWhisper() {
+    const v = SP.voice;
+    if (v.whDl) return;
+    const key = v.whModel;
+    v.whDl = { loaded: 0, total: 0 };
+    v.whErr = null;
+    renderSpeakKeep();
+    try {
+      await whisper.load(key, p => {
+        v.whDl = { loaded: p.loaded, total: p.total };
+        const el = app.querySelector('.wh-prog');
+        if (el && p.total) el.textContent = `ダウンロード中… ${Math.round((p.loaded / p.total) * 100)}%（${mb(p.loaded)} / ${mb(p.total)}）。この画面を離れても続きます`;
+      });
+      v.whBytes = (await whisper.cachedBytes(key)) || v.whDl.total || 1;
+    } catch (e) {
+      v.whErr = `ダウンロードできませんでした（${e.message}）。電波のよいところで、もう一度どうぞ`;
+    }
+    v.whDl = null;
+    if (location.hash.startsWith('#/speak')) renderSpeakKeep();
+  }
+
+  function renderSpeakKeep() {
+    if (!location.hash.startsWith('#/speak')) return;
+    const top = app.querySelector('.scroll')?.scrollTop || 0;
+    renderSpeak();
+    app.querySelector('.scroll')?.scrollTo(0, top);
+  }
+
   async function onChange(el) {
     if (el.dataset.act === 'sp-voice') {
       SP.voice.on = el.checked;
       SP.voice.micErr = null;
       if (!el.checked) voice.release();
+    } else if (el.dataset.act === 'sp-wh') {
+      SP.voice.wh = el.checked;
+      SP.voice.whErr = null;
     } else if (el.dataset.act === 'sp-sr') {
       SP.voice.sr = el.checked;
       if (el.checked && SP.voice.srState && !SP.voice.srState.ok) SP.voice.srState = null;   // もう一度試す
     } else return false;
     await saveVoice();
-    renderSpeak();
+    renderSpeakKeep();
     return true;
   }
 
@@ -394,6 +470,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
   function startDrill(mode) {
     const ids = pick(DRILL_SIZE, SP.filter);
     if (!ids.length) return;
+    if (mode === 'look' && whReady()) whisper.load(SP.voice.whModel).catch(() => {});   // 先に読み込んでおく（最初の1問を速く）
     SP.drill = { mode, ids, i: 0, phase: 'front', t0: 0, ms: 0, peeks: 0, peeking: false, results: [], startedAt: Date.now() };
     go('#/drill');
   }
@@ -509,7 +586,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
       ${d.voiceMsg ? `<p class="small" style="text-align:center">${esc(d.voiceMsg)}</p>` : ''}`;
   }
 
-  const useSr = () => SP.voice.sr && srSupported() && !(SP.voice.srState && !SP.voice.srState.ok);
+  const useSr = () => SP.voice.sr && !SP.voice.wh && srSupported() && !(SP.voice.srState && !SP.voice.srState.ok);
 
   /** 「顔を上げる」のタップの中で呼ぶ（音声認識はタップの中で始める必要がある） */
   function beginVoice(d) {
@@ -580,11 +657,45 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     d.onset = res.onsetAt ? Math.max(0, res.onsetAt - d.t0) : null;
     d.rec = { kind: res.kind, url: res.url || null, text: res.text || '' };
     if (res.kind === 'sr') d.rec.cmp = compareSay(c?.say || '', res.text || '');
+    if (res.kind === 'rec' && res.url && whReady()) {
+      if (res.onsetAt == null) d.rec.wh = 'none';
+      else runWhisper(d, d.i, res, c);
+    }
     SP.voice.micErr = null;
     d.peeking = false;
     d.phase = 'back';
     renderDrill();
     app.querySelector('.scroll')?.scrollTo(0, 0);
+  }
+
+  async function runWhisper(d, idx, res, c) {
+    d.rec.wh = 'running';
+    const same = () => SP.drill === d && d.i === idx && d.phase === 'back' && d.rec;
+    try {
+      const from = Math.max(0, (res.onsetAt - res.startAt) / 1000 - 0.35);
+      const to = (res.endAt - res.startAt) / 1000 + 0.5;
+      const pcm = await decodeForWhisper(res.url, from, to);
+      const out = await whisper.transcribe(SP.voice.whModel, pcm);
+      if (!same()) return;
+      d.rec.text = out.text;
+      d.rec.whMs = out.ms;
+      d.rec.cmp = out.text ? compareSay(c?.say || '', out.text) : null;
+      d.rec.wh = 'done';
+    } catch (e) {
+      if (!same()) return;
+      d.rec.wh = 'error';
+      d.rec.whErr = e.message;
+    }
+    const top = app.querySelector('.scroll')?.scrollTop || 0;
+    renderDrill();
+    app.querySelector('.scroll')?.scrollTo(0, top);
+  }
+
+  function textBlock(r) {
+    if (!r.text) return '<p class="small">文字にできませんでした</p>';
+    return `<p class="heard"><span>聞き取り${r.whMs ? `（Whisper · ${secLabel(r.whMs)}）` : ''}</span>${esc(r.text)}</p>
+           <p class="diff" aria-label="答えの文で、聞き取れなかった文字に印">${r.cmp.marks.map(m => (m.ok ? esc(m.ch) : `<mark>${esc(m.ch)}</mark>`)).join('')}</p>
+           <p class="small">一致 ${Math.round(r.cmp.score * 100)}% · 印は聞き取りになかった文字。漢字とかなの違いでも印が付くので、目安です</p>`;
   }
 
   function voiceResult(d) {
@@ -595,17 +706,16 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
       : `<p class="timer">声を聞き取れませんでした · ${secLabel(d.ms)}${d.peeks ? ` · 見た回数 ${d.peeks}` : ''}</p>`;
     let body = '';
     if (r.kind === 'sr') {
-      body = r.text
-        ? `<p class="heard"><span>聞き取り</span>${esc(r.text)}</p>
-           <p class="diff" aria-label="答えの文で、聞き取れなかった文字に印">${r.cmp.marks.map(m => (m.ok ? esc(m.ch) : `<mark>${esc(m.ch)}</mark>`)).join('')}</p>
-           <p class="small">一致 ${Math.round(r.cmp.score * 100)}% · 印は聞き取りになかった文字。漢字とかなの違いでも印が付くので、目安です</p>`
-        : '<p class="small">文字にできませんでした</p>';
+      body = textBlock(r);
     } else if (r.url) {
+      const wh = r.wh === 'running' ? '<p class="small wh-run">文字にしています…（スマホの中で。数秒かかります）</p>'
+        : r.wh === 'done' ? textBlock(r)
+        : r.wh === 'error' ? `<p class="msg err">文字にできませんでした（${esc(r.whErr || '')}）</p>` : '';
       body = `
         <div class="cmp-row">
           <button class="outline quiet" data-act="sp-mine">${ICON.speaker}自分の声</button>
           <button class="outline" data-act="sp-cmp">自分 → お手本</button>
-        </div>`;
+        </div>${wh}`;
     }
     return `<section class="voice-res">${times}${body}</section>`;
   }
@@ -808,6 +918,20 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
       }
     },
     'sp-dl': () => downloadAll(),
+    'sp-wh-dl': () => downloadWhisper(),
+    'sp-wh-model': async el => {
+      if (SP.voice.whDl || SP.voice.whModel === el.dataset.v) return;
+      SP.voice.whModel = el.dataset.v;
+      SP.voice.whErr = null;
+      SP.voice.whBytes = await whisper.cachedBytes(SP.voice.whModel);
+      await saveVoice();
+      renderSpeakKeep();
+    },
+    'sp-wh-del': async () => {
+      await whisper.remove(SP.voice.whModel);
+      SP.voice.whBytes = 0;
+      renderSpeakKeep();
+    },
     'sp-edit': el => { SP.ui.open = SP.ui.open === el.dataset.id ? null : el.dataset.id; renderSpeak(); },
     'sp-del': async el => {
       SP.stuck = SP.stuck.filter(s => s.id !== el.dataset.id);

@@ -1,4 +1,4 @@
-// 声で答える（v1.12.0）
+// 声で答える（v1.12.0。Whisper で文字にするのは js/whisper.js・v1.13.0）
 //
 // 2つのやり方があり、1回の答えではどちらか一方だけを使う（Android ではマイクの取り合いになり、同時には使えない）。
 //
@@ -108,7 +108,7 @@ export function createVoice() {
       const url = blob.size ? URL.createObjectURL(blob) : null;
       if (take === me) take = null;
       if (reason === 'cancel') { if (url) URL.revokeObjectURL(url); return; }
-      onEnd({ kind: 'rec', url, onsetAt, endAt: lastVoice || performance.now(), reason });
+      onEnd({ kind: 'rec', url, startAt: t0, onsetAt, endAt: lastVoice || performance.now(), reason });
     };
     rec.onstop = emit;
 

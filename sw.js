@@ -1,7 +1,7 @@
 // オフラインでも開けるように、アプリ本体をキャッシュする。
 // アプリを更新したら VERSION を上げる（古いキャッシュは自動で消える）。
 
-const VERSION = 'grass-v1.12.0';
+const VERSION = 'grass-v1.13.0';
 const SHELL = [
   './',
   './index.html',
@@ -15,6 +15,8 @@ const SHELL = [
   './js/visual.js',
   './js/speak.js',
   './js/voice.js',
+  './js/whisper.js',
+  './js/whisper-worker.js',
   './js/bjt.js',
   './js/quiz.js',
   './js/walk.js',
@@ -29,7 +31,9 @@ const SHELL = [
 ];
 const FONT_CACHE = 'grass-fonts';
 const AUDIO_CACHE = 'grass-audio';
-const CARD_AUDIO_CACHE = 'grass-audio-cards';   // カードの音声（スマホに読み込んだもの）。絶対に消さない   // 話す練習の音声。アプリを更新しても残す（古いファイルはアプリ側が片付ける）
+const CARD_AUDIO_CACHE = 'grass-audio-cards';
+const LIB_CACHE = 'grass-lib';                  // Whisper のライブラリ（jsDelivr・版の付いたファイルなので、取り直さない）
+const MODEL_CACHE = 'transformers-cache';       // Whisper のモデル（Transformers.js が入れる）。アプリを更新しても消さない   // カードの音声（スマホに読み込んだもの）。絶対に消さない   // 話す練習の音声。アプリを更新しても残す（古いファイルはアプリ側が片付ける）
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -38,7 +42,7 @@ self.addEventListener('install', event => {
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(k => ![VERSION, FONT_CACHE, AUDIO_CACHE, CARD_AUDIO_CACHE].includes(k)).map(k => caches.delete(k))))
+      .then(keys => Promise.all(keys.filter(k => ![VERSION, FONT_CACHE, AUDIO_CACHE, CARD_AUDIO_CACHE, LIB_CACHE, MODEL_CACHE].includes(k)).map(k => caches.delete(k))))
       .then(() => self.clients.claim()),
   );
 });
@@ -56,6 +60,24 @@ self.addEventListener('fetch', event => {
         if (hit) return hit;
         const res = await fetch(req);
         if (res.ok || res.type === 'opaque') cache.put(req, res.clone());
+        return res;
+      }),
+    );
+    return;
+  }
+
+  // Whisper のライブラリ（jsDelivr・版を固定した URL）は、キャッシュ優先
+  // （ONNX Runtime の .wasm 本体 27MB は Transformers.js が transformers-cache に入れるので、ここでは .mjs と .js だけ。二重に持たない）
+  const lib = url.hostname === 'cdn.jsdelivr.net'
+    && (url.pathname.startsWith('/npm/@huggingface/transformers@') || url.pathname.startsWith('/npm/onnxruntime-web@'))
+    && /\.m?js$/.test(url.pathname);
+  if (lib) {
+    event.respondWith(
+      caches.open(LIB_CACHE).then(async cache => {
+        const hit = await cache.match(req, { ignoreSearch: true });
+        if (hit) return hit;
+        const res = await fetch(req);
+        if (res.ok && res.status === 200) cache.put(req, res.clone());
         return res;
       }),
     );

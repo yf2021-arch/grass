@@ -127,6 +127,23 @@ Claude（grass-card-extractor）──register──▶ Apps Script ◀──pul
 - 初回は Chrome（とスマホの設定）でマイクの許可が必要です
 - 中身は `js/voice.js`（録音・話し始め／終わりの検出・音声認識・文字の比較）
 
+### Whisper で文字にする（v1.13.0）
+
+「声で答える」の下の **文字でも確かめる（Whisper）** をオンにすると、録音をスマホの中で文字にして、答えの文と比べます。
+Google のサービスもサーバーもいらないので、中国版のシステムのスマホでも動きます。録音の聞き比べと一緒に使えます。
+
+1. モデルを選んで「モデルをダウンロード」（初回だけ・Wi-Fi で）。**ふつう（base）約80MB**／**より正確（small）約400MB・遅い**
+2. あとは顔を上げて言うだけ。答えの画面に「文字にしています…」→ 聞き取った文・印・一致％が出ます
+3. ダウンロード後はオフラインでも使えます。アプリを更新しても消えません。「このモデルをスマホから消す」で消せます
+
+- しくみ：`js/whisper.js`（呼び出し・録音を 16kHz に変換・話した部分だけ切り出す）と `js/whisper-worker.js`（別スレッドで推論）
+- ライブラリ：Hugging Face Transformers.js 4.3.2（Apache-2.0）と ONNX Runtime を jsDelivr から（版を固定）、
+  モデル（`Xenova/whisper-base`／`Xenova/whisper-small`・8bit）を Hugging Face から、初回だけ取ります。
+  （ライブラリをリポジトリに入れないのは、圧縮されたコードの一部を GitHub がAPIキーと誤検出して push を止めるため）
+- キャッシュ：モデルと wasm は `transformers-cache`、ライブラリは `grass-lib`（sw.js はこの2つを消さない）
+- GitHub Pages ではマルチスレッドが使えない（COOP/COEP ヘッダーを付けられない）ので、1スレッドの wasm で動きます
+- 無音や雑音で Whisper が出しがちな決まり文句（「ご視聴ありがとうございました」など）は捨てます
+
 ## 生の日本語（v1.10.0）
 
 「今日」画面の「生の日本語」から。本物の素材（公式教材・YouTube など）の30〜90秒の場面で、聞く → 確かめる。
@@ -225,6 +242,7 @@ Claude（grass-card-extractor）──register──▶ Apps Script ◀──pul
 | `js/visual.js` | イメージ図を描く（型ごとのテンプレート） |
 | `js/speak.js` | 話す練習（場面から言う・読んで顔を上げる・詰まりメモ・音声） |
 | `js/voice.js` | 声で答える（録音・話し始め／終わりの検出・音声認識・文字の比較） |
+| `js/whisper.js`・`js/whisper-worker.js` | スマホの中の Whisper（モデルのダウンロード・文字にする） |
 | `js/bjt.js` | BJT 対策（記録・間違いノート・ペースタイマー・バックアップ） |
 | `js/cardaudio.js` | カードの音声パックの読み込みと再生（スマホの中だけ） |
 | `data/chunks.json` | 話す練習の素材（架空の職場の決まった言い方30個。自分の文はシートの 02_話すチャンク） |

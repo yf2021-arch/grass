@@ -969,7 +969,7 @@ function renderSettings() {
             <button class="outline quiet" data-act="${S.settings.demo ? 'demo-off' : 'demo-on'}">${S.settings.demo ? 'デモを終了' : 'デモデータで試す'}</button>
           </div>
         </section>
-        <p class="small" style="text-align:center">Grass v1.12.0</p>
+        <p class="small" style="text-align:center">Grass v1.13.0</p>
       </main>
       ${nav('settings')}
     </div>`;
@@ -1135,7 +1135,7 @@ app.addEventListener('click', e => {
 });
 
 app.addEventListener('change', async e => {
-  if (e.target.dataset.act === 'sp-voice' || e.target.dataset.act === 'sp-sr') { speak.onChange(e.target); return; }
+  if (['sp-voice', 'sp-sr', 'sp-wh'].includes(e.target.dataset.act)) { speak.onChange(e.target); return; }
   if (e.target.dataset.act === 'bjt-part') { bjt.actions['bjt-part'](e.target); return; }
   if (e.target.id === 'ca-file') {
     const file = e.target.files?.[0];
