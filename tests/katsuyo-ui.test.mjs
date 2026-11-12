@@ -1,7 +1,8 @@
 // node tests/katsuyo-ui.test.mjs — needs Playwright + Chromium.
 // 活用ドリル end to end: the Today link, a full 10-question round (right answers auto-advance,
 // wrong ones wait for 次へ and show the rule row; 止めて読む keeps a right answer open), the result
-// screen, retry of the misses, the 選ぶ前に答えを言う step,
+// screen, retry of the misses, the 選ぶ前に答えを言う step with its 言えた／言えなかった check,
+// switching off auto-advance and the speed bonus,
 // the rule map tab, and that stats survive a reload. SHOTS=dir saves screenshots.
 import { createRequire } from 'node:module';
 const { chromium } = createRequire(import.meta.url)(process.env.GRASS_PLAYWRIGHT || 'playwright');
@@ -77,17 +78,56 @@ try {
       await page.waitForFunction(w => document.querySelector('.kt-top span')?.textContent === `1 / ${w}`, wrong);
       await page.click('[data-act="kt-quit"]');
     }
-    // 選ぶ前に答えを言う: options stay hidden until 選択肢を見る
+    // the right option for the question on screen (base words only in this test)
+    const rightIndex = () => page.evaluate(async () => {
+      const m = await import('/js/katsuyo.js');
+      const w = document.querySelector('.kt-word .w').textContent;
+      const label = document.querySelector('.kt-form span').textContent;
+      const form = Object.keys(m.FORMS).find(f => m.FORMS[f].label === label);
+      const right = m.conj(m.BASE_WORDS.find(b => b.w === w), form);
+      return [...document.querySelectorAll('[data-act="kt-pick"]')].findIndex(b => b.textContent === right);
+    });
     if (await page.locator('[data-act="kt-home"]').count()) await page.click('[data-act="kt-home"]');
-    await page.click('[data-act="kt-say"]');
+
+    // 選ぶ前に答えを言う: options stay hidden until 選択肢を見る; a right pick asks 言えた／言えなかった,
+    // and 言えなかった takes the points back and sends the item to the misses
+    await page.click('[data-act="kt-set"][data-v="say"]');
     await page.click('[data-act="kt-start"]');
     await page.waitForSelector('[data-act="kt-show"]');
     assert.equal(await page.locator('[data-act="kt-pick"]').count(), 0);
     await shot('say');
     await page.click('[data-act="kt-show"]');
-    assert.ok(await page.locator('[data-act="kt-pick"]').count() >= 2);
+    await page.locator('[data-act="kt-pick"]').nth(await rightIndex()).click();
+    await page.waitForSelector('[data-act="kt-said"]');
+    assert.equal(await page.locator('[data-act="kt-hold"]').count(), 0, 'no auto-advance while asking');
+    await shot('selfcheck');
+    await page.click('[data-act="kt-said"][data-v="0"]');
+    await page.waitForSelector('[data-act="kt-next"]');
+    assert.match(await page.textContent('.kt-verdict'), /言えなかった/);
+    assert.match(await page.textContent('.kt-top'), /^1 \/ 10\s*0点/);
+    await page.click('[data-act="kt-next"]');
+    await page.click('[data-act="kt-show"]');
+    await page.locator('[data-act="kt-pick"]').nth(await rightIndex()).click();
+    await page.click('[data-act="kt-said"][data-v="1"]');          // 言えた → straight to the next question
+    await page.waitForFunction(() => document.querySelector('.kt-top span')?.textContent.startsWith('3 /'));
     await page.click('[data-act="kt-quit"]');
-    await page.click('[data-act="kt-say"]');
+    await page.click('[data-act="kt-set"][data-v="say"]');
+
+    // 正解なら自動で次へ off + 速さで＋点 off: no timer bar, a right answer stays until 次へ, 10 points flat
+    await page.click('[data-act="kt-set"][data-v="auto"]');
+    await page.click('[data-act="kt-set"][data-v="timed"]');
+    await page.click('[data-act="kt-start"]');
+    await page.waitForSelector('[data-act="kt-pick"]');
+    assert.equal(await page.locator('.kt-timer').count(), 0);
+    await page.locator('[data-act="kt-pick"]').nth(await rightIndex()).click();
+    await page.waitForSelector('.kt-fb.ok');
+    assert.equal(await page.locator('[data-act="kt-hold"]').count(), 0);
+    await page.waitForTimeout(3000);
+    assert.ok((await page.textContent('.kt-top span')).startsWith('1 /'), 'stays without auto-advance');
+    assert.match(await page.textContent('.kt-verdict'), /正解 ＋10$/);
+    await page.click('[data-act="kt-quit"]');
+    await page.click('[data-act="kt-set"][data-v="auto"]');
+    await page.click('[data-act="kt-set"][data-v="timed"]');
     await page.click('[data-act="kt-tab"][data-v="rules"]');
     await page.waitForSelector('.kt-chant');
     assert.ok(await page.locator('.kt-mrow').count() >= 7);

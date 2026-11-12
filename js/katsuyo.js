@@ -420,7 +420,9 @@ export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = ()
     tab: 'play',
     chips: ['て形', 'た形', 'ない形'],
     mine: true,
-    say: false,     // 選択肢を見る前に、答えを言う（頭の中・声で）
+    say: false,     // 選択肢を見る前に、答えを言う（頭の中・声で）。正解のあと「言えた／言えなかった」を自分で付ける
+    auto: true,     // 正解なら 2.5秒で自動的に次へ
+    timed: true,    // 速さで＋点（タイマーの帯を出す）。オフなら時間を気にせず練習
     stats: {},      // `${w}|${form}` → { b, ok, ng, at }
     hist: {},       // form → [1,0,…]（最近 40 回）
     best: 0,
@@ -436,9 +438,11 @@ export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = ()
       if (Array.isArray(d.chips) && d.chips.length) K.chips = d.chips.filter(c => CHIPS.includes(c));
       if (typeof d.mine === 'boolean') K.mine = d.mine;
       if (typeof d.say === 'boolean') K.say = d.say;
+      if (typeof d.auto === 'boolean') K.auto = d.auto;
+      if (typeof d.timed === 'boolean') K.timed = d.timed;
     }
   }
-  const save = () => store.put('meta', { stats: K.stats, hist: K.hist, best: K.best, days: pruneDays(K.days), chips: K.chips, mine: K.mine, say: K.say }, 'katsuyo');
+  const save = () => store.put('meta', { stats: K.stats, hist: K.hist, best: K.best, days: pruneDays(K.days), chips: K.chips, mine: K.mine, say: K.say, auto: K.auto, timed: K.timed }, 'katsuyo');
   const pruneDays = d => Object.fromEntries(Object.entries(d).sort().slice(-60));
 
   const myWords = () => {
@@ -493,6 +497,20 @@ export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = ()
     render();
   }
 
+  /** 語×形 の結果を残す（箱・正解率・苦手） */
+  function record(x, ok) {
+    const key = `${x.word.w}|${x.form}`;
+    const st = K.stats[key] || { b: 0, ok: 0, ng: 0 };
+    K.stats[key] = { b: ok ? Math.min(st.b + 1, 4) : 0, ok: st.ok + (ok ? 1 : 0), ng: st.ng + (ok ? 0 : 1), at: Date.now() };
+    K.hist[x.form] = (K.hist[x.form] || []).concat(ok ? 1 : 0).slice(-40);
+  }
+
+  function autoNext(s) {
+    if (!K.auto) return;
+    const at = s.i;
+    advanceTimer = setTimeout(() => { if (K.session === s && s.i === at && !s.hold && location.hash.startsWith('#/katsuyo')) next(); }, AUTO_MS);
+  }
+
   async function pick(v) {
     const s = K.session;
     if (!s || s.choice != null || s.done) return;
@@ -501,23 +519,35 @@ export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = ()
     const ok = v === x.answer;
     s.choice = v;
     const lim = K.say ? LIMIT_SAY_S : LIMIT_S;
-    const bonus = ok ? Math.max(0, Math.round(((lim - sec) / lim) * 5)) : 0;
+    const bonus = ok && K.timed ? Math.max(0, Math.round(((lim - sec) / lim) * 5)) : 0;
+    const pts = ok ? 10 + bonus : 0;
     s.streak = ok ? s.streak + 1 : 0;
     s.maxStreak = Math.max(s.maxStreak, s.streak);
-    s.score += ok ? 10 + bonus : 0;
-    s.results.push({ word: x.word, form: x.form, ok, sec, chose: x.options[v], right: x.options[x.answer], bonus });
-    const key = `${x.word.w}|${x.form}`;
-    const st = K.stats[key] || { b: 0, ok: 0, ng: 0 };
-    K.stats[key] = { b: ok ? Math.min(st.b + 1, 4) : 0, ok: st.ok + (ok ? 1 : 0), ng: st.ng + (ok ? 0 : 1), at: Date.now() };
-    const h = (K.hist[x.form] || []).concat(ok ? 1 : 0).slice(-40);
-    K.hist[x.form] = h;
+    s.score += pts;
+    s.results.push({ word: x.word, form: x.form, ok, sec, chose: x.options[v], right: x.options[x.answer], bonus, pts });
+    // 先に言うモードで選べたときは、言えたかどうかを聞いてから記録する（選べても言えなかった語を戻すため）
+    s.self = ok && K.say ? 'ask' : null;
+    if (!s.self) record(x, ok);
     K.days[todayStr()] = (K.days[todayStr()] || 0) + 1;
     render();
     await save();
-    if (ok) {
-      const at = s.i;
-      advanceTimer = setTimeout(() => { if (K.session === s && s.i === at && !s.hold && location.hash.startsWith('#/katsuyo')) next(); }, AUTO_MS);
-    }
+    if (ok && !s.self) autoNext(s);
+  }
+
+  async function selfCheck(said) {
+    const s = K.session;
+    if (!s || s.self !== 'ask') return;
+    const x = s.items[s.i];
+    const r = s.results[s.results.length - 1];
+    r.said = said;
+    record(x, said);
+    s.self = 'done';
+    if (said) { await save(); return next(); }
+    s.score -= r.pts; r.pts = 0;
+    s.streak = 0;
+    s.hold = true;
+    render();
+    await save();
   }
 
   async function next() {
@@ -528,7 +558,7 @@ export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = ()
       s.done = true;
       if (s.score > K.best) { s.newBest = true; K.best = s.score; }
       await save();
-    } else Object.assign(s, { i: s.i + 1, choice: null, shown: !K.say, hold: false, t0: Date.now() });
+    } else Object.assign(s, { i: s.i + 1, choice: null, shown: !K.say, hold: false, self: null, t0: Date.now() });
     render();
   }
 
@@ -583,10 +613,14 @@ export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = ()
     const today = K.days[todayStr()] || 0;
     return `
       <section class="kt-hero">
-        <p class="kt-lead">10問 · 速く選ぶほど＋点 · 間違えた形ほど次にまた出ます</p>
+        <p class="kt-lead">10問 · ${K.timed ? '速く選ぶほど＋点 · ' : ''}間違えた形ほど次にまた出ます</p>
         <div class="kt-chips" role="group" aria-label="練習する形">${chips}</div>
         <button class="chip toggle" aria-pressed="${K.mine}" data-act="kt-mine">自分のカードも混ぜる（${mine.length}語）</button>
-        <button class="chip toggle" aria-pressed="${K.say}" data-act="kt-say">選ぶ前に答えを言う</button>
+        <div class="kt-chips" role="group" aria-label="進め方">
+          <button class="chip" aria-pressed="${K.say}" data-act="kt-set" data-v="say">選ぶ前に答えを言う</button>
+          <button class="chip" aria-pressed="${K.auto}" data-act="kt-set" data-v="auto">正解なら自動で次へ</button>
+          <button class="chip" aria-pressed="${K.timed}" data-act="kt-set" data-v="timed">速さで＋点</button>
+        </div>
         <button class="primary ink kt-start" data-act="kt-start" ${K.chips.length ? '' : 'disabled'}>スタート</button>
         <p class="kt-meta">今日 ${today}問 · ベスト ${K.best}点</p>
       </section>
@@ -615,18 +649,21 @@ export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = ()
     const blank = frame ? esc(frame).replace('＿', '<span class="kt-blank">？</span>') : '';
     const fb = answered ? `
       <div class="kt-fb ${ok ? 'ok' : 'ng'}" role="status">
-        <p class="kt-verdict">${ok ? `正解 ＋${10 + s.results[s.results.length - 1].bonus}${s.streak > 1 ? ` · ${s.streak}連続` : ''}` : `答え：${esc(right)}`}</p>
+        <p class="kt-verdict">${verdict(s, ok, right)}</p>
         <div class="kt-path"><span>${esc(x.word.w)}</span><span class="kt-rule fam-${rp.fam}">${esc(rp.rule)}</span>${x.form === 'group' || x.form === 'agroup' ? '' : `<b>${esc(right)}</b>`}</div>
         ${filled ? `<p class="kt-sent">${filled.split(/(<b[^>]*>.*?<\/b>)/).map((p, i) => (i % 2 ? p : esc(p))).join('')}</p>` : ''}
         ${rp.trap ? `<p class="kt-trap">⚠ ${esc(rp.trap)}</p>` : ''}
         ${ok ? '' : ruleRow(rp.fam, x.form)}
-        ${ok && !s.hold
-          ? `<div class="kt-auto"><button class="text-btn" data-act="kt-hold">止めて読む</button><button class="outline quiet" data-act="kt-next">次へ<i style="animation-duration:${AUTO_MS}ms"></i></button></div>`
-          : `<button class="primary ink" data-act="kt-next">${s.i + 1 >= s.items.length ? '結果を見る' : '次へ'}</button>`}
+        ${s.self === 'ask'
+          ? `<p class="kt-ask">選ぶ前に、この形を言えましたか？</p>
+             <div class="grid2"><button class="outline quiet" data-act="kt-said" data-v="0">言えなかった</button><button class="primary ink kt-said" data-act="kt-said" data-v="1">言えた</button></div>`
+          : ok && K.auto && !s.hold
+            ? `<div class="kt-auto"><button class="text-btn" data-act="kt-hold">止めて読む</button><button class="outline quiet" data-act="kt-next">次へ<i style="animation-duration:${AUTO_MS}ms"></i></button></div>`
+            : `<button class="primary ink" data-act="kt-next">${s.i + 1 >= s.items.length ? '結果を見る' : '次へ'}</button>`}
       </div>` : '';
     return `
       <div class="kt-top"><span>${s.i + 1} / ${s.items.length}</span><span>${s.score}点${s.streak > 1 ? ` · ${s.streak}連続` : ''}</span></div>
-      ${answered ? '' : `<div class="kt-timer" aria-hidden="true"><i style="animation-duration:${K.say ? LIMIT_SAY_S : LIMIT_S}s"></i></div>`}
+      ${answered || !K.timed ? '' : `<div class="kt-timer" aria-hidden="true"><i style="animation-duration:${K.say ? LIMIT_SAY_S : LIMIT_S}s"></i></div>`}
       <section class="kt-q">
         <p class="kt-form"><span>${esc(F.label)}</span><span class="en">${esc(F.en)}</span></p>
         ${wordHead(x.word)}
@@ -638,13 +675,23 @@ export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = ()
       ${fb}`;
   }
 
+  const missed = r => !r.ok || r.said === false;
+
+  function verdict(s, ok, right) {
+    if (!ok) return `答え：${esc(right)}`;
+    const r = s.results[s.results.length - 1];
+    if (r.said === false) return `言えなかった → もう一度出します：${esc(right)}`;
+    const pts = r.pts ? ` ＋${r.pts}` : '';
+    return s.self === 'ask' ? `選べました${pts}` : `正解${pts}${s.streak > 1 ? ` · ${s.streak}連続` : ''}`;
+  }
+
   function endView(s) {
-    const n = s.results.length, ok = s.results.filter(r => r.ok).length;
-    const miss = s.results.filter(r => !r.ok);
+    const n = s.results.length, ok = s.results.filter(r => !missed(r)).length;
+    const miss = s.results.filter(missed);
     const rows = miss.map(r => {
       const rp = rulePath(r.word, r.form);
       return `<li><div><span class="kt-w">${esc(r.word.w)}</span><span class="kt-f">${esc(FORMS[r.form].label)}</span></div>
-        <div class="kt-miss"><s>${esc(r.chose)}</s> → <b class="fam-${rp.fam}">${esc(r.right)}</b></div>
+        <div class="kt-miss">${r.ok ? '言えなかった' : `<s>${esc(r.chose)}</s>`} → <b class="fam-${rp.fam}">${esc(r.right)}</b></div>
         <div class="kt-rule-s fam-${rp.fam}">${esc(rp.rule)}</div></li>`;
     }).join('');
     const avg = n ? (s.results.reduce((t, r) => t + r.sec, 0) / n).toFixed(1) : 0;
@@ -761,7 +808,8 @@ export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = ()
       render(); await save();
     },
     'kt-mine': async () => { K.mine = !K.mine; render(); await save(); },
-    'kt-say': async () => { K.say = !K.say; render(); await save(); },
+    'kt-set': async el => { const k = el.dataset.v; if (['say', 'auto', 'timed'].includes(k)) { K[k] = !K[k]; render(); await save(); } },
+    'kt-said': el => selfCheck(el.dataset.v === '1'),
     'kt-show': () => { if (K.session) { K.session.shown = true; render(); } },
     'kt-hold': () => { if (K.session) { K.session.hold = true; clearTimeout(advanceTimer); render(); } },
     'kt-start': () => start(),
@@ -770,7 +818,7 @@ export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = ()
     'kt-quit': () => { clearTimeout(advanceTimer); K.session = null; render(); },
     'kt-home': () => { K.session = null; K.tab = 'play'; render(); },
     'kt-retry': () => {
-      const miss = K.session?.results.filter(r => !r.ok).map(r => ({ word: r.word, form: r.form })) || [];
+      const miss = K.session?.results.filter(missed).map(r => ({ word: r.word, form: r.form })) || [];
       if (miss.length) start(miss);
     },
     'kt-weak': () => {
