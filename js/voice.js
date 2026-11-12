@@ -11,9 +11,11 @@
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition || null;
 
 const TICK = 50;              // 音の大きさを見る間隔（ms）
-const ONSET_FRAMES = 3;       // 続けて3回（150ms）声があれば「話し始め」
 const MIN_VOICE = 400;        // これより短い音は、咳や物音として扱う
 const SILENCE = 1600;         // 話したあと、これだけ黙ったら「言い終わり」
+const FLOOR_WIN = 3000;       // まわりの雑音の大きさ＝この時間（ms）の中でいちばん静かな瞬間（v1.16.1）
+const SEG_JOIN = 300;         // これより短い切れ目は、同じ声のかたまりとしてつなぐ
+const MIN_SEG = 300;          // 声のかたまりがこれより短ければ、物音（ドア・咳・机をたたく音など）として数えない
 const MIN_THR = 0.006;        // 声とみなす最小の大きさ（-44dB）。自動音量をオフにしたので、前の 0.02（-34dB）では小さい声を見落とした（v1.15.0）。
                               // ふだんは「まわりの雑音の3倍（+9.5dB）」がしきい値になり、これはその下限
 const MAX_TAKE = 20000;       // 1回の最長
@@ -106,12 +108,43 @@ export function createVoice() {
     rec.ondataavailable = e => { if (e.data?.size) parts.push(e.data); };
 
     const t0 = performance.now();
-    let floor = 0.01;
-    let run = 0;
+    // 声の見つけ方（v1.16.1・Kairos のレビュー：突然の物音・まわりがうるさくなったとき）
+    //   1. 雑音の大きさ＝直近3秒でいちばん静かな瞬間。最初の50msから実際の値を使い、うるさくなっても3秒で追いつく
+    //   2. 雑音の大きさが上がったら、直近3秒の「声」を新しいしきい値で見直す（上がった雑音を声として数え続けない）
+    //   3. 声のかたまり（300ms未満の切れ目はつなぐ）が300ms未満なら、物音として数えない
+    const hist = [];              // { t, rms, v（しきい値を超えたか） }
     let onsetAt = null;
     let voiced = 0;
     let lastVoice = 0;
     let holdUntil = 0;
+    /** 記録から、話し始め・最後に声があった時刻・声の合計時間を出す */
+    const analyse = () => {
+      let first = null;
+      let last = 0;
+      let total = 0;
+      let segStart = null;
+      let segEnd = 0;
+      let segVoiced = 0;
+      const close = () => {
+        if (segStart != null && segVoiced >= MIN_SEG) {
+          if (first == null) first = segStart;
+          last = segEnd;
+          total += segVoiced;
+        }
+        segStart = null; segVoiced = 0;
+      };
+      for (const f of hist) {
+        if (!f.v) continue;
+        if (segStart != null && f.t - segEnd > SEG_JOIN) close();
+        if (segStart == null) segStart = f.t;
+        segEnd = f.t;
+        segVoiced += TICK;
+      }
+      close();
+      onsetAt = first;
+      lastVoice = last;
+      voiced = total;
+    };
     let done = false;
     let reason = 'tap';
 
@@ -140,15 +173,15 @@ export function createVoice() {
     const timer = setInterval(() => {
       const now = performance.now();
       const rms = level();
-      // 雑音の大きさを少しずつ追いかける（静かになればすぐ下げ、うるさくなればゆっくり上げる）
-      floor = rms < floor ? rms : floor + (rms - floor) * 0.003;
-      const thr = Math.max(MIN_THR, floor * 3);
       onLevel(Math.min(1, rms / 0.25));
-      if (rms > thr) {
-        run += 1;
-        if (run >= ONSET_FRAMES && onsetAt == null) onsetAt = now - (ONSET_FRAMES - 1) * TICK;
-        if (onsetAt != null) { voiced += TICK; lastVoice = now; }
-      } else run = 0;
+      hist.push({ t: now, rms, v: false });
+      let floor = Infinity;
+      for (let i = hist.length - 1; i >= 0 && now - hist[i].t <= FLOOR_WIN; i -= 1) if (hist[i].rms < floor) floor = hist[i].rms;
+      const thr = Math.max(MIN_THR, floor * 3);
+      hist[hist.length - 1].v = rms > thr;
+      // 直近3秒は、いまのしきい値で見直す（声→雑音への見直しだけ。前の声を後から増やすことはしない）
+      for (let i = hist.length - 2; i >= 0 && now - hist[i].t <= FLOOR_WIN; i -= 1) if (hist[i].v && hist[i].rms <= thr) hist[i].v = false;
+      analyse();
       if (now - t0 > MAX_TAKE) { finish('max'); return; }
       if (now < holdUntil) return;
       if (onsetAt != null && voiced >= MIN_VOICE && now - Math.max(lastVoice, holdUntil) > SILENCE) finish('silence');
