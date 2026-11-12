@@ -144,6 +144,49 @@ Google のサービスもサーバーもいらないので、中国版のシス�
 - GitHub Pages ではマルチスレッドが使えない（COOP/COEP ヘッダーを付けられない）ので、1スレッドの wasm で動きます
 - 無音や雑音で Whisper が出しがちな決まり文句（「ご視聴ありがとうございました」など）は捨てます
 
+### マイクの処理をすべてオフに（v1.15.0）
+
+録音のとき、エコー除去・雑音抑制・自動音量をすべてオフにした（`js/voice.js` の `MIC_DEFAULT`）。
+
+- Grass が lab/asr.html で2回、どれがどれかを知らずに3つの設定を聞き比べ、2回とも「すべてオフ」を選んだ
+- 2回目の測定（ふつうのビットレート）：すべてオフ＝雑音 -49dB・声 -30dB・SN比 19dB／すべてオン（前の設定）＝雑音 -33dB・声 -21dB・SN比 12dB／雑音抑制だけオフ＝SN比 11dB。音割れはどれも 0%
+- 前の設定で聞こえた「雑音」は、処理（雑音抑制・自動音量）によるものだったと考えられる
+- 自動音量をやめたので、声が約 9dB 小さくなる。話し始め／言い終わりのしきい値の下限を 0.02（-34dB）から 0.006（-44dB）に下げた（ふだんは「雑音の3倍」）。
+  確かめたこと（偽のマイク・すべてオフ）：声 -30dB／-36dB → どちらも話し始め・言い終わりを検出。前の下限では -36dB の声を見落とした。雑音だけ（-49dB・-38dB）→ 声と間違えない
+- 試すときは localStorage の `micConstraints`（JSON）で上書きできる
+
+### 標準は Moonshine（v1.14.0）
+
+「文字でも確かめる（スマホの中で）」の標準を **速い（Moonshine Tiny JA・約30MB）** にした。**遅い（Whisper base・約80MB）** も選べる。Whisper small は外した。
+
+- Grass のスマホ（Android 10・Chrome 156・8GB）で測った結果（lab/asr.html）：6秒の文 Moonshine 1.5秒／base 10.0秒、22.5秒の文 Moonshine 5.7秒／base 13.2秒。精度は同じくらい（どちらも間違える）
+- Whisper は文の長さに関係なく30秒分を計算するので、短い文でも遅い。Moonshine は話した長さだけ計算する
+- Whisper small はそのスマホでブラウザごと落ちた。端末のキャッシュに残っていれば、アプリが自動で消す（約400MB）
+- 前の版で base／small を選んでいた場合も、一度だけ Moonshine に切り替える（保存の形 `whModelV: 2`）
+- Moonshine で文字にできなかったとき、Whisper base が端末にあれば「Whisper base でやり直す」が出る
+- **Powered by Moonshine AI**（Moonshine AI Community License・個人の非商用）。モデルは Hugging Face のコミュニティ変換版（いまは `wmoto-ai/moonshine-tiny-ja-ONNX`）。端末にある候補を先に使う
+
+### 実験ページ：声を文字にする（lab/asr.html・ブランチ asr-poc）
+
+アプリとは別の、測るためだけのページ。アプリのデータには触らない。最後に「レポートをコピー」して Slack に貼る。
+
+1. **ブラウザの音声認識**：Chrome の SpeechRecognition（ja-JP）を1回試し、使えなければエラーコード（`network`・`service-not-allowed` など）を出す
+2. **速さ**：短い文（3〜5秒）と長い文（15〜20秒）を録音し、選んだモデルで2回ずつ文字にする。
+   準備（ダウンロード・最初の読み込み）／1回目（キャッシュから読み込み＋文字に）／2回目（読み込み済み）の時間と、文字の一致（F1）を記録
+   - モデル：**Moonshine Tiny JA**（日本語専用・27M・話した長さだけ計算する。q8 で約30MB）、Whisper base、Whisper small（任意）
+   - Moonshine は Hugging Face の `onnx-community/moonshine-tiny-ja-ONNX` → なければ `wmoto-ai/moonshine-tiny-ja-ONNX` の順に試し（どちらも q8 だけ。大きい fp32 には自動で落とさない）、使ったリポジトリ・精度・attention_mask の形と型をレポートに出す
+   - 生成トークンの上限は「1秒あたり13＋8」（Transformers.js の既定は英語向けの「1秒あたり6」で、日本語だと文の途中で切れるため）
+   - 新しい書き出しの Moonshine はエンコーダーに `attention_mask`（モデルの中では使わない互換用の入力）がある。Transformers.js は Moonshine に渡さないので、
+     Worker で全部 1 のものを渡す（`forward_params` にも足す。足さないと generate() が捨てる）。Grass のスマホで「Missing the following inputs: attention_mask」が出たため
+   - 「ダウンロード」か「スマホの中から読み込み」かは、Worker が Cache Storage を見て決める（Transformers.js の 'download' はキャッシュから読むときにも出る）
+   - Whisper small は Grass のスマホ（Android・8GB）でブラウザごと落ちたので、このページでは測らない
+   - 結果（1・2）は localStorage にも残す。ブラウザが落ちても、開き直すと前回の結果が出る
+3. **マイクの音質**：3つの設定（処理すべてオン／雑音抑制だけオフ／すべてオフ）をランダムな順で A・B・C として録音し、聞き比べて選ぶ。
+   選んだあとで、設定（`track.getSettings()`）・雑音・声の大きさ・SN比・音割れを表示。ビットレートは別の選択肢
+
+ライセンス：Moonshine Tiny JA は **Moonshine AI Community License**（個人・非商用。"Powered by Moonshine AI" を表示）。Whisper は MIT、Transformers.js は Apache-2.0。
+v1.14.0 から、Moonshine は「話す」の標準。
+
 ## 生の日本語（v1.10.0）
 
 「今日」画面の「生の日本語」から。本物の素材（公式教材・YouTube など）の30〜90秒の場面で、聞く → 確かめる。
@@ -168,7 +211,7 @@ Google のサービスもサーバーもいらないので、中国版のシス�
 - **操作**：画面のボタン、またはイヤホン・ロック画面（再生／一時停止、前の曲＝今の項目をもう一度、次の曲＝次へ）。間も無音の音声として流すので、画面を消しても続きます
 - 復習の評価・練習の初回結果・書き取りには何も記録しません。散歩した時間だけ残ります（「今日 N分」）
 
-## 活用ドリル（v1.14.0）
+## 活用ドリル（v1.16.0）
 
 「今日」画面の「活用ドリル」から。動詞・形容詞の活用を、短いラウンドで速く正確にするモードです。データはこのスマホの中だけ（シート・Apps Script の変更なし）。
 

@@ -10,7 +10,7 @@ class FakeWorker {
   reply(m) { this.onmessage?.({ data: m }); }
 }
 globalThis.Worker = FakeWorker;
-globalThis.localStorage = { getItem: () => JSON.stringify({ slowMs: { base: 50, small: 50 }, loadLimitMs: 200, runLimitMs: { base: 150, small: 150 } }) };
+globalThis.localStorage = { getItem: () => JSON.stringify({ slowMs: { base: 50, moonshine: 50 }, loadLimitMs: 200, runLimitMs: { base: 150, moonshine: 150 } }) };
 const { createWhisper, WH_LIMITS } = await import('../js/whisper.js');
 assert.equal(WH_LIMITS.runLimitMs.base, 150, 'limits can be tuned via localStorage');
 const pcm = () => new Float32Array(16000);
@@ -40,7 +40,7 @@ assert.equal(out.text, 'もう一度'); assert.ok(workers.length > before, 'reco
 // 3. crash: onerror rejects every pending call (queued work proceeds on a fresh worker)
 wh = createWhisper();
 FakeWorker.behave = (w, m) => { if (m.type === 'load') setTimeout(() => w.onerror?.({ message: 'out of memory', preventDefault() {} }), 5); };
-const a = wh.load('small');
+const a = wh.load('moonshine');
 await assert.rejects(a, e => e.code === 'crashed' && /out of memory/.test(e.message));
 
 // 4. messageerror also rejects
@@ -51,7 +51,7 @@ await assert.rejects(wh.transcribe('base', pcm()), e => e.code === 'crashed');
 // 5. cancel rejects with cancelled and terminates
 wh = createWhisper();
 FakeWorker.behave = () => {};
-const c = wh.transcribe('small', pcm());
+const c = wh.transcribe('moonshine', pcm());
 await sleep(10); wh.cancel();
 await assert.rejects(c, e => e.code === 'cancelled');
 assert.equal(workers.at(-1).terminated, true);

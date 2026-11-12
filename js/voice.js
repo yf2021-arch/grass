@@ -14,11 +14,24 @@ const TICK = 50;              // 音の大きさを見る間隔（ms）
 const ONSET_FRAMES = 3;       // 続けて3回（150ms）声があれば「話し始め」
 const MIN_VOICE = 400;        // これより短い音は、咳や物音として扱う
 const SILENCE = 1600;         // 話したあと、これだけ黙ったら「言い終わり」
+const MIN_THR = 0.006;        // 声とみなす最小の大きさ（-44dB）。自動音量をオフにしたので、前の 0.02（-34dB）では小さい声を見落とした（v1.15.0）。
+                              // ふだんは「まわりの雑音の3倍（+9.5dB）」がしきい値になり、これはその下限
 const MAX_TAKE = 20000;       // 1回の最長
 const SR_START_TIMEOUT = 5000;
 
 export const srSupported = () => !!SR;
 export const micSupported = () => !!(navigator.mediaDevices?.getUserMedia && window.MediaRecorder);
+
+// マイクの設定（v1.15.0）：エコー除去・雑音抑制・自動音量を、すべてオフにする。
+//   Grass のスマホで2回、どれがどれかを知らずに聞き比べて、2回ともこれを選んだ（lab/asr.html・2026-11-12）。
+//   測った値（2回目）：すべてオフ＝雑音 -49dB・声 -30dB・SN比 19dB／すべてオン（前の設定）＝雑音 -33dB・声 -21dB・SN比 12dB。音割れはどれも 0%。
+//   前の設定で聞こえた「雑音」は、雑音抑制や自動音量の処理によるものだったと考えられる。
+//   ただし声は約 9dB 小さくなるので、話し始め／言い終わりを見つけるしきい値も下げた（下の MIN_THR）。
+//   試すときは localStorage の micConstraints（JSON）で上書きできる。
+export const MIC_DEFAULT = { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
+export function micConstraints() {
+  try { return { ...MIC_DEFAULT, ...JSON.parse(localStorage.getItem('micConstraints') || '{}') }; } catch (e) { return { ...MIC_DEFAULT }; }
+}
 
 export function createVoice() {
   let ctx = null;
@@ -39,7 +52,7 @@ export function createVoice() {
   async function openMic() {
     if (stream && stream.getAudioTracks().some(t => t.readyState === 'live')) return;
     stream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      audio: micConstraints(),
     });
     analyser = null;
     if (ctx) {
@@ -129,7 +142,7 @@ export function createVoice() {
       const rms = level();
       // 雑音の大きさを少しずつ追いかける（静かになればすぐ下げ、うるさくなればゆっくり上げる）
       floor = rms < floor ? rms : floor + (rms - floor) * 0.003;
-      const thr = Math.max(0.02, floor * 3);
+      const thr = Math.max(MIN_THR, floor * 3);
       onLevel(Math.min(1, rms / 0.25));
       if (rms > thr) {
         run += 1;

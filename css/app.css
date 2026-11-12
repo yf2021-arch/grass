@@ -609,7 +609,7 @@ button.row-link { width: 100%; border: 0; text-align: left; font: inherit; color
 .raw-cue .k { flex-shrink: 0; font-size: 12px; color: var(--muted); padding-top: 3px; font-variant-numeric: tabular-nums; }
 .voice-box .line:has(+ .wh-panel) { border-bottom: 0; }
 
-/* ---------- 活用ドリル（v1.14.0） ---------- */
+/* ---------- 活用ドリル（v1.16.0） ---------- */
 .katsuyo { gap: 12px; }
 .katsuyo h2 { margin: 0 0 8px; font-size: 14px; }
 .katsuyo .fam-tte   { --f: var(--accent); --ft: var(--accent-tint); }
