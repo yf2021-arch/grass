@@ -2,7 +2,7 @@
 // アプリ本体（index.html）とは別。アプリのデータ（IndexedDB）には触らない。結果はレポート（JSON）にして、コピーして Slack に貼ってもらう。
 
 import { createWhisper, WH_MODELS, decodeForWhisper } from '../js/whisper.js';
-import { compareSay } from '../js/voice.js';
+import { compareSay, micConstraints } from '../js/voice.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -16,11 +16,11 @@ const SENTENCES = [
 
 // マイクの設定（Kairos の案）。順番はランダムにして A・B・C と呼ぶ
 const PRESETS = [
-  { id: 'P1', name: '処理すべてオン（今のアプリ）', c: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } },
+  { id: 'P1', name: '処理すべてオン（v1.14 までのアプリ）', c: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } },
   { id: 'P2', name: '雑音抑制だけオフ', c: { echoCancellation: true, noiseSuppression: false, autoGainControl: true } },
-  { id: 'P3', name: '処理すべてオフ', c: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } },
+  { id: 'P3', name: '処理すべてオフ（v1.15 からのアプリ）', c: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } },
 ];
-const APP_CONSTRAINTS = PRESETS[0].c;
+const APP_CONSTRAINTS = micConstraints();   // 2. の速さは、アプリと同じマイクの設定で録る
 
 // Whisper small は、Grass のスマホ（Android・8GB）でブラウザごと落ちた（2026-11-12）ので、ここでは測らない
 const ENGINES = [
