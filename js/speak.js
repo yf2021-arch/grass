@@ -496,7 +496,8 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     const ids = pick(DRILL_SIZE, SP.filter);
     if (!ids.length) return;
     if (mode === 'look' && whReady()) {   // 先に読み込んでおく（最初の1問を速く）。失敗したら、文字にするときにもう一度試し、そこで理由を出す
-      whisper.load(SP.voice.whModel).then(r => { if (r.files.length) { SP.voice.whFiles[WH_MODELS[SP.voice.whModel].id] = r.files; saveVoice(); } }).catch(() => {});
+      const id = WH_MODELS[SP.voice.whModel].id;   // 読み込み中にモデルを変えても、結果は読み込んだモデルの名前で残す
+      whisper.load(SP.voice.whModel).then(r => { if (r.files.length) { SP.voice.whFiles[id] = r.files; saveVoice(); } }).catch(() => {});
     }
     SP.drill = { mode, ids, i: 0, phase: 'front', t0: 0, ms: 0, peeks: 0, peeking: false, results: [], startedAt: Date.now() };
     go('#/drill');
@@ -738,6 +739,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     att.timings = {};
     att.whole = whole;
     const run = att.run = (att.run || 0) + 1;   // やめた・やり直したあとに、古い結果で上書きしない
+    const abort = att.abort = new AbortController();   // この答えだけをやめるため（ほかの答えの処理は止めない）
     paintAttempt(att);
     tickWhisper();
     try {
@@ -748,6 +750,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
       att.timings.decodeMs = performance.now() - d0;
       if (att.run !== run || att.wh === 'cancelled') return;
       const out = await whisper.transcribe(model, pcm, {
+        signal: abort.signal,
         onStage: m => {
           if (att.run !== run || att.wh === 'cancelled') return;
           att.wh = m.stage === 'load' ? 'loading' : m.stage === 'infer' ? 'transcribing' : 'queued';
@@ -1008,7 +1011,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     },
     'sp-rate': el => rateDrill(el.dataset.ok === '1'),
     'sp-mine': () => { const u = SP.drill?.rec?.url; if (u) playMine(u); },
-    'sp-wh-cancel': () => { const att = SP.drill?.rec; if (!whRunning(att)) return; att.wh = 'cancelled'; whisper.cancel(); paintAttempt(att); },
+    'sp-wh-cancel': () => { const att = SP.drill?.rec; if (!whRunning(att)) return; att.wh = 'cancelled'; att.abort?.abort(); paintAttempt(att); },
     'sp-wh-retry': el => { const att = SP.drill?.rec; if (att && !whRunning(att)) runWhisper(att, { whole: !!att.whole, model: el.dataset.v || SP.voice.whModel }); },
     'sp-wh-anyway': () => { const att = SP.drill?.rec; if (att && att.wh === 'none') runWhisper(att, { whole: true }); },
     'sp-cmp': async () => {

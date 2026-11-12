@@ -62,8 +62,9 @@ export function createWhisper() {
     return worker;
   }
 
-  function call(msg, { onProgress, onStage, limitMs } = {}, transfer = []) {
+  function call(msg, { onProgress, onStage, limitMs, onId } = {}, transfer = []) {
     const id = ++seq;
+    onId?.(id);
     return new Promise((resolve, reject) => {
       const timer = limitMs ? setTimeout(() => reset('timeout', `${Math.round(limitMs / 1000)}秒たっても終わらないので止めました`), limitMs) : 0;
       pending.set(id, { resolve, reject, onProgress, onStage, timer });
@@ -83,22 +84,37 @@ export function createWhisper() {
   /**
    * 16kHz・モノラルの Float32Array を文字にする → { text, ms（文字にする時間）, loadMs（読み込みが要ったとき） }
    * onStage({ stage: 'queued' | 'load' | 'infer' }) で、いま何をしているかを知らせる。
+   * signal（AbortSignal）で、この1件だけをやめられる：
+   *   順番待ちのあいだ → Worker には送らない（前の処理はそのまま続く）
+   *   処理中 → Worker ごと止める（WASM の計算は途中で止められないため）。順番待ちのものは新しい Worker で続く
    */
-  function transcribe(key, audio, { onStage } = {}) {
+  function transcribe(key, audio, { onStage, signal } = {}) {
     const model = WH_MODELS[key]?.id;
+    const cancelled = () => new WhisperError('cancelled', 'やめました');
+    if (signal?.aborted) return Promise.reject(cancelled());
     onStage?.({ stage: 'queued' });
+    let reqId = null;
     const job = queue.then(async () => {
+      if (signal?.aborted) throw cancelled();          // 順番待ちのあいだにやめた → 送らない
       const needLoad = loaded !== model;
       onStage?.({ stage: needLoad ? 'load' : 'infer' });
       const limitMs = (needLoad ? WH_LIMITS.loadLimitMs : 0) + (WH_LIMITS.runLimitMs[key] || 120000);
-      const r = await call({ type: 'run', model, audio }, { onStage, limitMs }, [audio.buffer]);
+      const r = await call({ type: 'run', model, audio }, { onStage, limitMs, onId: id => { reqId = id; } }, [audio.buffer]);
       return { text: cleanText(r.text), ms: r.ms, loadMs: r.loadMs || 0 };
     });
     queue = job.catch(() => {});
-    return job;
+    if (!signal) return job;
+    return new Promise((resolve, reject) => {
+      const onAbort = () => {
+        if (reqId != null && pending.has(reqId)) reset('cancelled', 'やめました');   // 処理中のこの1件を止める
+        else reject(cancelled());                                                  // 順番待ち：すぐに終わったことにする
+      };
+      signal.addEventListener('abort', onAbort, { once: true });
+      job.then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort));
+    });
   }
 
-  /** 今の処理をやめる（Worker ごと止める。次に使うときは読み込み直し） */
+  /** 今の処理をすべてやめる（Worker ごと止める。モデルを消すときなど） */
   function cancel() { if (pending.size) reset('cancelled', 'やめました'); }
 
   /** ファイル名のリスト（files）がすべて端末のキャッシュにあるか → { ready, bytes, missing } */

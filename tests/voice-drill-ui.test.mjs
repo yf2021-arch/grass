@@ -13,6 +13,7 @@ import assert from 'node:assert/strict';
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const types = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.webmanifest': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.mp3': 'audio/mpeg' };
 let mode = 'ok';   // what the fake worker does with the next "run": ok | stall | slow
+let runs = 0;      // how many transcriptions reached the worker
 const FAKE_WORKER = `
 self.onmessage = async e => {
   const m = e.data;
@@ -25,7 +26,7 @@ self.onmessage = async e => {
 };`;
 const server = http.createServer((req, res) => {
   const url = decodeURIComponent(req.url.split('?')[0]);
-  if (url === '/__whmode') { res.writeHead(200, { 'Content-Type': 'text/plain' }); return res.end(mode); }
+  if (url === '/__whmode') { runs++; res.writeHead(200, { 'Content-Type': 'text/plain' }); return res.end(mode); }
   if (url === '/js/whisper-worker.js') { res.writeHead(200, { 'Content-Type': 'text/javascript' }); return res.end(FAKE_WORKER); }
   const file = path.join(root, url === '/' ? 'index.html' : url);
   if (!file.startsWith(root) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); return res.end(); }
@@ -110,6 +111,34 @@ try {
   });
   assert.equal(last.ok, false); assert.equal(last.late, true, 'late result is marked');
   assert.ok(last.match > 0, 'late Whisper score saved on the rated entry');
+
+  // 5. A still transcribing, B queued behind it, cancel B: A's late score is kept, B never reaches the worker
+  const readLog = () => page.evaluate(async () => {
+    const db = await new Promise(ok => { const r = indexedDB.open('grass'); r.onsuccess = () => ok(r.result); });
+    return new Promise(ok => { const q = db.transaction('meta').objectStore('meta').get('speakLog'); q.onsuccess = () => ok(q.result); });
+  });
+  await page.evaluate(() => { location.hash = '#/speak'; });   // a fresh drill (the first one has used its cards)
+  await page.click('[data-act="sp-start"][data-mode="look"]');
+  mode = 'slow';
+  await answerOnce();                                     // A
+  await page.waitForSelector('.wh-run');
+  await page.click('[data-act="sp-rate"][data-ok="1"]');  // rate A while it is still running
+  const before = runs;
+  await page.click('[data-act="sp-lookup"]');
+  await page.waitForSelector('[data-act="sp-said"]');
+  await page.waitForTimeout(500);
+  await page.click('[data-act="sp-said"]');               // B
+  await page.waitForSelector('.voice-res');
+  if (await page.locator('[data-act="sp-wh-anyway"]').count()) await page.click('[data-act="sp-wh-anyway"]');
+  await page.waitForSelector('text=前の文を文字にし終わるのを待っています', { timeout: 3000 });
+  await page.click('[data-act="sp-wh-cancel"]');          // cancel B only
+  await page.waitForSelector('text=文字にするのをやめました');
+  await page.waitForTimeout(3500);
+  const log = await readLog();
+  const aEntry = log.at(-1);
+  assert.equal(aEntry.late, true, "A's late result still arrives after B is cancelled");
+  assert.ok(aEntry.match > 0);
+  assert.equal(runs, before, 'cancelled B never reached the worker');
   assert.deepEqual(errors, []);
   console.log('PASS voice-drill-ui');
 } finally { await browser.close(); server.close(); }

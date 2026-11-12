@@ -67,4 +67,37 @@ assert.deepEqual(order, ['start1', 'end1', 'start2', 'end2'], 'one transcription
 wh = createWhisper();
 FakeWorker.behave = (w, m) => { if (m.type === 'run') setTimeout(() => w.reply({ type: 'err', id: m.id, error: 'bad audio' }), 5); };
 await assert.rejects(wh.transcribe('base', pcm()), e => e.code === 'failed' && e.message === 'bad audio');
+// 8. A active + B queued, cancel B: A finishes, B is never sent to the worker
+wh = createWhisper();
+let runs = 0;
+FakeWorker.behave = (w, m) => { if (m.type === 'run') { runs++; setTimeout(() => w.reply({ type: 'ok', id: m.id, model: m.model, text: 'A', ms: 1 }), 60); } };
+const abortB = new AbortController();
+const jobA = wh.transcribe('base', pcm());
+const jobB = wh.transcribe('base', pcm(), { signal: abortB.signal });
+await sleep(10);
+abortB.abort();
+await assert.rejects(jobB, e => e.code === 'cancelled', 'queued B rejects at once');
+assert.equal((await jobA).text, 'A', 'active A is not affected');
+await sleep(80);
+assert.equal(runs, 1, 'cancelled B was never dispatched');
+assert.equal(workers.at(-1).terminated, false, 'worker kept: nothing active was cancelled');
+
+// 9. cancel the active A: A rejects, the worker is replaced, queued B still runs and completes
+wh = createWhisper();
+runs = 0;
+FakeWorker.behave = (w, m) => { if (m.type === 'run') { runs++; const text = runs === 1 ? null : 'B'; if (text) setTimeout(() => w.reply({ type: 'ok', id: m.id, model: m.model, text, ms: 1 }), 10); } };
+const abortA = new AbortController();
+const activeA = wh.transcribe('base', pcm(), { signal: abortA.signal });
+const queuedB = wh.transcribe('base', pcm());
+await sleep(10);
+const firstWorker = workers.at(-1);
+abortA.abort();
+await assert.rejects(activeA, e => e.code === 'cancelled');
+assert.equal(firstWorker.terminated, true, 'stopping an active run needs a new worker');
+assert.equal((await queuedB).text, 'B', 'queued B continues on a fresh worker');
+assert.equal(runs, 2);
+
+// 10. aborted before calling: rejected without queueing
+const pre = new AbortController(); pre.abort();
+await assert.rejects(wh.transcribe('base', pcm(), { signal: pre.signal }), e => e.code === 'cancelled');
 console.log('PASS whisper-client');
