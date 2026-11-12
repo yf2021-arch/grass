@@ -3,17 +3,22 @@
 //   モデルは初回だけダウンロード（Wi-Fi で）。その後はオフラインでも動く。
 //   処理は js/whisper-worker.js（別スレッド）で行う。
 
+// v1.14.0：標準は Moonshine（Grass のスマホで、6秒の文が約1.5秒・Whisper base は約10秒。精度は同じくらい）。
+//   Whisper small は Grass のスマホ（Android・8GB）でブラウザごと落ちたので、外した。
 export const WH_MODELS = {
-  base: { id: 'Xenova/whisper-base', kind: 'whisper', name: 'ふつう（base）', approx: '約80MB', note: '1文が数秒〜10秒ほどで文字になります' },
-  small: { id: 'Xenova/whisper-small', kind: 'whisper', name: 'より正確（small）', approx: '約400MB', note: '遅く、1文に十数秒かかることがあります' },
-  // 実験（lab/asr.html だけで使う。「話す」の画面には出さない）。日本語専用・27M パラメータ。
-  // 話した長さだけ計算する（Whisper のような30秒の枠がない）。Moonshine AI Community License（個人の非商用は可・"Powered by Moonshine AI"）。
-  // Hugging Face の変換版はコミュニティのもの。最初の候補がなければ次を使い、どれを使ったかを結果に返す。
+  // 日本語専用・27M パラメータ。話した長さだけ計算する（Whisper のような30秒の枠がない）。
+  // Moonshine AI Community License（個人の非商用は可・"Powered by Moonshine AI" を表示）。
+  // Hugging Face の変換版はコミュニティのもの。最初の候補がなければ次を使う（いまは wmoto-ai のものが使われる）。
   moonshine: {
-    id: 'onnx-community/moonshine-tiny-ja-ONNX', alt: ['wmoto-ai/moonshine-tiny-ja-ONNX'], kind: 'moonshine', lab: true,
-    name: 'Moonshine（日本語・軽い）', approx: '約30MB', note: '実験中',
+    id: 'onnx-community/moonshine-tiny-ja-ONNX', alt: ['wmoto-ai/moonshine-tiny-ja-ONNX'], kind: 'moonshine',
+    name: '速い（Moonshine）', approx: '約30MB', note: '1文が1〜2秒ほどで文字になります',
+    credit: 'Powered by Moonshine AI（Moonshine AI Community License・個人の非商用）',
   },
+  base: { id: 'Xenova/whisper-base', kind: 'whisper', name: '遅い（Whisper base）', approx: '約80MB', note: 'スマホでは1文に10秒ほどかかります' },
 };
+export const DEFAULT_WH_MODEL = 'moonshine';
+// 選べなくなったモデル。端末のキャッシュに残っていれば消す（small は約400MB）
+const RETIRED_REPOS = ['Xenova/whisper-small'];
 
 /** 「話す」の画面で選べるモデル（実験のものを除く） */
 export const appModels = () => Object.entries(WH_MODELS).filter(([, m]) => !m.lab);
@@ -34,9 +39,9 @@ const TF_CACHE = 'transformers-cache';
 //   limitMs を過ぎたら Worker を止めて、エラーとして返す（画面が「文字にしています…」のままにならない）。
 // 端末で測った数字がまだないので、余裕を大きく取っている。設定（localStorage の whLimits）で変えられる。
 export const WH_LIMITS = {
-  slowMs: { base: 20000, small: 45000, moonshine: 10000 },
+  slowMs: { base: 20000, moonshine: 10000 },
   loadLimitMs: 300000,                       // モデルの読み込み（初回のコンパイルを含む）
-  runLimitMs: { base: 120000, small: 240000, moonshine: 60000 }, // 1文を文字にする
+  runLimitMs: { base: 120000, moonshine: 60000 }, // 1文を文字にする
 };
 try { Object.assign(WH_LIMITS, JSON.parse(localStorage.getItem('whLimits') || '{}')); } catch (e) { /* 既定のまま */ }
 
@@ -141,18 +146,25 @@ export function createWhisper() {
 
   /** ファイル名のリスト（files）がすべて端末のキャッシュにあるか → { ready, bytes, missing } */
   async function cacheStatus(key, files) {
-    const model = WH_MODELS[key]?.id;
+    const m = WH_MODELS[key];
     const list = files && files.length ? files : MODEL_FILES;
-    if (!model || !('caches' in window)) return { ready: false, bytes: 0, missing: list };
+    if (!m || !('caches' in window)) return { ready: false, bytes: 0, missing: list };
     try {
       const cache = await caches.open(TF_CACHE);
-      let bytes = 0;
-      const missing = [];
-      for (const f of list) {
-        const hit = await cache.match(`https://huggingface.co/${model}/resolve/main/${f}`);
-        if (!hit) missing.push(f); else bytes += Number(hit.headers.get('content-length')) || 0;
+      let first = null;
+      // 候補のリポジトリのどれかに、ファイルが全部そろっていればよい（Moonshine は2つ目の候補が使われている）
+      for (const repo of [m.id, ...(m.alt || [])]) {
+        let bytes = 0;
+        const missing = [];
+        for (const f of list) {
+          const hit = await cache.match(`https://huggingface.co/${repo}/resolve/main/${f}`);
+          if (!hit) missing.push(f); else bytes += Number(hit.headers.get('content-length')) || 0;
+        }
+        const st = { ready: !missing.length, bytes, missing, checked: list.length, full: !!(files && files.length), repo };
+        if (st.ready) return st;
+        if (!first) first = st;
       }
-      return { ready: !missing.length, bytes, missing, checked: list.length, full: !!(files && files.length) };
+      return first;
     } catch (e) { return { ready: false, bytes: 0, missing: list }; }
   }
 
@@ -160,6 +172,19 @@ export function createWhisper() {
   async function cachedBytes(key, files) {
     const st = await cacheStatus(key, files);
     return st.ready ? (st.bytes || 1) : 0;
+  }
+
+  /** 選べなくなったモデル（Whisper small）のファイルを、端末のキャッシュから消す → 消した数 */
+  async function purgeRetired() {
+    if (!('caches' in window)) return 0;
+    try {
+      const cache = await caches.open(TF_CACHE);
+      let n = 0;
+      for (const req of await cache.keys()) {
+        if (RETIRED_REPOS.some(r => req.url.includes(`/${r}/`))) { await cache.delete(req); n += 1; }
+      }
+      return n;
+    } catch (e) { return 0; }
   }
 
   /** モデルを端末から消す */
@@ -174,7 +199,7 @@ export function createWhisper() {
     }
   }
 
-  return { load, transcribe, cancel, dispose, cacheStatus, cachedBytes, remove, get loadedModel() { return loaded; } };
+  return { load, transcribe, cancel, dispose, cacheStatus, cachedBytes, remove, purgeRetired, get loadedModel() { return loaded; } };
 }
 
 /** 録音（webm など）を 16kHz・モノラルにする。fromSec〜toSec だけ切り出す（前後の無音で Whisper が作り話をしないように） */

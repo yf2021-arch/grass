@@ -39,7 +39,7 @@ try {
   const ctx = await browser.newContext({ viewport: { width: 420, height: 860 }, serviceWorkers: 'block' });
   await ctx.grantPermissions(['microphone'], { origin: base });
   await ctx.addInitScript(() => {
-    localStorage.setItem('whLimits', JSON.stringify({ slowMs: { base: 1200, small: 1200 }, loadLimitMs: 3000, runLimitMs: { base: 3000, small: 3000 } }));
+    localStorage.setItem('whLimits', JSON.stringify({ slowMs: { base: 1200, moonshine: 1200 }, loadLimitMs: 3000, runLimitMs: { base: 3000, moonshine: 3000 } }));
     window.__tracks = [];
     const gum = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
     navigator.mediaDevices.getUserMedia = async c => { const s = await gum(c); window.__tracks.push(...s.getTracks()); return s; };
@@ -51,7 +51,7 @@ try {
   // settings: voice on + Whisper base "installed" (model files present in the cache)
   await page.evaluate(async () => {
     const db = await new Promise((ok, ng) => { const r = indexedDB.open('grass'); r.onsuccess = () => ok(r.result); r.onerror = ng; });
-    await new Promise((ok, ng) => { const tx = db.transaction('meta', 'readwrite'); tx.objectStore('meta').put({ on: true, sr: false, wh: true, whModel: 'base' }, 'speakVoice'); tx.oncomplete = ok; tx.onerror = ng; });
+    await new Promise((ok, ng) => { const tx = db.transaction('meta', 'readwrite'); tx.objectStore('meta').put({ on: true, sr: false, wh: true, whModel: 'base', whModelV: 2 }, 'speakVoice'); tx.oncomplete = ok; tx.onerror = ng; });
     const cache = await caches.open('transformers-cache');
     for (const f of ['onnx/encoder_model_quantized.onnx', 'onnx/decoder_model_merged_quantized.onnx'])
       await cache.put(`https://huggingface.co/Xenova/whisper-base/resolve/main/${f}`, new Response('x', { headers: { 'content-length': '1' } }));

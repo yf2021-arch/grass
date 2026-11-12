@@ -144,6 +144,17 @@ Google のサービスもサーバーもいらないので、中国版のシス�
 - GitHub Pages ではマルチスレッドが使えない（COOP/COEP ヘッダーを付けられない）ので、1スレッドの wasm で動きます
 - 無音や雑音で Whisper が出しがちな決まり文句（「ご視聴ありがとうございました」など）は捨てます
 
+### 標準は Moonshine（v1.14.0）
+
+「文字でも確かめる（スマホの中で）」の標準を **速い（Moonshine Tiny JA・約30MB）** にした。**遅い（Whisper base・約80MB）** も選べる。Whisper small は外した。
+
+- Grass のスマホ（Android 10・Chrome 156・8GB）で測った結果（lab/asr.html）：6秒の文 Moonshine 1.5秒／base 10.0秒、22.5秒の文 Moonshine 5.7秒／base 13.2秒。精度は同じくらい（どちらも間違える）
+- Whisper は文の長さに関係なく30秒分を計算するので、短い文でも遅い。Moonshine は話した長さだけ計算する
+- Whisper small はそのスマホでブラウザごと落ちた。端末のキャッシュに残っていれば、アプリが自動で消す（約400MB）
+- 前の版で base／small を選んでいた場合も、一度だけ Moonshine に切り替える（保存の形 `whModelV: 2`）
+- Moonshine で文字にできなかったとき、Whisper base が端末にあれば「Whisper base でやり直す」が出る
+- **Powered by Moonshine AI**（Moonshine AI Community License・個人の非商用）。モデルは Hugging Face のコミュニティ変換版（いまは `wmoto-ai/moonshine-tiny-ja-ONNX`）。端末にある候補を先に使う
+
 ### 実験ページ：声を文字にする（lab/asr.html・ブランチ asr-poc）
 
 アプリとは別の、測るためだけのページ。アプリのデータには触らない。最後に「レポートをコピー」して Slack に貼る。
@@ -163,7 +174,7 @@ Google のサービスもサーバーもいらないので、中国版のシス�
    選んだあとで、設定（`track.getSettings()`）・雑音・声の大きさ・SN比・音割れを表示。ビットレートは別の選択肢
 
 ライセンス：Moonshine Tiny JA は **Moonshine AI Community License**（個人・非商用。"Powered by Moonshine AI" を表示）。Whisper は MIT、Transformers.js は Apache-2.0。
-Moonshine はまだ「話す」の画面では選べない（`WH_MODELS` の `lab: true`）。スマホで測ってから決める。
+v1.14.0 から、Moonshine は「話す」の標準。
 
 ## 生の日本語（v1.10.0）
 

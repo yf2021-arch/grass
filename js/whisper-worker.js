@@ -28,7 +28,12 @@ async function load(model, reqId, cands) {
   if (asr && asrModel === model) return asr;
   if (loading && loading.model === model) return loading.promise;
   if (asr) { try { await asr.dispose?.(); } catch (e) { /* */ } asr = null; asrModel = null; info = null; }
-  const list = cands && cands.length ? cands : [{ model, dtype: 'q8' }];
+  let list = cands && cands.length ? cands : [{ model, dtype: 'q8' }];
+  // もう端末にある候補を先に試す（オフラインでも動くように・ない候補への問い合わせを省くため）
+  if (list.length > 1) {
+    const have = await Promise.all(list.map(c => inCache(c.model, c.dtype)));
+    list = [...list.filter((c, i) => have[i]), ...list.filter((c, i) => !have[i])];
+  }
   const promise = (async () => {
     let lastErr = null;
     for (const c of list) {
