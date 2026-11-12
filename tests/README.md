@@ -3,6 +3,7 @@
 Run from the repository root (Node 20+):
 
 ```bash
+node tests/katsuyo.test.mjs          # 活用ドリル: conjugation rules, distractors, words from cards (no browser)
 node tests/voice-compare.test.mjs     # text-overlap score (no browser)
 node tests/whisper-client.test.mjs    # Whisper client: timeouts, crashes, cancel, queue (fake worker)
 node tests/voice-drill-ui.test.mjs    # 声で答える end to end (Playwright + Chromium, fake mic, fake worker)

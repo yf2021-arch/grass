@@ -8,6 +8,7 @@ import { demoCards } from './demo.js';
 import { parseVisual, visualHtml } from './visual.js';
 import { createSpeak } from './speak.js';
 import { createBjt } from './bjt.js';
+import { createKatsuyo } from './katsuyo.js';
 import { createWalk } from './walk.js';
 import { createRaw } from './raw.js';
 import { createCardAudio } from './cardaudio.js';
@@ -206,6 +207,7 @@ const cardAudio = createCardAudio({ store });
 const speak = createSpeak({ app, esc, go, nav, store, todayStr: srs.todayStr, addDays: srs.addDays, ICON, cardAudio });
 const raw = createRaw({ app, esc, nav, store, go, startChunks: ids => speak.startWith(ids), chunkSay: id => speak.chunkSay(id) });
 const bjt = createBjt({ app, esc, go, nav, store, todayStr: srs.todayStr, ICON, audio: { has: speak.hasClip, play: speak.playClip, stop: speak.stopClip }, extraBackup: [raw] });
+const katsuyo = createKatsuyo({ app, esc, nav, store, todayStr: srs.todayStr, ICON, cards: () => S.cards });
 const walk = createWalk({
   app, esc, nav, store, todayStr: srs.todayStr, ICON, cardAudio,
   cards: () => S.cards, isDue: c => srs.isDue(c), clipUrl: speak.clipUrl, chunks: speak.chunks, quizItems: bjt.walkItems,
@@ -219,7 +221,7 @@ const playBtn = (id, key, extra = '') => cardAudio.has(id, key)
 function render() {
   const r = route();
   if (r.name !== 'drill') speak.releaseMic();          // 練習の外ではマイクを閉じる（「戻る」で抜けたときも）
-  const screens = { today: renderToday, review: renderReview, done: renderDone, inbox: renderInbox, speak: speak.renderSpeak, drill: speak.renderDrill, bjt: bjt.renderBjt, walk: walk.render, raw: raw.render, search: renderSearch, card: renderDetail, family: renderFamily, settings: renderSettings };
+  const screens = { today: renderToday, review: renderReview, done: renderDone, inbox: renderInbox, speak: speak.renderSpeak, drill: speak.renderDrill, bjt: bjt.renderBjt, katsuyo: katsuyo.render, walk: walk.render, raw: raw.render, search: renderSearch, card: renderDetail, family: renderFamily, settings: renderSettings };
   (screens[r.name] || renderToday)(r.arg);
   refreshSyncBits();
 }
@@ -319,6 +321,10 @@ function renderToday() {
           <a class="row-link" href="#/walk">
             <span class="t"><b>散歩モード</b><span>画面を見ずに聞く：単語（例文→表現→例文）・話す・答えた聴解${walk.active() ? '（再生中）' : ''}</span></span>
             <span class="n">${walk.todayMin() ? `今日 ${walk.todayMin()}分` : ''} ${ICON.chevron}</span>
+          </a>
+          <a class="row-link" href="#/katsuyo">
+            <span class="t"><b>活用ドリル</b><span>て形・た形・ない形・形容詞・受け身・使役を10問ずつ。色で覚えるルール図つき</span></span>
+            <span class="n">${katsuyo.todayCount() ? `今日 ${katsuyo.todayCount()}問` : ''} ${ICON.chevron}</span>
           </a>
           <a class="row-link" href="#/bjt">
             <span class="t"><b>BJT 対策</b><span>練習問題・結果の記録・間違いノート・ペースタイマー${bjt.timerRunning() ? '（計測中）' : ''}</span></span>
@@ -969,7 +975,7 @@ function renderSettings() {
             <button class="outline quiet" data-act="${S.settings.demo ? 'demo-off' : 'demo-on'}">${S.settings.demo ? 'デモを終了' : 'デモデータで試す'}</button>
           </div>
         </section>
-        <p class="small" style="text-align:center">Grass v1.13.1</p>
+        <p class="small" style="text-align:center">Grass v1.14.0</p>
       </main>
       ${nav('settings')}
     </div>`;
@@ -1102,7 +1108,7 @@ const actions = {
     go('#/today');
   },
 };
-Object.assign(actions, speak.actions, bjt.actions, walk.actions, raw.actions, {
+Object.assign(actions, speak.actions, bjt.actions, katsuyo.actions, walk.actions, raw.actions, {
   'ca-play': async el => {
     const ok = await cardAudio.play(el.dataset.id, el.dataset.k);
     const ss = S.session;
@@ -1227,7 +1233,7 @@ document.addEventListener('visibilitychange', () => {
 
 (async function boot() {
   try {
-    await Promise.all([loadAll(), loadVisuals(), speak.load(), cardAudio.load(), bjt.load(), walk.load(), raw.load()]);
+    await Promise.all([loadAll(), loadVisuals(), speak.load(), cardAudio.load(), bjt.load(), katsuyo.load(), walk.load(), raw.load()]);
   } catch (e) {
     app.innerHTML = `<div class="empty"><h2>データを開けません</h2><p>${esc(e.message)}</p></div>`;
     return;
@@ -1243,7 +1249,7 @@ document.addEventListener('visibilitychange', () => {
     const hadController = !!navigator.serviceWorker.controller;
     let reloaded = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (!hadController || reloaded || ['review', 'drill', 'bjt', 'walk'].includes(route().name) || walk.active()) return;   // 復習・練習の途中では再読み込みしない
+      if (!hadController || reloaded || ['review', 'drill', 'bjt', 'katsuyo', 'walk'].includes(route().name) || walk.active()) return;   // 復習・練習の途中では再読み込みしない
       reloaded = true;
       location.reload();
     });
