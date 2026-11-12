@@ -75,6 +75,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
         // v1.14.0：標準を Moonshine に変えた。前の版で選んでいたモデル（base・small）は、一度だけ Moonshine に切り替える
         wh: !!vo.wh, whModel: (vo.whModelV || 0) >= 2 && WH_MODELS[vo.whModel] && !WH_MODELS[vo.whModel].lab ? vo.whModel : DEFAULT_WH_MODEL,
         whFiles: vo.whFiles && typeof vo.whFiles === 'object' ? vo.whFiles : {}, whVerified: vo.whVerified && typeof vo.whVerified === 'object' ? vo.whVerified : {} };
+      if ((vo.whModelV || 0) < 2) saveVoice();   // 一度だけの切り替えを、すぐに保存する（v1.16.1）
     }
     refreshWhStatus();
     try {
@@ -617,7 +618,16 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
   const useSr = () => SP.voice.sr && !SP.voice.wh && srSupported() && !(SP.voice.srState && !SP.voice.srState.ok);
 
   /** 「顔を上げる」のタップの中で呼ぶ（音声認識はタップの中で始める必要がある） */
+  /** 鳴っている音をすべて止める（お手本・自分の声・端末の読み上げ） */
+  function stopPlayback() {
+    try { player?.pause(); } catch (e) { /* */ }
+    try { minePlayer?.pause(); } catch (e) { /* */ }
+    if ('speechSynthesis' in window) speechSynthesis.cancel();
+  }
+
   function beginVoice(d) {
+    // エコー除去をオフにしたので（v1.15.0）、お手本などが鳴ったままマイクを開くと、その音が録音に入る。先に止める（v1.16.1・Kairos のレビュー）
+    stopPlayback();
     voice.prepare();
     d.vstate = 'opening';
     if (useSr()) {
