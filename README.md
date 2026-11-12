@@ -154,6 +154,11 @@ Google のサービスもサーバーもいらないので、中国版のシス�
    - モデル：**Moonshine Tiny JA**（日本語専用・27M・話した長さだけ計算する。q8 で約30MB）、Whisper base、Whisper small（任意）
    - Moonshine は Hugging Face の `onnx-community/moonshine-tiny-ja-ONNX` → なければ `wmoto-ai/moonshine-tiny-ja-ONNX` の順に試し、使ったリポジトリと精度をレポートに出す
    - 生成トークンの上限は「1秒あたり13＋8」（Transformers.js の既定は英語向けの「1秒あたり6」で、日本語だと文の途中で切れるため）
+   - 新しい書き出しの Moonshine はエンコーダーに `attention_mask`（モデルの中では使わない互換用の入力）がある。Transformers.js は Moonshine に渡さないので、
+     Worker で全部 1 のものを渡す（`forward_params` にも足す。足さないと generate() が捨てる）。Grass のスマホで「Missing the following inputs: attention_mask」が出たため
+   - 「ダウンロード」か「スマホの中から読み込み」かは、Worker が Cache Storage を見て決める（Transformers.js の 'download' はキャッシュから読むときにも出る）
+   - Whisper small は Grass のスマホ（Android・8GB）でブラウザごと落ちたので、このページでは測らない
+   - 結果（1・2）は localStorage にも残す。ブラウザが落ちても、開き直すと前回の結果が出る
 3. **マイクの音質**：3つの設定（処理すべてオン／雑音抑制だけオフ／すべてオフ）をランダムな順で A・B・C として録音し、聞き比べて選ぶ。
    選んだあとで、設定（`track.getSettings()`）・雑音・声の大きさ・SN比・音割れを表示。ビットレートは別の選択肢
 

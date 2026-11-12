@@ -22,13 +22,19 @@ const PRESETS = [
 ];
 const APP_CONSTRAINTS = PRESETS[0].c;
 
+// Whisper small は、Grass のスマホ（Android・8GB）でブラウザごと落ちた（2026-11-12）ので、ここでは測らない
 const ENGINES = [
   { key: 'moonshine', on: true, warn: '' },
   { key: 'base', on: true, warn: '' },
-  { key: 'small', on: false, warn: '約400MB・遅い。Wi-Fi で、時間があるときに' },
 ];
+const SAVE_KEY = 'grass-lab-asr-report';
 
-const REPORT = { page: 'grass-lab-asr', v: 1, at: new Date().toISOString(), env: null, sr: null, asr: {}, mic: null };
+const REPORT = { page: 'grass-lab-asr', v: 2, at: new Date().toISOString(), env: null, sr: null, asr: {}, mic: null };
+// ブラウザが落ちても結果が残るように、前回の結果（1・2）を読み戻す
+try {
+  const old = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
+  if (old && old.v === REPORT.v) { REPORT.sr = old.sr || null; REPORT.asr = old.asr || {}; }
+} catch (e) { /* 読めなければ新しく始める */ }
 
 /* ---------------- レポート ---------------- */
 
@@ -43,17 +49,18 @@ function summary() {
     for (const x of r.runs || []) {
       if (x.error) { L.push(`   ${x.engine}: エラー ${x.error}`); continue; }
       if (!x.run1) { L.push(`   ${x.engine}: 測定中`); continue; }
-      L.push(`   ${x.engine}${x.repo ? ` [${x.repo} ${x.dtype}]` : ''}: 初回準備 ${x.prepMs}ms${x.downloaded ? '（ダウンロード込み）' : ''} · 1回目 読込${x.run1.loadMs}+文字${x.run1.ms}ms · 2回目 文字${x.run2?.ms ?? '—'}ms · 一致 ${x.run1.score}%「${x.run1.text}」`);
+      L.push(`   ${x.engine}${x.repo ? ` [${x.repo} ${x.dtype}]` : ''}: 初回準備 ${x.prepMs}ms${x.downloaded ? '（ダウンロード込み）' : '（キャッシュから）'} · 1回目 読込${x.run1.loadMs}+文字${x.run1.ms}ms · 2回目 文字${x.run2?.ms ?? '—'}ms · 一致 ${x.run1.score}%「${x.run1.text}」`);
     }
   }
   const m = REPORT.mic;
   if (m?.choice) L.push(`3. マイク: いちばん聞きやすい＝${m.choice}（${m.choicePreset}）· ビットレート ${m.bitrate || '端末まかせ'}`);
-  if (m?.takes) for (const t of m.takes) if (t.metrics) L.push(`   ${t.label}=${t.preset}: 雑音 ${t.metrics.noiseDb}dB · 声 ${t.metrics.speechDb}dB · SN比 ${t.metrics.snrDb}dB · 音割れ ${t.metrics.clipPct}%`);
+  if (m?.takes) for (const t of m.takes) L.push(t.metrics ? `   ${t.label}=${t.preset}: 雑音 ${t.metrics.noiseDb}dB · 声 ${t.metrics.speechDb}dB · SN比 ${t.metrics.snrDb}dB · 音割れ ${t.metrics.clipPct}%` : `   ${t.label}=${t.preset}: ${t.error ? `エラー ${t.error}` : 'まだ録音していない'}`);
   return L.join('\n');
 }
 
 function renderReport() {
   $('report').value = `${summary()}\n\n${JSON.stringify(REPORT, null, 1)}`;
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ v: REPORT.v, sr: REPORT.sr, asr: REPORT.asr })); } catch (e) { /* 保存できなくても続ける */ }
 }
 
 $('copy').addEventListener('click', async () => {
@@ -208,7 +215,7 @@ async function runEngines(sid, rec, box) {
   const draw = () => {
     tableEl.innerHTML = `<table><tr><th>モデル</th><th>準備</th><th>1回目</th><th>2回目</th><th>一致</th></tr>${result.runs.map(x => (x.error
       ? `<tr><td>${esc(x.engine)}</td><td colspan="4" class="bad">${esc(x.error)}</td></tr>`
-      : `<tr><td>${esc(x.engine)}</td><td>${sec(x.prepMs)}${x.downloaded ? '<br><span class="small">DL込み</span>' : ''}</td><td>読込 ${sec(x.run1?.loadMs)}<br>文字 ${sec(x.run1?.ms)}</td><td>${sec(x.run2?.ms)}</td><td>${x.run1 ? `${x.run1.score}%` : '…'}</td></tr>
+      : `<tr><td>${esc(x.engine)}</td><td>${sec(x.prepMs)}<br><span class="small">${x.prepMs == null ? '' : x.downloaded ? 'DL込み' : 'キャッシュ'}</span></td><td>読込 ${sec(x.run1?.loadMs)}<br>文字 ${sec(x.run1?.ms)}</td><td>${sec(x.run2?.ms)}</td><td>${x.run1 ? `${x.run1.score}%` : '…'}</td></tr>
          ${x.run1 ? `<tr><td colspan="5" class="small">「${esc(x.run1.text)}」</td></tr>` : ''}`)).join('')}</table>`;
     renderReport();
   };
@@ -224,14 +231,16 @@ async function runEngines(sid, rec, box) {
       try {
         // (a) 準備：ダウンロード（なければ）と最初の読み込み
         const prep = createWhisper();
-        const before = await prep.cacheStatus(key);
-        status.textContent = `${WH_MODELS[key].name}：準備中${before.ready ? '' : '（ダウンロード）'}…`;
+        status.textContent = `${WH_MODELS[key].name}：準備中…`;
         const p0 = now();
-        const ld = await prep.load(key, pr => { if (pr.total) status.textContent = `${WH_MODELS[key].name}：ダウンロード ${Math.round((pr.loaded / pr.total) * 100)}%`; });
+        const ld = await prep.load(key, pr => {
+          if (pr.total) status.textContent = `${WH_MODELS[key].name}：${pr.net ? 'ダウンロード' : '読み込み（スマホの中から）'} ${Math.round((pr.loaded / pr.total) * 100)}%`;
+        });
         x.prepMs = Math.round(now() - p0);
-        x.downloaded = !before.ready;
+        x.downloaded = !!ld.info?.net;
         x.repo = ld.info?.repo || null;
         x.dtype = ld.info?.dtype || null;
+        x.inputs = ld.info ? { encoder: ld.info.encoderInputs, decoder: ld.info.decoderInputs?.filter(n => !n.startsWith('past_key_values')) } : null;
         prep.dispose();
         // (b) 新しい Worker で：1回目（キャッシュから読み込み＋文字に）・2回目（読み込み済み）
         const c = createWhisper();
@@ -320,11 +329,13 @@ document.addEventListener('click', async e => {
     t.mime = out.mime;
     t.bitrate = out.bitrate;
     t.metrics = await analyze(out.blob);
+    t.error = null;
   } catch (err) {
-    cue().textContent = `マイクを使えません（${err.name || err}）`;
+    t.error = `${err.name || ''} ${err.message || err}`.trim();
+    cue().textContent = `${t.label}：うまくいきませんでした（${t.error}）`;
   }
   micBusy = false;
-  REPORT.mic.takes = takes.map(x => ({ label: x.label, preset: x.preset, constraints: x.constraints, settings: x.settings, mime: x.mime, bitrate: x.bitrate, metrics: x.metrics }));
+  REPORT.mic.takes = takes.map(x => ({ label: x.label, preset: x.preset, constraints: x.constraints, settings: x.settings, mime: x.mime, bitrate: x.bitrate, metrics: x.metrics, error: x.error || null }));
   drawMic();
   if (REPORT.mic.choice) revealMic();
   renderReport();
@@ -368,5 +379,17 @@ async function analyze(blob) {
   };
 }
 
+// 前回の結果があれば表に出す（ブラウザが落ちたあとでも見られるように）
+function drawSaved() {
+  for (const [sid, r] of Object.entries(REPORT.asr)) {
+    const box = document.querySelector(`.sent[data-sid="${sid}"]`);
+    if (!box || !r?.runs) continue;
+    box.querySelector('[data-out="status"]').textContent = `前回の結果（録音 ${r.audioSec ?? '?'}秒）。録音し直すと上書きします。`;
+    box.querySelector('[data-out="table"]').innerHTML = `<table><tr><th>モデル</th><th>結果</th></tr>${r.runs.map(x => `<tr><td>${esc(x.engine)}</td><td class="${x.error ? 'bad' : ''}">${x.error ? esc(x.error) : x.run1 ? `1回目 ${sec(x.run1.ms)} · 2回目 ${sec(x.run2?.ms)} · ${x.run1.score}%「${esc(x.run1.text)}」` : '途中で止まった（ブラウザが落ちたかもしれません）'}</td></tr>`).join('')}</table>`;
+  }
+  if (REPORT.sr) { $('sr-out').hidden = false; $('sr-out').textContent = `前回：${REPORT.sr.ok ? `使える「${REPORT.sr.text}」` : `使えない（${REPORT.sr.error || REPORT.sr.reason}）`}`; }
+}
+
+drawSaved();
 drawMic();
 renderReport();
