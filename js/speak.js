@@ -25,7 +25,7 @@
 //     モデルは「話す」画面からダウンロード（初回だけ）。音声認識（Google）より優先する。
 
 import { createVoice, compareSay, srSupported, micSupported } from './voice.js';
-import { createWhisper, decodeForWhisper, WH_MODELS, WH_LIMITS } from './whisper.js';
+import { createWhisper, decodeForWhisper, WH_MODELS, WH_LIMITS, appModels, DEFAULT_WH_MODEL } from './whisper.js';
 
 const DRILL_SIZE = 5;
 const LOG_MAX = 3000;
@@ -56,7 +56,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     ui: { open: null, copied: null, showSent: false, ttsMsg: null, dl: null },
     audio: { files: {}, credit: '', cached: 0 },
     voice: { on: false, sr: false, srState: null, micErr: null,   // srState: { ok, reason, at }
-      wh: false, whModel: 'base', whBytes: 0, whDl: null, whErr: null,  // whDl: { loaded, total }
+      wh: false, whModel: DEFAULT_WH_MODEL, whBytes: 0, whDl: null, whErr: null,  // whDl: { loaded, total }
       whFiles: {}, whVerified: {}, whStatus: null },  // whFiles: モデルごとの読み込んだファイル名。whVerified: 実際に文字にできた日時
   };
   const voice = createVoice();
@@ -72,7 +72,8 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     SP.stuck = Array.isArray(stuck) ? stuck : [];
     if (vo && typeof vo === 'object') {
       SP.voice = { ...SP.voice, on: !!vo.on, sr: !!vo.sr && srSupported(), srState: vo.srState || null,
-        wh: !!vo.wh, whModel: WH_MODELS[vo.whModel] ? vo.whModel : 'base',
+        // v1.14.0：標準を Moonshine に変えた。前の版で選んでいたモデル（base・small）は、一度だけ Moonshine に切り替える
+        wh: !!vo.wh, whModel: (vo.whModelV || 0) >= 2 && WH_MODELS[vo.whModel] && !WH_MODELS[vo.whModel].lab ? vo.whModel : DEFAULT_WH_MODEL,
         whFiles: vo.whFiles && typeof vo.whFiles === 'object' ? vo.whFiles : {}, whVerified: vo.whVerified && typeof vo.whVerified === 'object' ? vo.whVerified : {} };
     }
     refreshWhStatus();
@@ -133,16 +134,16 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
 
   const saveLog = () => store.put('meta', SP.log.slice(-LOG_MAX), 'speakLog');
   const saveStuck = () => store.put('meta', SP.stuck, 'stuck');
-  const saveVoice = () => store.put('meta', { on: SP.voice.on, sr: SP.voice.sr, srState: SP.voice.srState, wh: SP.voice.wh, whModel: SP.voice.whModel, whFiles: SP.voice.whFiles, whVerified: SP.voice.whVerified }, 'speakVoice');
+  const saveVoice = () => store.put('meta', { on: SP.voice.on, sr: SP.voice.sr, srState: SP.voice.srState, wh: SP.voice.wh, whModel: SP.voice.whModel, whModelV: 2, whFiles: SP.voice.whFiles, whVerified: SP.voice.whVerified }, 'speakVoice');
   const whReady = () => SP.voice.on && SP.voice.wh && SP.voice.whBytes > 0;
-  const isMobile = () => /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
   const baseReady = () => !!SP.voice.whStatusByModel?.base?.ready;
+  whisper.purgeRetired().catch(() => {});      // Whisper small（約400MB）が端末に残っていれば消す（v1.14.0）
 
   /** モデルのファイルが全部そろっているかを確かめる（読み込みのとき実際に使ったファイルの一覧で） */
   async function refreshWhStatus() {
     const v = SP.voice;
     v.whStatusByModel = v.whStatusByModel || {};
-    for (const key of Object.keys(WH_MODELS)) {
+    for (const [key] of appModels()) {
       v.whStatusByModel[key] = await whisper.cacheStatus(key, v.whFiles[WH_MODELS[key].id]);
     }
     v.whStatus = v.whStatusByModel[v.whModel];
@@ -386,7 +387,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     const m = WH_MODELS[v.whModel];
     let panel = '';
     if (v.wh) {
-      const chips = Object.entries(WH_MODELS).map(([k, x]) =>
+      const chips = appModels().map(([k, x]) =>
         `<button class="chip" aria-pressed="${v.whModel === k}" data-act="sp-wh-model" data-v="${k}" ${v.whDl ? 'disabled' : ''}>${esc(x.name)}</button>`).join('');
       let state;
       if (v.whDl) {
@@ -405,8 +406,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
         state = `<button class="outline" data-act="sp-wh-dl">モデルをダウンロード（${esc(m.approx)}・Wi-Fi で）</button>
           <p class="small">初回だけです。${esc(m.note)}</p>`;
       }
-      const warn = v.whModel === 'small' && isMobile()
-        ? '<p class="small wh-warn">スマホでは small はとても遅く、メモリが足りずに止まることがあります。まず base で試してください</p>' : '';
+      const warn = m.credit ? `<p class="small wh-credit">${esc(m.credit)}</p>` : '';
       panel = `
           <div class="wh-panel">
             <div class="frow" role="group" aria-label="モデル">${chips}</div>
@@ -416,7 +416,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     }
     return `
           <label class="line">
-            <span class="t"><b>文字でも確かめる（Whisper）</b><span>録音をスマホの中で文字にして、答えの文と比べます。録音は送信しません（Google のサービスもいりません）</span></span>
+            <span class="t"><b>文字でも確かめる（スマホの中で）</b><span>録音をスマホの中で文字にして、答えの文と比べます。録音は送信しません（Google のサービスもいりません）</span></span>
             <span class="switch"><input type="checkbox" data-act="sp-wh" ${v.wh ? 'checked' : ''}><span></span></span>
           </label>${panel}`;
   }
@@ -792,7 +792,8 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
   function textBlock(r) {
     if (!r.text) return '<p class="small">文字にできませんでした</p>';
     const t = r.timings ? whTimings(r.timings) : '';
-    return `<p class="heard"><span>聞き取り${r.kind === 'rec' ? `（Whisper${t ? ` · ${t}` : ''}）` : ''}</span>${esc(r.text)}</p>
+    const engine = r.model === 'base' ? 'Whisper base' : 'Moonshine';
+    return `<p class="heard"><span>聞き取り${r.kind === 'rec' ? `（${engine}${t ? ` · ${t}` : ''}）` : ''}</span>${esc(r.text)}</p>
            <p class="diff" aria-label="答えの文で、聞き取れなかった文字に印">${r.cmp.marks.map(m => (m.ok ? esc(m.ch) : `<mark>${esc(m.ch)}</mark>`)).join('')}</p>
            <p class="small">文字の一致（目安）${Math.round(r.cmp.score * 100)}%${r.cmp.extra > 0 ? ` · 余分な文字 ${r.cmp.extra}` : ''} · 印は聞き取りになかった文字。聞き取った文字の比較で、発音の良し悪しではありません。漢字とかなの違いでも印が付きます</p>`;
   }
@@ -818,15 +819,16 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
   }
 
   function whStateHtml(r) {
-    const smallToBase = r.model === 'small' && baseReady()
-      ? '<button class="outline quiet" data-act="sp-wh-retry" data-v="base">base でやり直す</button>' : '';
+    // Moonshine でうまくいかなかったとき、Whisper base が端末にあれば、そちらでやり直せる
+    const toBase = r.model !== 'base' && baseReady()
+      ? '<button class="outline quiet" data-act="sp-wh-retry" data-v="base">Whisper base でやり直す</button>' : '';
     if (whRunning(r)) {
       const label = { queued: '前の文を文字にし終わるのを待っています…', decoding: '録音を読み込んでいます…',
         loading: 'モデルを読み込んでいます…（初めてや、しばらく使っていないときは時間がかかります）', transcribing: '文字にしています…（スマホの中で）' }[r.wh];
       const sec = Math.floor((performance.now() - r.t0) / 1000);
       const slow = r.slowShown ? '<p class="small">時間がかかっています。このまま待つか、やめられます。結果はあとからでも、この答えの記録に入ります</p>' : '';
       return `<div class="wh-run" role="status"><p class="small">${label} <span class="wh-elapsed">${sec}秒</span></p>${slow}
-        <div class="cmp-row"><button class="outline quiet" data-act="sp-wh-cancel">やめる</button>${r.slowShown ? smallToBase : ''}</div></div>`;
+        <div class="cmp-row"><button class="outline quiet" data-act="sp-wh-cancel">やめる</button>${r.slowShown ? toBase : ''}</div></div>`;
     }
     if (r.wh === 'done') return textBlock(r);
     if (r.wh === 'none') {
@@ -835,12 +837,12 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     }
     if (r.wh === 'cancelled') {
       return `<div class="wh-none"><p class="small">文字にするのをやめました</p>
-        <div class="cmp-row"><button class="outline quiet" data-act="sp-wh-retry">もう一度文字にする</button>${smallToBase}</div></div>`;
+        <div class="cmp-row"><button class="outline quiet" data-act="sp-wh-retry">もう一度文字にする</button>${toBase}</div></div>`;
     }
     if (r.wh === 'error') {
-      const why = { timeout: '時間がかかりすぎたので止めました', crashed: 'Whisper が止まりました（メモリが足りないのかもしれません）' }[r.whCode] || '文字にできませんでした';
+      const why = { timeout: '時間がかかりすぎたので止めました', crashed: '文字にする処理が止まりました（メモリが足りないのかもしれません）' }[r.whCode] || '文字にできませんでした';
       return `<div class="wh-err"><p class="msg err">${why}（${esc(r.whErr || '')}）</p>
-        <div class="cmp-row"><button class="outline quiet" data-act="sp-wh-retry">もう一度</button>${smallToBase}</div></div>`;
+        <div class="cmp-row"><button class="outline quiet" data-act="sp-wh-retry">もう一度</button>${toBase}</div></div>`;
     }
     return '';
   }
