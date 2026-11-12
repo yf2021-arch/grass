@@ -87,5 +87,52 @@ assert.deepEqual(pick(wordFromCard(card('見極める', '', '動詞'))), { w: '�
 assert.equal(wordFromCard(card('映る', '', '動詞')), null);   // 漢字＋る で読みがない → 段が分からないので出さない
 assert.equal(conj(wordFromCard(card('とんでもない', '', '形容詞')), 'apast'), 'とんでもなかった');
 function pick(x) { return x && { w: x.w, g: x.g }; }
+// レビュー（PR #4）で見つかった間違い
+// 1. 型が書いてあればそれを使う。出来る は一段、くる だけ（意味なし）は出さない
+assert.deepEqual(pick(wordFromCard(card('出来る', 'できる', '動詞（一段）'))), { w: '出来る', g: '1' });
+assert.deepEqual(pick(wordFromCard(card('出来る', 'できる', '動詞'))), { w: '出来る', g: '1' });
+assert.equal(wordFromCard(card('出来る', '', '動詞')), null);
+assert.equal(conj(wordFromCard(card('出来る', 'できる', '動詞（一段）')), 'te'), '出来て');
+assert.equal(conj(wordFromCard(card('出来る', 'できる', '動詞（一段）')), 'nai'), '出来ない');
+assert.equal(wordFromCard(card('くる', 'くる', '動詞')), null);
+assert.deepEqual(pick(wordFromCard({ ID: 'x', 表現: 'くる', 読み: 'くる', '品詞・型': '動詞', 英語の意味: 'to come' })), { w: 'くる', g: 'k' });
+assert.deepEqual(pick(wordFromCard(card('来る', 'くる', '動詞'))), { w: '来る', g: 'k' });
+assert.deepEqual(pick(wordFromCard(card('戻ってくる', 'もどってくる', '動詞'))), { w: '戻ってくる', g: 'k' });
+assert.equal(conj(wordFromCard(card('戻ってくる', '', '動詞')), 'nai'), '戻ってこない');
+assert.deepEqual(pick(wordFromCard(card('こする', 'こする', '動詞（他動詞・五段）'))), { w: 'こする', g: '5' });
+assert.equal(conj(wordFromCard(card('こする', 'こする', '動詞（五段）')), 'te'), 'こすって');
+assert.equal(wordFromCard(card('こする', 'こする', '動詞')), null);   // 型がない かなの〜する は迷うので出さない
+assert.deepEqual(pick(wordFromCard(card('めくる', 'めくる', '動詞'))), { w: 'めくる', g: '5' });
+// 2. いい → よ は いい とその複合語だけ。かわいい は普通の い形容詞
+assert.equal(conj(V('かわいい', 'i'), 'aneg'), 'かわいくない');
+assert.equal(conj(V('かわいい', 'i'), 'apast'), 'かわいかった');
+assert.equal(conj(V('かわいい', 'i'), 'ate'), 'かわいくて');
+assert.equal(conj(V('頭がいい', 'i'), 'aneg'), '頭がよくない');
+assert.equal(conj(V('気持ちいい', 'i'), 'apast'), '気持ちよかった');
+for (const f of ['aneg', 'apast', 'apneg', 'ate']) {
+  const { options } = makeOptions(V('かわいい', 'i'), f);
+  assert.ok(!options.some(o => o.startsWith('かわよ')), `かわいい ${f}: ${options}`);
+}
+// 3. ある の否定は ない（あらない は間違いの選択肢）
+assert.equal(conj(V('ある', '5'), 'nai'), 'ない');
+assert.equal(conj(V('書いてある', '5'), 'nai'), '書いてない');
+assert.equal(conj(V('ある', '5'), 'te'), 'あって');
+assert.ok(makeOptions(V('ある', '5'), 'nai').options.includes('ない'));
+assert.ok(makeOptions(V('ある', '5'), 'nai').options.includes('あらない'));
+assert.equal(rulePath(V('ある', '5'), 'nai').rule, '例外：ある → ない');
+assert.deepEqual(formsFor(BASE_WORDS.find(b => b.w === 'ある')), ['group', 'te', 'ta', 'nai']);
+// 4. 正しい別の言い方は、間違いの選択肢に入れない（丁寧形・では〜）
+const VALID_ALT = /(でした|です|ではない|ではなかった|ではありません|じゃありません|ます|ません)$/;
+for (const word of BASE_WORDS) for (const f of formsFor(word)) {
+  if (f === 'group' || f === 'agroup') continue;
+  for (let k = 0; k < 8; k++) {
+    const { options, answer } = makeOptions(word, f);
+    options.forEach((o, i) => { if (i !== answer) assert.ok(!VALID_ALT.test(o), `${word.w} ${f}: valid alternative offered as wrong: ${o}`); });
+  }
+}
+// 問う の て形
+assert.equal(conj(V('問う', '5'), 'te'), '問うて');
+assert.equal(conj(V('問う', '5'), 'ta'), '問うた');
+
 
 console.log(`ok — ${n} forms, ${opts} option sets, ${BASE_WORDS.length} base words`);

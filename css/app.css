@@ -705,3 +705,8 @@ button.row-link { width: 100%; border: 0; text-align: left; font: inherit; color
 .kt-flow .q { font-weight: 700; }
 .kt-flow .a { background: var(--ft); color: var(--f); border-radius: 10px; padding: 4px 9px; font-weight: 500; }
 .kt-map.kt-mini .kt-mrow .ex { display: none; }
+.kt-auto { display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: center; }
+.kt-auto .outline { position: relative; overflow: hidden; }
+.kt-auto .outline i { position: absolute; left: 0; bottom: 0; height: 3px; width: 100%; background: var(--good); transform-origin: left; animation: kt-shrink linear forwards; }
+.kt-say { display: flex; flex-direction: column; gap: 10px; text-align: center; }
+.kt-say p { margin: 0; font-size: 14px; color: var(--muted); }

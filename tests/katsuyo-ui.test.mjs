@@ -1,6 +1,7 @@
 // node tests/katsuyo-ui.test.mjs — needs Playwright + Chromium.
 // 活用ドリル end to end: the Today link, a full 10-question round (right answers auto-advance,
-// wrong ones wait for 次へ and show the rule row), the result screen, retry of the misses,
+// wrong ones wait for 次へ and show the rule row; 止めて読む keeps a right answer open), the result
+// screen, retry of the misses, the 選ぶ前に答えを言う step,
 // the rule map tab, and that stats survive a reload. SHOTS=dir saves screenshots.
 import { createRequire } from 'node:module';
 const { chromium } = createRequire(import.meta.url)(process.env.GRASS_PLAYWRIGHT || 'playwright');
@@ -38,7 +39,7 @@ try {
     assert.equal(await page.locator('[data-act="kt-chip"][aria-pressed="true"]').count(), 5);
     await page.click('[data-act="kt-start"]');
 
-    let wrong = 0, shotQ = false, shotNg = false, shotOk = false;
+    let wrong = 0, held = false, shotQ = false, shotNg = false, shotOk = false;
     for (let q = 1; q <= 10; q++) {
       await page.waitForFunction(n => document.querySelector('.kt-top span')?.textContent.startsWith(`${n} /`) && document.querySelector('[data-act="kt-pick"]:not([disabled])'), q);
       if (!shotQ) { await shot('question'); shotQ = true; }
@@ -55,7 +56,16 @@ try {
         assert.ok(await page.locator('.kt-rule').count(), 'rule path shown');
         if (!shotNg) { await shot('wrong'); shotNg = true; }
         await page.click('[data-act="kt-next"]');
-      } else if (!shotOk) { await shot('right'); shotOk = true; }
+      } else {
+        if (!shotOk) { await shot('right'); shotOk = true; }
+        if (!held) {           // 止めて読む: the right answer stays on screen until 次へ
+          held = true;
+          await page.click('[data-act="kt-hold"]');
+          await page.waitForTimeout(3000);
+          assert.ok((await page.textContent('.kt-top span')).startsWith(`${q} /`), 'held answer did not advance');
+          await page.click('[data-act="kt-next"]');
+        }
+      }
     }
     await page.waitForSelector('.kt-end');
     await shot('end');
@@ -67,6 +77,17 @@ try {
       await page.waitForFunction(w => document.querySelector('.kt-top span')?.textContent === `1 / ${w}`, wrong);
       await page.click('[data-act="kt-quit"]');
     }
+    // 選ぶ前に答えを言う: options stay hidden until 選択肢を見る
+    if (await page.locator('[data-act="kt-home"]').count()) await page.click('[data-act="kt-home"]');
+    await page.click('[data-act="kt-say"]');
+    await page.click('[data-act="kt-start"]');
+    await page.waitForSelector('[data-act="kt-show"]');
+    assert.equal(await page.locator('[data-act="kt-pick"]').count(), 0);
+    await shot('say');
+    await page.click('[data-act="kt-show"]');
+    assert.ok(await page.locator('[data-act="kt-pick"]').count() >= 2);
+    await page.click('[data-act="kt-quit"]');
+    await page.click('[data-act="kt-say"]');
     await page.click('[data-act="kt-tab"][data-v="rules"]');
     await page.waitForSelector('.kt-chant');
     assert.ok(await page.locator('.kt-mrow').count() >= 7);

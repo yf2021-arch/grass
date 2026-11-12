@@ -5,6 +5,8 @@
 //     ルール図 … 色で覚える活用の地図（う・つ・る→って など）。ドリルの答えも同じ色で出る
 //
 // 選択肢は「よくある間違い」から作る（帰る→帰て、きれい→きれくない、書く→書かさせる …）。
+// 正しい別の言い方（簡単でした・簡単ではない など）は選択肢に入れない。答えはすべて普通形。
+// 自分のカードの語は、品詞・型 の型（五段・一段・サ変・カ変）をいちばんに使い、型がなくて迷う語は出さない。
 // 間違えた組み合わせ（語×形）ほど次のラウンドに多く出る（箱 0〜4 の簡単な間隔反復）。
 // 基本語（仕事でよく使う動詞・形容詞）に、自分のカードの動詞・形容詞も混ぜられる。
 // データはこのスマホの中（meta の katsuyo）だけ。
@@ -43,8 +45,17 @@ const AGROUP_OPTS = ['い形容詞', 'な形容詞'];
 const isVerb = g => g === '5' || g === '1' || g === 's' || g === 'k';
 const kuruStem = w => w.replace(/(来る|くる)$/, '');     // 持ってくる → 持って
 const suruStem = w => w.replace(/する$/, '');
-const iStem = w => (w.endsWith('いい') ? w.slice(0, -2) + 'よ' : w.slice(0, -1));   // いい → よ（よくない・よかった）
+// いい（＝よい）とその複合語だけが よ で活用する。かわいい は普通の い形容詞（かわいくない）
+const YOI = /^いい$|[がのはも]いい$|(かっこ|格好|気持ち|心地|ちょうど|丁度)いい$/;
+export const isYoi = w => YOI.test(w);
+const iStem = w => (isYoi(w) ? w.slice(0, -2) + 'よ' : w.slice(0, -1));   // いい → よ（よくない・よかった）
 const isIku = w => /(行く|いく)$/.test(w);
+// ある の否定は「ない」（あらない ではない）。〜てある・〜である も同じ
+const ARU = /^(ある|有る|在る)$|[てで]ある$/;
+export const isAru = w => ARU.test(w);
+const aruNai = w => w.replace(/(ある|有る|在る)$/, 'ない');
+// 問う・請う・乞う の て形は「うて」（問うて・問うた）
+const isTou = w => /(問う|請う|乞う)$/.test(w);
 
 /** 正しい形。word = { w, g }。g は 5 | 1 | s | k | i | na */
 export function conj(word, form) {
@@ -57,13 +68,13 @@ export function conj(word, form) {
     case 'agroup': return AGROUP_OPTS[g === 'i' ? 0 : 1];
     case 'te': case 'ta': {
       let t;
-      if (g === '5') t = isIku(w) ? s5 + 'って' : s5 + TE[last];
+      if (g === '5') t = isIku(w) ? s5 + 'って' : isTou(w) ? s5 + 'うて' : s5 + TE[last];
       else if (g === '1') t = s5 + 'て';
       else if (g === 's') t = suruStem(w) + 'して';
       else t = kuruStem(w) + 'きて';
       return form === 'ta' ? toTa(t) : t;
     }
-    case 'nai': return g === '5' ? s5 + a + 'ない' : g === '1' ? s5 + 'ない' : g === 's' ? suruStem(w) + 'しない' : kuruStem(w) + 'こない';
+    case 'nai': return g === '5' && isAru(w) ? aruNai(w) : g === '5' ? s5 + a + 'ない' : g === '1' ? s5 + 'ない' : g === 's' ? suruStem(w) + 'しない' : kuruStem(w) + 'こない';
     case 'pass': return g === '5' ? s5 + a + 'れる' : g === '1' ? s5 + 'られる' : g === 's' ? suruStem(w) + 'される' : kuruStem(w) + 'こられる';
     case 'caus': return g === '5' ? s5 + a + 'せる' : g === '1' ? s5 + 'させる' : g === 's' ? suruStem(w) + 'させる' : kuruStem(w) + 'こさせる';
     case 'aneg': return g === 'i' ? iStem(w) + 'くない' : w + 'じゃない';
@@ -94,6 +105,7 @@ function wrongForms(word, form) {
   if (form === 'nai') {
     if (g === 's') { const st = suruStem(w); return [st + 'さない', st + 'すない', st + 'せない']; }
     if (g === 'k') { const st = kuruStem(w); return [st + 'きない', st + 'くない', st + 'こらない']; }
+    if (g === '5' && isAru(w)) return [s5 + 'らない', s5 + 'ない', s5 + 'りない', s5 + 'れない'];   // あらない（いちばん多い間違い）
     const pri = g === '1' ? [s5 + 'らない'] : last === 'う' ? [s5 + 'あない'] : last === 'る' ? [s5 + 'ない'] : [];
     return [...pri, s5 + a + 'ない', s5 + 'ない', s5 + i + 'ない', s5 + e + 'ない', s5 + 'らない'];
   }
@@ -109,7 +121,7 @@ function wrongForms(word, form) {
     return [...pri, ...ua, s5 + a + 'せる', s5 + 'させる', s5 + i + 'せる', s5 + 'せる', s5 + a + 'せられる'];
   }
   if (g === 'i') {
-    const st = w.slice(0, -1);          // いい → い（いくない・いかった：いちばん多い間違い）
+    const st = w.slice(0, -1);          // いい → い（いくない・いかった：いちばん多い間違い）。普通の い形容詞では正しい形と同じなので除かれる
     const yo = iStem(w);
     return {
       aneg: [st + 'くない', w + 'じゃない', w + 'くない', yo + 'ない', st + 'じゃない'],
@@ -121,7 +133,7 @@ function wrongForms(word, form) {
   const wi = w.endsWith('い') ? w.slice(0, -1) : null;   // きれい・嫌い を い形容詞のように活用してしまう
   return {
     aneg: [...(wi ? [wi + 'くない'] : []), w + 'くない', w + 'ない', w + 'だじゃない', w + 'なくない'],
-    apast: [...(wi ? [wi + 'かった'] : []), w + 'かった', w + 'だかった', w + 'なかった', w + 'でした'],
+    apast: [...(wi ? [wi + 'かった'] : []), w + 'かった', w + 'だかった', w + 'なかった', w + 'だだった'],
     apneg: [...(wi ? [wi + 'くなかった'] : []), w + 'くなかった', w + 'じゃないだった', w + 'だじゃなかった', w + 'じゃない'],
     ate: [...(wi ? [wi + 'くて'] : []), w + 'くて', w + 'て', w + 'だて', w + 'なで'],
   }[form] || [];
@@ -162,6 +174,7 @@ export function rulePath(word, form) {
   if (form === 'te' || ta) {
     const T = s => (ta ? s.replace(/て$/, 'た').replace(/で$/, 'だ') : s);
     if (g === '5' && isIku(w)) return { fam: 'irr', rule: `例外：行く → 行${T('って')}`, trap };
+    if (g === '5' && isTou(w)) return { fam: 'irr', rule: `例外：問う → 問う${T('て')}`, trap };
     if (g === '5') return { fam: FAM[last], rule: `五段：${famKeys(last)} → ${T(TE[last])}`, trap };
     if (g === '1') return { fam: 'ichi', rule: `一段：る → ${T('て')}`, trap };
     if (g === 's') return { fam: 'irr', rule: `する → ${T('して')}`, trap };
@@ -169,12 +182,13 @@ export function rulePath(word, form) {
   }
   if (form === 'nai' || form === 'pass' || form === 'caus') {
     const end = { nai: ['ない', 'ない', 'しない', 'こない'], pass: ['れる', 'られる', 'される', 'こられる'], caus: ['せる', 'させる', 'させる', 'こさせる'] }[form];
+    if (g === '5' && form === 'nai' && isAru(w)) return { fam: 'irr', rule: '例外：ある → ない', trap };
     if (g === '5') return { fam: 'arow', rule: `五段：${last} → ${a}＋${end[0]}${last === 'う' ? '（う は「わ」）' : ''}`, trap };
     if (g === '1') return { fam: 'ichi', rule: `一段：る → ${end[1]}`, trap };
     if (g === 's') return { fam: 'irr', rule: `する → ${end[2]}`, trap: form === 'caus' ? '〜させていただきます ＝「〜してもいいですか」の丁寧な言い方' : trap };
     return { fam: 'irr', rule: `来る → ${end[3]}`, trap };
   }
-  const yoi = w.endsWith('いい');
+  const yoi = isYoi(w);
   const ia = { aneg: 'くない', apast: 'かった', apneg: 'くなかった', ate: 'くて' }[form];
   const na = { aneg: 'じゃない', apast: 'だった', apneg: 'じゃなかった', ate: 'で' }[form];
   if (g === 'i') return { fam: 'iadj', rule: yoi ? `例外：いい → よ${ia}` : `い形容詞：い → ${ia}`, trap };
@@ -187,7 +201,8 @@ function trapNote({ w, g }) {
   if (g === '5' && w.endsWith('る') && GODAN_RU.some(x => w.endsWith(x))) return `${w} は い段・え段＋る に見えますが五段：${conj({ w, g }, 'te')}・${conj({ w, g }, 'nai')}`;
   if (g === '5' && isIku(w)) return 'く で終わっても 行く だけは「行って・行った」';
   if (g === 'na' && w.endsWith('い')) return `「い」で終わっても な形容詞（${w}な〜）：${w}じゃない`;
-  if (g === 'i' && w.endsWith('いい')) return 'いい は「よい」の形で活用：よくない・よかった';
+  if (g === '5' && isAru(w)) return 'ある の否定は「ない」だけ（あらない とは言わない）';
+  if (g === 'i' && isYoi(w)) return 'いい は「よい」の形で活用：よくない・よかった';
   return '';
 }
 
@@ -279,6 +294,7 @@ const BANK = `
 準備する|じゅんびする|s|prepare|資料を
 参加する|さんかする|s|take part|会議に|v
 持ってくる|もってくる|k|bring|資料を
+ある|ある|5|there is; have|会議が|n
 高い|たかい|i|expensive; high|値段が
 安い|やすい|i|cheap|費用が
 忙しい|いそがしい|i|busy|今週は
@@ -336,14 +352,27 @@ export function wordFromCard(card) {
   if (/形容動詞|な形容詞/.test(pos)) return { ...base, w: w.replace(/な$/, ''), g: 'na' };
   if (/形容詞/.test(pos)) return w.endsWith('い') ? { ...base, w, g: 'i' } : null;
   if (!/動詞/.test(pos)) return null;
-  if (w.endsWith('する')) return w.length > 2 ? { ...base, w, g: 's' } : null;
-  if (/カ変/.test(pos) || w.endsWith('来る')) return { ...base, w, g: 'k' };
   const last = w.slice(-1);
+  const ok = g => ({ ...base, w, g });
+  // 1) カードに書いてある型がいちばん確か（出来る＝一段、こする＝五段 など）
+  if (/サ変/.test(pos)) return w.endsWith('する') && w.length > 2 ? ok('s') : null;
+  if (/カ変/.test(pos)) return /(来る|くる)$/.test(w) ? ok('k') : null;
+  if (/一段/.test(pos)) return last === 'る' ? ok('1') : null;
+  if (/五段/.test(pos)) return ROWS[last] ? ok('5') : null;
+  // 2) 型がないときは、はっきり分かるものだけ。迷う語は出さない（間違った答えを教えないため）
+  if (w.endsWith('する')) return /[^\p{Script=Hiragana}]/u.test(suruStem(w)) ? ok('s') : null;   // 確認する・腹落ちする（こする・かする は五段のことがある）
+  if (isKuru(w, r, base.en)) return ok('k');
+  if (w === 'くる') return null;                           // 来る？繰る？ 分からない
   if (!ROWS[last]) return null;
-  let g = /一段/.test(pos) ? '1' : /五段/.test(pos) ? '5' : null;
-  if (g === '1' && last !== 'る') return null;
-  if (!g) g = last === 'る' ? ruGroup(w, r) : '5';
-  return g ? { ...base, w, g } : null;
+  const g = last === 'る' ? ruGroup(w, r) : '5';
+  return g ? ok(g) : null;
+}
+
+/** カ変（来る）：来る そのもの、〜て来る・〜でくる、読みが「…くる」の 〜来る、意味が come の くる。出来る（できる）は含めない */
+function isKuru(w, r, en) {
+  if (w === '来る' || /[てで](来る|くる)$/.test(w)) return true;
+  if (w.endsWith('来る')) return r.endsWith('くる') && !r.endsWith('できる');
+  return w === 'くる' && /\bcome/i.test(en || '');
 }
 
 /** る で終わる動詞の段：例外 → 漢字1字＋る → 直前のかな（なければ読み） */
@@ -382,6 +411,8 @@ export function formsFor(word) {
 
 const ROUND = 10;
 const LIMIT_S = 8;                       // この秒数より速いほど＋点（時間切れはなし）
+const LIMIT_SAY_S = 12;                  // 「先に言う」のときは考える時間を足す
+const AUTO_MS = 2500;                    // 正解のあと自動で次へ（「止めて読む」で止まる）
 const BOX_W = [6, 3, 1.5, 0.7, 0.35];   // 箱ごとの出やすさ（間違えると箱 0 に戻る）
 
 export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = () => [] }) {
@@ -389,6 +420,7 @@ export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = ()
     tab: 'play',
     chips: ['て形', 'た形', 'ない形'],
     mine: true,
+    say: false,     // 選択肢を見る前に、答えを言う（頭の中・声で）
     stats: {},      // `${w}|${form}` → { b, ok, ng, at }
     hist: {},       // form → [1,0,…]（最近 40 回）
     best: 0,
@@ -403,9 +435,10 @@ export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = ()
       K.stats = d.stats || {}; K.hist = d.hist || {}; K.best = d.best || 0; K.days = d.days || {};
       if (Array.isArray(d.chips) && d.chips.length) K.chips = d.chips.filter(c => CHIPS.includes(c));
       if (typeof d.mine === 'boolean') K.mine = d.mine;
+      if (typeof d.say === 'boolean') K.say = d.say;
     }
   }
-  const save = () => store.put('meta', { stats: K.stats, hist: K.hist, best: K.best, days: pruneDays(K.days), chips: K.chips, mine: K.mine }, 'katsuyo');
+  const save = () => store.put('meta', { stats: K.stats, hist: K.hist, best: K.best, days: pruneDays(K.days), chips: K.chips, mine: K.mine, say: K.say }, 'katsuyo');
   const pruneDays = d => Object.fromEntries(Object.entries(d).sort().slice(-60));
 
   const myWords = () => {
@@ -456,7 +489,7 @@ export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = ()
     clearTimeout(advanceTimer);
     const items = buildRound(only);
     if (!items.length) return;
-    K.session = { items, i: 0, choice: null, t0: Date.now(), score: 0, streak: 0, maxStreak: 0, results: [], done: false };
+    K.session = { items, i: 0, choice: null, shown: !K.say, hold: false, t0: Date.now(), score: 0, streak: 0, maxStreak: 0, results: [], done: false };
     render();
   }
 
@@ -467,7 +500,8 @@ export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = ()
     const sec = (Date.now() - s.t0) / 1000;
     const ok = v === x.answer;
     s.choice = v;
-    const bonus = ok ? Math.max(0, Math.round(((LIMIT_S - sec) / LIMIT_S) * 5)) : 0;
+    const lim = K.say ? LIMIT_SAY_S : LIMIT_S;
+    const bonus = ok ? Math.max(0, Math.round(((lim - sec) / lim) * 5)) : 0;
     s.streak = ok ? s.streak + 1 : 0;
     s.maxStreak = Math.max(s.maxStreak, s.streak);
     s.score += ok ? 10 + bonus : 0;
@@ -482,7 +516,7 @@ export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = ()
     await save();
     if (ok) {
       const at = s.i;
-      advanceTimer = setTimeout(() => { if (K.session === s && s.i === at && location.hash.startsWith('#/katsuyo')) next(); }, 1100);
+      advanceTimer = setTimeout(() => { if (K.session === s && s.i === at && !s.hold && location.hash.startsWith('#/katsuyo')) next(); }, AUTO_MS);
     }
   }
 
@@ -494,7 +528,7 @@ export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = ()
       s.done = true;
       if (s.score > K.best) { s.newBest = true; K.best = s.score; }
       await save();
-    } else Object.assign(s, { i: s.i + 1, choice: null, t0: Date.now() });
+    } else Object.assign(s, { i: s.i + 1, choice: null, shown: !K.say, hold: false, t0: Date.now() });
     render();
   }
 
@@ -552,6 +586,7 @@ export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = ()
         <p class="kt-lead">10問 · 速く選ぶほど＋点 · 間違えた形ほど次にまた出ます</p>
         <div class="kt-chips" role="group" aria-label="練習する形">${chips}</div>
         <button class="chip toggle" aria-pressed="${K.mine}" data-act="kt-mine">自分のカードも混ぜる（${mine.length}語）</button>
+        <button class="chip toggle" aria-pressed="${K.say}" data-act="kt-say">選ぶ前に答えを言う</button>
         <button class="primary ink kt-start" data-act="kt-start" ${K.chips.length ? '' : 'disabled'}>スタート</button>
         <p class="kt-meta">今日 ${today}問 · ベスト ${K.best}点</p>
       </section>
@@ -585,17 +620,21 @@ export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = ()
         ${filled ? `<p class="kt-sent">${filled.split(/(<b[^>]*>.*?<\/b>)/).map((p, i) => (i % 2 ? p : esc(p))).join('')}</p>` : ''}
         ${rp.trap ? `<p class="kt-trap">⚠ ${esc(rp.trap)}</p>` : ''}
         ${ok ? '' : ruleRow(rp.fam, x.form)}
-        ${ok ? '' : `<button class="primary ink" data-act="kt-next">${s.i + 1 >= s.items.length ? '結果を見る' : '次へ'}</button>`}
+        ${ok && !s.hold
+          ? `<div class="kt-auto"><button class="text-btn" data-act="kt-hold">止めて読む</button><button class="outline quiet" data-act="kt-next">次へ<i style="animation-duration:${AUTO_MS}ms"></i></button></div>`
+          : `<button class="primary ink" data-act="kt-next">${s.i + 1 >= s.items.length ? '結果を見る' : '次へ'}</button>`}
       </div>` : '';
     return `
       <div class="kt-top"><span>${s.i + 1} / ${s.items.length}</span><span>${s.score}点${s.streak > 1 ? ` · ${s.streak}連続` : ''}</span></div>
-      ${answered ? '' : `<div class="kt-timer" aria-hidden="true"><i style="animation-duration:${LIMIT_S}s"></i></div>`}
+      ${answered ? '' : `<div class="kt-timer" aria-hidden="true"><i style="animation-duration:${K.say ? LIMIT_SAY_S : LIMIT_S}s"></i></div>`}
       <section class="kt-q">
         <p class="kt-form"><span>${esc(F.label)}</span><span class="en">${esc(F.en)}</span></p>
         ${wordHead(x.word)}
         ${blank && !answered ? `<p class="kt-frame">${blank}</p>` : ''}
       </section>
-      <div class="kt-opts ${two ? 'col' : ''}">${opts}</div>
+      ${s.shown || answered
+        ? `<div class="kt-opts ${two ? 'col' : ''}">${opts}</div>`
+        : `<div class="kt-say"><p>答えを言ってから（頭の中で・声に出して）</p><button class="primary ink" data-act="kt-show">選択肢を見る</button></div>`}
       ${fb}`;
   }
 
@@ -722,6 +761,9 @@ export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = ()
       render(); await save();
     },
     'kt-mine': async () => { K.mine = !K.mine; render(); await save(); },
+    'kt-say': async () => { K.say = !K.say; render(); await save(); },
+    'kt-show': () => { if (K.session) { K.session.shown = true; render(); } },
+    'kt-hold': () => { if (K.session) { K.session.hold = true; clearTimeout(advanceTimer); render(); } },
     'kt-start': () => start(),
     'kt-pick': el => pick(Number(el.dataset.v)),
     'kt-next': () => next(),
