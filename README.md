@@ -144,6 +144,22 @@ Google のサービスもサーバーもいらないので、中国版のシス�
 - GitHub Pages ではマルチスレッドが使えない（COOP/COEP ヘッダーを付けられない）ので、1スレッドの wasm で動きます
 - 無音や雑音で Whisper が出しがちな決まり文句（「ご視聴ありがとうございました」など）は捨てます
 
+### 実験ページ：声を文字にする（lab/asr.html・ブランチ asr-poc）
+
+アプリとは別の、測るためだけのページ。アプリのデータには触らない。最後に「レポートをコピー」して Slack に貼る。
+
+1. **ブラウザの音声認識**：Chrome の SpeechRecognition（ja-JP）を1回試し、使えなければエラーコード（`network`・`service-not-allowed` など）を出す
+2. **速さ**：短い文（3〜5秒）と長い文（15〜20秒）を録音し、選んだモデルで2回ずつ文字にする。
+   準備（ダウンロード・最初の読み込み）／1回目（キャッシュから読み込み＋文字に）／2回目（読み込み済み）の時間と、文字の一致（F1）を記録
+   - モデル：**Moonshine Tiny JA**（日本語専用・27M・話した長さだけ計算する。q8 で約30MB）、Whisper base、Whisper small（任意）
+   - Moonshine は Hugging Face の `onnx-community/moonshine-tiny-ja-ONNX` → なければ `wmoto-ai/moonshine-tiny-ja-ONNX` の順に試し、使ったリポジトリと精度をレポートに出す
+   - 生成トークンの上限は「1秒あたり13＋8」（Transformers.js の既定は英語向けの「1秒あたり6」で、日本語だと文の途中で切れるため）
+3. **マイクの音質**：3つの設定（処理すべてオン／雑音抑制だけオフ／すべてオフ）をランダムな順で A・B・C として録音し、聞き比べて選ぶ。
+   選んだあとで、設定（`track.getSettings()`）・雑音・声の大きさ・SN比・音割れを表示。ビットレートは別の選択肢
+
+ライセンス：Moonshine Tiny JA は **Moonshine AI Community License**（個人・非商用。"Powered by Moonshine AI" を表示）。Whisper は MIT、Transformers.js は Apache-2.0。
+Moonshine はまだ「話す」の画面では選べない（`WH_MODELS` の `lab: true`）。スマホで測ってから決める。
+
 ## 生の日本語（v1.10.0）
 
 「今日」画面の「生の日本語」から。本物の素材（公式教材・YouTube など）の30〜90秒の場面で、聞く → 確かめる。

@@ -25,7 +25,7 @@
 //     モデルは「話す」画面からダウンロード（初回だけ）。音声認識（Google）より優先する。
 
 import { createVoice, compareSay, srSupported, micSupported } from './voice.js';
-import { createWhisper, decodeForWhisper, WH_MODELS, WH_LIMITS } from './whisper.js';
+import { createWhisper, decodeForWhisper, WH_MODELS, WH_LIMITS, appModels } from './whisper.js';
 
 const DRILL_SIZE = 5;
 const LOG_MAX = 3000;
@@ -72,7 +72,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     SP.stuck = Array.isArray(stuck) ? stuck : [];
     if (vo && typeof vo === 'object') {
       SP.voice = { ...SP.voice, on: !!vo.on, sr: !!vo.sr && srSupported(), srState: vo.srState || null,
-        wh: !!vo.wh, whModel: WH_MODELS[vo.whModel] ? vo.whModel : 'base',
+        wh: !!vo.wh, whModel: WH_MODELS[vo.whModel] && !WH_MODELS[vo.whModel].lab ? vo.whModel : 'base',
         whFiles: vo.whFiles && typeof vo.whFiles === 'object' ? vo.whFiles : {}, whVerified: vo.whVerified && typeof vo.whVerified === 'object' ? vo.whVerified : {} };
     }
     refreshWhStatus();
@@ -142,7 +142,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
   async function refreshWhStatus() {
     const v = SP.voice;
     v.whStatusByModel = v.whStatusByModel || {};
-    for (const key of Object.keys(WH_MODELS)) {
+    for (const [key] of appModels()) {
       v.whStatusByModel[key] = await whisper.cacheStatus(key, v.whFiles[WH_MODELS[key].id]);
     }
     v.whStatus = v.whStatusByModel[v.whModel];
@@ -386,7 +386,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     const m = WH_MODELS[v.whModel];
     let panel = '';
     if (v.wh) {
-      const chips = Object.entries(WH_MODELS).map(([k, x]) =>
+      const chips = appModels().map(([k, x]) =>
         `<button class="chip" aria-pressed="${v.whModel === k}" data-act="sp-wh-model" data-v="${k}" ${v.whDl ? 'disabled' : ''}>${esc(x.name)}</button>`).join('');
       let state;
       if (v.whDl) {

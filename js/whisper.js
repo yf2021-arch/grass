@@ -4,9 +4,27 @@
 //   処理は js/whisper-worker.js（別スレッド）で行う。
 
 export const WH_MODELS = {
-  base: { id: 'Xenova/whisper-base', name: 'ふつう（base）', approx: '約80MB', note: '1文が数秒〜10秒ほどで文字になります' },
-  small: { id: 'Xenova/whisper-small', name: 'より正確（small）', approx: '約400MB', note: '遅く、1文に十数秒かかることがあります' },
+  base: { id: 'Xenova/whisper-base', kind: 'whisper', name: 'ふつう（base）', approx: '約80MB', note: '1文が数秒〜10秒ほどで文字になります' },
+  small: { id: 'Xenova/whisper-small', kind: 'whisper', name: 'より正確（small）', approx: '約400MB', note: '遅く、1文に十数秒かかることがあります' },
+  // 実験（lab/asr.html だけで使う。「話す」の画面には出さない）。日本語専用・27M パラメータ。
+  // 話した長さだけ計算する（Whisper のような30秒の枠がない）。Moonshine AI Community License（個人の非商用は可・"Powered by Moonshine AI"）。
+  // Hugging Face の変換版はコミュニティのもの。最初の候補がなければ次を使い、どれを使ったかを結果に返す。
+  moonshine: {
+    id: 'onnx-community/moonshine-tiny-ja-ONNX', alt: ['wmoto-ai/moonshine-tiny-ja-ONNX'], kind: 'moonshine', lab: true,
+    name: 'Moonshine（日本語・軽い）', approx: '約30MB', note: '実験中',
+  },
 };
+
+/** 「話す」の画面で選べるモデル（実験のものを除く） */
+export const appModels = () => Object.entries(WH_MODELS).filter(([, m]) => !m.lab);
+
+/** 読み込みの候補（リポジトリ × 精度）。Whisper は今までどおり q8 だけ */
+function candidates(key) {
+  const m = WH_MODELS[key];
+  const repos = [m.id, ...(m.alt || [])];
+  const dtypes = m.kind === 'moonshine' ? ['q8', 'fp32'] : ['q8'];
+  return repos.flatMap(model => dtypes.map(dtype => ({ model, dtype })));
+}
 const MODEL_FILES = ['onnx/encoder_model_quantized.onnx', 'onnx/decoder_model_merged_quantized.onnx'];
 const TF_CACHE = 'transformers-cache';
 
@@ -15,9 +33,9 @@ const TF_CACHE = 'transformers-cache';
 //   limitMs を過ぎたら Worker を止めて、エラーとして返す（画面が「文字にしています…」のままにならない）。
 // 端末で測った数字がまだないので、余裕を大きく取っている。設定（localStorage の whLimits）で変えられる。
 export const WH_LIMITS = {
-  slowMs: { base: 20000, small: 45000 },
+  slowMs: { base: 20000, small: 45000, moonshine: 10000 },
   loadLimitMs: 300000,                       // モデルの読み込み（初回のコンパイルを含む）
-  runLimitMs: { base: 120000, small: 240000 }, // 1文を文字にする
+  runLimitMs: { base: 120000, small: 240000, moonshine: 60000 }, // 1文を文字にする
 };
 try { Object.assign(WH_LIMITS, JSON.parse(localStorage.getItem('whLimits') || '{}')); } catch (e) { /* 既定のまま */ }
 
@@ -77,8 +95,8 @@ export function createWhisper() {
     const model = WH_MODELS[key]?.id;
     if (!model) throw new Error(`unknown model ${key}`);
     try { await navigator.storage?.persist?.(); } catch (e) { /* 消されにくくするだけ */ }
-    const r = await call({ type: 'load', model }, { onProgress, limitMs: WH_LIMITS.loadLimitMs });
-    return { files: r.files || [], ms: r.ms };
+    const r = await call({ type: 'load', model, kind: WH_MODELS[key].kind, cands: candidates(key) }, { onProgress, limitMs: WH_LIMITS.loadLimitMs });
+    return { files: r.files || [], ms: r.ms, info: r.info || null };
   }
 
   /**
@@ -99,8 +117,8 @@ export function createWhisper() {
       const needLoad = loaded !== model;
       onStage?.({ stage: needLoad ? 'load' : 'infer' });
       const limitMs = (needLoad ? WH_LIMITS.loadLimitMs : 0) + (WH_LIMITS.runLimitMs[key] || 120000);
-      const r = await call({ type: 'run', model, audio }, { onStage, limitMs, onId: id => { reqId = id; } }, [audio.buffer]);
-      return { text: cleanText(r.text), ms: r.ms, loadMs: r.loadMs || 0 };
+      const r = await call({ type: 'run', model, kind: WH_MODELS[key].kind, cands: candidates(key), audio }, { onStage, limitMs, onId: id => { reqId = id; } }, [audio.buffer]);
+      return { text: cleanText(r.text), ms: r.ms, loadMs: r.loadMs || 0, info: r.info || null };
     });
     queue = job.catch(() => {});
     if (!signal) return job;
@@ -116,6 +134,9 @@ export function createWhisper() {
 
   /** 今の処理をすべてやめる（Worker ごと止める。モデルを消すときなど） */
   function cancel() { if (pending.size) reset('cancelled', 'やめました'); }
+
+  /** Worker を閉じる（読み込んだモデルもメモリから消える。次の処理は読み込みからやり直し） */
+  function dispose() { reset('cancelled', 'やめました'); }
 
   /** ファイル名のリスト（files）がすべて端末のキャッシュにあるか → { ready, bytes, missing } */
   async function cacheStatus(key, files) {
@@ -146,12 +167,13 @@ export function createWhisper() {
     reset('cancelled', 'cancelled');
     if (!model || !('caches' in window)) return;
     const cache = await caches.open(TF_CACHE);
+    const repos = [model, ...(WH_MODELS[key].alt || [])];
     for (const req of await cache.keys()) {
-      if (req.url.includes(`/${model}/`)) await cache.delete(req);
+      if (repos.some(r => req.url.includes(`/${r}/`))) await cache.delete(req);
     }
   }
 
-  return { load, transcribe, cancel, cacheStatus, cachedBytes, remove, get loadedModel() { return loaded; } };
+  return { load, transcribe, cancel, dispose, cacheStatus, cachedBytes, remove, get loadedModel() { return loaded; } };
 }
 
 /** 録音（webm など）を 16kHz・モノラルにする。fromSec〜toSec だけ切り出す（前後の無音で Whisper が作り話をしないように） */
