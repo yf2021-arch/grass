@@ -76,6 +76,12 @@ function genOptions(kind, audio) {
   return { language: 'japanese', task: 'transcribe', return_timestamps: false };
 }
 
+/** レポート用：実際に渡した attention_mask の形と型 */
+function maskInfo(opts) {
+  const t = opts.attention_mask;
+  return t ? { dtype: t.type, dims: t.dims, forwardParams: asr?.model?.forward_params || null } : null;
+}
+
 self.onmessage = async e => {
   const m = e.data || {};
   try {
@@ -91,8 +97,9 @@ self.onmessage = async e => {
       const loadMs = needLoad ? performance.now() - l0 : 0;
       self.postMessage({ type: 'stage', id: m.id, stage: 'infer', model: m.model, loadMs });
       const t0 = performance.now();
-      const out = await p(m.audio, genOptions(m.kind, m.audio));
-      self.postMessage({ type: 'ok', id: m.id, model: m.model, info, text: (Array.isArray(out) ? out[0]?.text : out?.text) || '', ms: performance.now() - t0, loadMs });
+      const opts = genOptions(m.kind, m.audio);
+      const out = await p(m.audio, opts);
+      self.postMessage({ type: 'ok', id: m.id, model: m.model, info: { ...info, mask: maskInfo(opts), maxNewTokens: opts.max_new_tokens ?? null }, text: (Array.isArray(out) ? out[0]?.text : out?.text) || '', ms: performance.now() - t0, loadMs });
     } else if (m.type === 'unload') {
       if (asr) { try { await asr.dispose?.(); } catch (err) { /* */ } }
       asr = null; asrModel = null;

@@ -18,12 +18,13 @@ export const WH_MODELS = {
 /** 「話す」の画面で選べるモデル（実験のものを除く） */
 export const appModels = () => Object.entries(WH_MODELS).filter(([, m]) => !m.lab);
 
-/** 読み込みの候補（リポジトリ × 精度）。Whisper は今までどおり q8 だけ */
+/**
+ * 読み込みの候補（リポジトリ × 精度）。q8 だけ。
+ * fp32（大きい）には自動で落とさない：スマホで small が落ちたように、大きいモデルはブラウザごと落ちることがあるため（Kairos のレビュー・2026-11-12）
+ */
 function candidates(key) {
   const m = WH_MODELS[key];
-  const repos = [m.id, ...(m.alt || [])];
-  const dtypes = m.kind === 'moonshine' ? ['q8', 'fp32'] : ['q8'];
-  return repos.flatMap(model => dtypes.map(dtype => ({ model, dtype })));
+  return [m.id, ...(m.alt || [])].map(model => ({ model, dtype: 'q8' }));
 }
 const MODEL_FILES = ['onnx/encoder_model_quantized.onnx', 'onnx/decoder_model_merged_quantized.onnx'];
 const TF_CACHE = 'transformers-cache';

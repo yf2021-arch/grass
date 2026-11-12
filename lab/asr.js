@@ -248,7 +248,7 @@ async function runEngines(sid, rec, box) {
         const r1 = await c.transcribe(key, pcm.slice());
         const s1 = compareSay(target, r1.text);
         x.run1 = { loadMs: Math.round(r1.loadMs), ms: Math.round(r1.ms), text: r1.text, score: Math.round(s1.score * 100), recall: Math.round(s1.recall * 100), precision: Math.round(s1.precision * 100) };
-        if (r1.info) { x.repo = r1.info.repo; x.dtype = r1.info.dtype; }
+        if (r1.info) { x.repo = r1.info.repo; x.dtype = r1.info.dtype; x.mask = r1.info.mask || null; x.maxNewTokens = r1.info.maxNewTokens; }
         draw();
         status.textContent = `${WH_MODELS[key].name}：2回目…`;
         const r2 = await c.transcribe(key, pcm.slice());

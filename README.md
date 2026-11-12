@@ -152,7 +152,7 @@ Google のサービスもサーバーもいらないので、中国版のシス�
 2. **速さ**：短い文（3〜5秒）と長い文（15〜20秒）を録音し、選んだモデルで2回ずつ文字にする。
    準備（ダウンロード・最初の読み込み）／1回目（キャッシュから読み込み＋文字に）／2回目（読み込み済み）の時間と、文字の一致（F1）を記録
    - モデル：**Moonshine Tiny JA**（日本語専用・27M・話した長さだけ計算する。q8 で約30MB）、Whisper base、Whisper small（任意）
-   - Moonshine は Hugging Face の `onnx-community/moonshine-tiny-ja-ONNX` → なければ `wmoto-ai/moonshine-tiny-ja-ONNX` の順に試し、使ったリポジトリと精度をレポートに出す
+   - Moonshine は Hugging Face の `onnx-community/moonshine-tiny-ja-ONNX` → なければ `wmoto-ai/moonshine-tiny-ja-ONNX` の順に試し（どちらも q8 だけ。大きい fp32 には自動で落とさない）、使ったリポジトリ・精度・attention_mask の形と型をレポートに出す
    - 生成トークンの上限は「1秒あたり13＋8」（Transformers.js の既定は英語向けの「1秒あたり6」で、日本語だと文の途中で切れるため）
    - 新しい書き出しの Moonshine はエンコーダーに `attention_mask`（モデルの中では使わない互換用の入力）がある。Transformers.js は Moonshine に渡さないので、
      Worker で全部 1 のものを渡す（`forward_params` にも足す。足さないと generate() が捨てる）。Grass のスマホで「Missing the following inputs: attention_mask」が出たため
