@@ -417,7 +417,11 @@ a { color: var(--accent); }
 .wh-panel { padding: 0 14px 14px; display: flex; flex-direction: column; gap: 10px; border-bottom: 1px solid var(--divider); }
 .wh-panel:last-child { border-bottom: 0; }
 .wh-panel .frow { flex-wrap: wrap; }
-.wh-run { animation: mic-pulse 1.4s ease-in-out infinite; }
+.wh-run > p:first-child { animation: mic-pulse 1.4s ease-in-out infinite; }
+.wh-run, .wh-none, .wh-err { margin-top: 8px; }
+.wh-run .cmp-row, .wh-none .cmp-row, .wh-err .cmp-row { margin-top: 6px; }
+.wh-elapsed { font-variant-numeric: tabular-nums; }
+.wh-warn { color: var(--warn, #9a5b00); }
 .mic { display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 13px; color: var(--muted); }
 .mic-dot { width: 10px; height: 10px; border-radius: 5px; background: var(--bad); flex-shrink: 0; animation: mic-pulse 1.2s ease-in-out infinite; }
 .mic-meter { width: 72px; height: 6px; border-radius: 3px; background: var(--divider); overflow: hidden; flex-shrink: 0; }

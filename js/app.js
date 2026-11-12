@@ -969,7 +969,7 @@ function renderSettings() {
             <button class="outline quiet" data-act="${S.settings.demo ? 'demo-off' : 'demo-on'}">${S.settings.demo ? 'デモを終了' : 'デモデータで試す'}</button>
           </div>
         </section>
-        <p class="small" style="text-align:center">Grass v1.13.0</p>
+        <p class="small" style="text-align:center">Grass v1.13.1</p>
       </main>
       ${nav('settings')}
     </div>`;

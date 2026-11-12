@@ -61,13 +61,18 @@ export function createVoice() {
     return Math.sqrt(s / buf.length);
   }
 
-  /** マイクを閉じる（練習が終わったら・画面を離れたら） */
-  function release() {
-    if (take) take.cancel();
-    take = null;
+  /** マイクだけを閉じる（1回の録音が終わるたび。音の解析用の AudioContext は残して、次はすぐ始められるようにする） */
+  function closeMic() {
     stream?.getTracks().forEach(t => t.stop());
     stream = null;
     analyser = null;
+  }
+
+  /** 全部閉じる（練習が終わったら・画面を離れたら） */
+  function release() {
+    if (take) take.cancel();
+    take = null;
+    closeMic();
   }
 
   /* ---------------- 録音 ---------------- */
@@ -82,7 +87,8 @@ export function createVoice() {
     await openMic();
     const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus']
       .find(m => window.MediaRecorder.isTypeSupported?.(m)) || '';
-    const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+    let rec;
+    try { rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined); } catch (e) { closeMic(); throw e; }
     const parts = [];
     rec.ondataavailable = e => { if (e.data?.size) parts.push(e.data); };
 
@@ -103,14 +109,20 @@ export function createVoice() {
       clearInterval(timer);
       if (rec.state !== 'inactive') rec.stop(); else emit();
     };
+    let emitted = false;
     const emit = () => {
+      if (emitted) return;
+      emitted = true;
+      // 録音が終わったら、毎回マイクを閉じる（答えを見ている間にマイクが使われたままにならないように）
+      if (take === me) take = null;
+      if (!take) closeMic();
+      if (reason === 'cancel') return;
       const blob = new Blob(parts, { type: rec.mimeType || mime || 'audio/webm' });
       const url = blob.size ? URL.createObjectURL(blob) : null;
-      if (take === me) take = null;
-      if (reason === 'cancel') { if (url) URL.revokeObjectURL(url); return; }
-      onEnd({ kind: 'rec', url, startAt: t0, onsetAt, endAt: lastVoice || performance.now(), reason });
+      onEnd({ kind: 'rec', url, blob: blob.size ? blob : null, startAt: t0, onsetAt, endAt: lastVoice || performance.now(), reason });
     };
     rec.onstop = emit;
+    rec.onerror = () => { done = true; clearInterval(timer); reason = reason === 'cancel' ? 'cancel' : 'error'; emit(); };
 
     const timer = setInterval(() => {
       const now = performance.now();
@@ -129,7 +141,7 @@ export function createVoice() {
       if (onsetAt != null && voiced >= MIN_VOICE && now - Math.max(lastVoice, holdUntil) > SILENCE) finish('silence');
     }, TICK);
 
-    rec.start();
+    try { rec.start(); } catch (e) { clearInterval(timer); closeMic(); throw e; }
     const me = {
       kind: 'rec',
       stop: () => finish('tap'),
@@ -245,7 +257,7 @@ export function createVoice() {
     return me;
   }
 
-  return { prepare, record, recognize, release, active: () => !!take };
+  return { prepare, record, recognize, release, active: () => !!take, micOpen: () => !!stream?.getAudioTracks().some(t => t.readyState === 'live') };
 }
 
 /* ---------------- 聞き取った文と、答えの文を比べる ---------------- */
@@ -256,8 +268,10 @@ const norm = s => kataToHira(String(s || '').normalize('NFKC')).replace(PUNCT, '
 
 /**
  * 答えの文の1文字ずつに、聞き取った文に（順番どおり）あったかの印を付ける（最長共通部分列）。
- * 漢字とかなの書き分けが違うだけでも「ない」になるので、目安として使う。
- * 戻り値：{ score: 0〜1, marks: [{ ch, ok }] }（marks は句読点も含む、答えの文そのままの文字）
+ * これは「聞き取った文字がどれだけ重なったか」の目安で、発音の良さを測るものではない。
+ * 漢字とかなの書き分けが違うだけでも「ない」になる。
+ * score は、足りない文字（recall）と余分な文字（precision）の両方を見る（F1）。同じ文を2回言うと 100% にならない。
+ * 戻り値：{ score, recall, precision, extra（余分な文字数）, marks: [{ ch, ok }] }（marks は句読点も含む、答えの文そのままの文字）
  */
 export function compareSay(target, heard) {
   const chars = [...String(target || '')];
@@ -266,7 +280,7 @@ export function compareSay(target, heard) {
   const b = [...norm(heard)];
   const n = a.length;
   const m = b.length;
-  if (!n) return { score: 0, marks: chars.map(ch => ({ ch, ok: true })) };
+  if (!n) return { score: 0, recall: 0, precision: 0, extra: m, marks: chars.map(ch => ({ ch, ok: true })) };
   const dp = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1));
   for (let i = n - 1; i >= 0; i -= 1) {
     for (let j = m - 1; j >= 0; j -= 1) {
@@ -279,5 +293,9 @@ export function compareSay(target, heard) {
   }
   let k = 0;
   const marks = chars.map((ch, i) => (keep[i] ? { ch, ok: hit[k++] } : { ch, ok: true }));
-  return { score: dp[0][0] / n, marks };
+  const lcs = dp[0][0];
+  const recall = lcs / n;
+  const precision = m ? lcs / m : 0;
+  const score = lcs ? (2 * lcs) / (n + m) : 0;
+  return { score, recall, precision, extra: m - lcs, marks };
 }

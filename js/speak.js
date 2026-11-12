@@ -25,7 +25,7 @@
 //     モデルは「話す」画面からダウンロード（初回だけ）。音声認識（Google）より優先する。
 
 import { createVoice, compareSay, srSupported, micSupported } from './voice.js';
-import { createWhisper, decodeForWhisper, WH_MODELS } from './whisper.js';
+import { createWhisper, decodeForWhisper, WH_MODELS, WH_LIMITS } from './whisper.js';
 
 const DRILL_SIZE = 5;
 const LOG_MAX = 3000;
@@ -56,7 +56,8 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     ui: { open: null, copied: null, showSent: false, ttsMsg: null, dl: null },
     audio: { files: {}, credit: '', cached: 0 },
     voice: { on: false, sr: false, srState: null, micErr: null,   // srState: { ok, reason, at }
-      wh: false, whModel: 'base', whBytes: 0, whDl: null, whErr: null },  // whDl: { loaded, total }
+      wh: false, whModel: 'base', whBytes: 0, whDl: null, whErr: null,  // whDl: { loaded, total }
+      whFiles: {}, whVerified: {}, whStatus: null },  // whFiles: モデルごとの読み込んだファイル名。whVerified: 実際に文字にできた日時
   };
   const voice = createVoice();
   const whisper = createWhisper();
@@ -71,9 +72,10 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     SP.stuck = Array.isArray(stuck) ? stuck : [];
     if (vo && typeof vo === 'object') {
       SP.voice = { ...SP.voice, on: !!vo.on, sr: !!vo.sr && srSupported(), srState: vo.srState || null,
-        wh: !!vo.wh, whModel: WH_MODELS[vo.whModel] ? vo.whModel : 'base' };
+        wh: !!vo.wh, whModel: WH_MODELS[vo.whModel] ? vo.whModel : 'base',
+        whFiles: vo.whFiles && typeof vo.whFiles === 'object' ? vo.whFiles : {}, whVerified: vo.whVerified && typeof vo.whVerified === 'object' ? vo.whVerified : {} };
     }
-    whisper.cachedBytes(SP.voice.whModel).then(b => { SP.voice.whBytes = b; if (location.hash.startsWith('#/speak')) renderSpeak(); });
+    refreshWhStatus();
     try {
       const res = await fetch('data/chunks.json', { cache: 'no-cache' });
       if (res.ok) SP.base = (await res.json()).chunks || [];
@@ -131,8 +133,22 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
 
   const saveLog = () => store.put('meta', SP.log.slice(-LOG_MAX), 'speakLog');
   const saveStuck = () => store.put('meta', SP.stuck, 'stuck');
-  const saveVoice = () => store.put('meta', { on: SP.voice.on, sr: SP.voice.sr, srState: SP.voice.srState, wh: SP.voice.wh, whModel: SP.voice.whModel }, 'speakVoice');
+  const saveVoice = () => store.put('meta', { on: SP.voice.on, sr: SP.voice.sr, srState: SP.voice.srState, wh: SP.voice.wh, whModel: SP.voice.whModel, whFiles: SP.voice.whFiles, whVerified: SP.voice.whVerified }, 'speakVoice');
   const whReady = () => SP.voice.on && SP.voice.wh && SP.voice.whBytes > 0;
+  const isMobile = () => /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+  const baseReady = () => !!SP.voice.whStatusByModel?.base?.ready;
+
+  /** モデルのファイルが全部そろっているかを確かめる（読み込みのとき実際に使ったファイルの一覧で） */
+  async function refreshWhStatus() {
+    const v = SP.voice;
+    v.whStatusByModel = v.whStatusByModel || {};
+    for (const key of Object.keys(WH_MODELS)) {
+      v.whStatusByModel[key] = await whisper.cacheStatus(key, v.whFiles[WH_MODELS[key].id]);
+    }
+    v.whStatus = v.whStatusByModel[v.whModel];
+    v.whBytes = v.whStatus?.ready ? (v.whStatus.bytes || 1) : 0;
+    if (location.hash.startsWith('#/speak')) renderSpeakKeep();
+  }
   const chunkById = id => SP.chunks.find(c => c.id === id);
 
   /* ---------------- 集計 ---------------- */
@@ -377,22 +393,30 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
         const pct = v.whDl.total ? Math.round((v.whDl.loaded / v.whDl.total) * 100) : 0;
         state = `<p class="small wh-prog">ダウンロード中… ${pct}%${v.whDl.total ? `（${mb(v.whDl.loaded)} / ${mb(v.whDl.total)}）` : ''}。この画面を離れても続きます</p>`;
       } else if (v.whBytes > 0) {
-        state = `<p class="msg ok">このスマホに入っています${v.whBytes > 1 ? `（${mb(v.whBytes)}）` : ''}。オフラインでも使えます · ${esc(m.note)}</p>
+        const verified = v.whVerified[m.id];
+        state = `<p class="msg ok">このスマホに入っています${v.whBytes > 1 ? `（${mb(v.whBytes)}）` : ''}${v.whStatus?.full ? `・ファイル ${v.whStatus.checked}個を確認` : ''}。${verified
+          ? `${mdShort(verified)}に文字にできました。オフラインでも使えます`
+          : 'まだ一度も文字にしていません。最初の1回で、本当に使えるかを確かめます'} · ${esc(m.note)}</p>
           <button class="text-btn" data-act="sp-wh-del">このモデルをスマホから消す</button>`;
+      } else if (v.whStatus?.full && v.whStatus.missing?.length) {
+        state = `<p class="msg err">ファイルが ${v.whStatus.missing.length}個 足りません（消えたか、ダウンロードが途中で止まりました）。オフラインでは使えません</p>
+          <button class="outline" data-act="sp-wh-dl">もう一度ダウンロード（${esc(m.approx)}・Wi-Fi で）</button>`;
       } else {
         state = `<button class="outline" data-act="sp-wh-dl">モデルをダウンロード（${esc(m.approx)}・Wi-Fi で）</button>
           <p class="small">初回だけです。${esc(m.note)}</p>`;
       }
+      const warn = v.whModel === 'small' && isMobile()
+        ? '<p class="small wh-warn">スマホでは small はとても遅く、メモリが足りずに止まることがあります。まず base で試してください</p>' : '';
       panel = `
           <div class="wh-panel">
             <div class="frow" role="group" aria-label="モデル">${chips}</div>
-            ${state}
+            ${warn}${state}
             ${v.whErr ? `<p class="msg err">${esc(v.whErr)}</p>` : ''}
           </div>`;
     }
     return `
           <label class="line">
-            <span class="t"><b>文字でも確かめる（Whisper）</b><span>録音をスマホの中で文字にして、答えの文と比べます。Google のサービスはいりません</span></span>
+            <span class="t"><b>文字でも確かめる（Whisper）</b><span>録音をスマホの中で文字にして、答えの文と比べます。録音は送信しません（Google のサービスもいりません）</span></span>
             <span class="switch"><input type="checkbox" data-act="sp-wh" ${v.wh ? 'checked' : ''}><span></span></span>
           </label>${panel}`;
   }
@@ -405,16 +429,17 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     v.whErr = null;
     renderSpeakKeep();
     try {
-      await whisper.load(key, p => {
+      const r = await whisper.load(key, p => {
         v.whDl = { loaded: p.loaded, total: p.total };
         const el = app.querySelector('.wh-prog');
         if (el && p.total) el.textContent = `ダウンロード中… ${Math.round((p.loaded / p.total) * 100)}%（${mb(p.loaded)} / ${mb(p.total)}）。この画面を離れても続きます`;
       });
-      v.whBytes = (await whisper.cachedBytes(key)) || v.whDl.total || 1;
+      if (r.files.length) { v.whFiles[WH_MODELS[key].id] = r.files; saveVoice(); }
     } catch (e) {
       v.whErr = `ダウンロードできませんでした（${e.message}）。電波のよいところで、もう一度どうぞ`;
     }
     v.whDl = null;
+    await refreshWhStatus();
     if (location.hash.startsWith('#/speak')) renderSpeakKeep();
   }
 
@@ -470,7 +495,10 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
   function startDrill(mode) {
     const ids = pick(DRILL_SIZE, SP.filter);
     if (!ids.length) return;
-    if (mode === 'look' && whReady()) whisper.load(SP.voice.whModel).catch(() => {});   // 先に読み込んでおく（最初の1問を速く）
+    if (mode === 'look' && whReady()) {   // 先に読み込んでおく（最初の1問を速く）。失敗したら、文字にするときにもう一度試し、そこで理由を出す
+      const id = WH_MODELS[SP.voice.whModel].id;   // 読み込み中にモデルを変えても、結果は読み込んだモデルの名前で残す
+      whisper.load(SP.voice.whModel).then(r => { if (r.files.length) { SP.voice.whFiles[id] = r.files; saveVoice(); } }).catch(() => {});
+    }
     SP.drill = { mode, ids, i: 0, phase: 'front', t0: 0, ms: 0, peeks: 0, peeking: false, results: [], startedAt: Date.now() };
     go('#/drill');
   }
@@ -648,6 +676,12 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     if (SP.drill === d && d.phase === 'hidden') renderDrill();
   }
 
+  // 1回の答え（attempt）ごとに、録音と文字にした結果を持つ。次の文に進んでも、結果はその答えの記録に入る。
+  let attemptSeq = 0;
+  let whTicker = 0;
+  const WH_RUNNING = ['queued', 'decoding', 'loading', 'transcribing'];
+  const whRunning = att => WH_RUNNING.includes(att?.wh);
+
   function finishVoice(d, res) {
     if (SP.drill !== d || d.phase !== 'hidden') { if (res?.url) URL.revokeObjectURL(res.url); return; }
     const c = chunkById(d.ids[d.i]);
@@ -655,11 +689,13 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     d.vstate = null;
     d.ms = Math.max(0, (res.endAt || performance.now()) - d.t0);
     d.onset = res.onsetAt ? Math.max(0, res.onsetAt - d.t0) : null;
-    d.rec = { kind: res.kind, url: res.url || null, text: res.text || '' };
-    if (res.kind === 'sr') d.rec.cmp = compareSay(c?.say || '', res.text || '');
-    if (res.kind === 'rec' && res.url && whReady()) {
-      if (res.onsetAt == null) d.rec.wh = 'none';
-      else runWhisper(d, d.i, res, c);
+    const att = { aid: ++attemptSeq, chunkId: c?.id, say: c?.say || '', kind: res.kind, url: res.url || null, blob: res.blob || null,
+      text: res.text || '', res, wh: null, whErr: null, t0: 0, timings: {}, entry: null };
+    d.rec = att;
+    if (res.kind === 'sr') att.cmp = compareSay(att.say, res.text || '');
+    if (res.kind === 'rec' && att.blob && whReady()) {
+      if (res.onsetAt == null) att.wh = 'none';
+      else runWhisper(att);
     }
     SP.voice.micErr = null;
     d.peeking = false;
@@ -668,34 +704,97 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     app.querySelector('.scroll')?.scrollTo(0, 0);
   }
 
-  async function runWhisper(d, idx, res, c) {
-    d.rec.wh = 'running';
-    const same = () => SP.drill === d && d.i === idx && d.phase === 'back' && d.rec;
-    try {
-      const from = Math.max(0, (res.onsetAt - res.startAt) / 1000 - 0.35);
-      const to = (res.endAt - res.startAt) / 1000 + 0.5;
-      const pcm = await decodeForWhisper(res.url, from, to);
-      const out = await whisper.transcribe(SP.voice.whModel, pcm);
-      if (!same()) return;
-      d.rec.text = out.text;
-      d.rec.whMs = out.ms;
-      d.rec.cmp = out.text ? compareSay(c?.say || '', out.text) : null;
-      d.rec.wh = 'done';
-    } catch (e) {
-      if (!same()) return;
-      d.rec.wh = 'error';
-      d.rec.whErr = e.message;
-    }
+  /** 表示中の答えなら描き直す（スクロール位置はそのまま） */
+  function paintAttempt(att) {
+    const d = SP.drill;
+    if (!d || d.rec !== att || d.phase !== 'back' || !location.hash.startsWith('#/drill')) return;
     const top = app.querySelector('.scroll')?.scrollTop || 0;
     renderDrill();
     app.querySelector('.scroll')?.scrollTo(0, top);
   }
 
+  /** 文字にしている間、経過秒数を1秒ごとに書きかえる。遅い目安を越えたら、やめる・base でやり直すを出す */
+  function tickWhisper() {
+    clearInterval(whTicker);
+    whTicker = setInterval(() => {
+      const att = SP.drill?.rec;
+      if (!whRunning(att)) { clearInterval(whTicker); whTicker = 0; return; }
+      const sec = Math.floor((performance.now() - att.t0) / 1000);
+      const el = app.querySelector('.wh-elapsed');
+      if (el) el.textContent = `${sec}秒`;
+      const slow = performance.now() - att.t0 > (WH_LIMITS.slowMs[att.model] || 20000);
+      if (slow && !att.slowShown) { att.slowShown = true; paintAttempt(att); }
+    }, 1000);
+  }
+
+  async function runWhisper(att, { whole = false, model = SP.voice.whModel } = {}) {
+    if (!att.blob && !att.url) return;
+    const res = att.res;
+    att.wh = 'decoding';
+    att.whErr = null;
+    att.whCode = '';
+    att.model = model;
+    att.t0 = performance.now();
+    att.slowShown = false;
+    att.timings = {};
+    att.whole = whole;
+    const run = att.run = (att.run || 0) + 1;   // やめた・やり直したあとに、古い結果で上書きしない
+    const abort = att.abort = new AbortController();   // この答えだけをやめるため（ほかの答えの処理は止めない）
+    paintAttempt(att);
+    tickWhisper();
+    try {
+      const d0 = performance.now();
+      const from = whole ? 0 : Math.max(0, (res.onsetAt - res.startAt) / 1000 - 0.35);
+      const to = whole ? Infinity : (res.endAt - res.startAt) / 1000 + 0.5;
+      const pcm = await decodeForWhisper(att.blob || att.url, from, to);
+      att.timings.decodeMs = performance.now() - d0;
+      if (att.run !== run || att.wh === 'cancelled') return;
+      const out = await whisper.transcribe(model, pcm, {
+        signal: abort.signal,
+        onStage: m => {
+          if (att.run !== run || att.wh === 'cancelled') return;
+          att.wh = m.stage === 'load' ? 'loading' : m.stage === 'infer' ? 'transcribing' : 'queued';
+          if (m.loadMs) att.timings.loadMs = m.loadMs;
+          paintAttempt(att);
+        },
+      });
+      if (att.run !== run || att.wh === 'cancelled') return;
+      att.text = out.text;
+      att.timings.inferMs = out.ms;
+      if (out.loadMs) att.timings.loadMs = out.loadMs;
+      att.cmp = out.text ? compareSay(att.say, out.text) : null;
+      att.wh = 'done';
+      SP.voice.whVerified[WH_MODELS[model].id] = Date.now();
+      saveVoice();
+      // もう次の文に進んでいたら、その答えの記録に一致率を書き足す（結果をなくさない）
+      if (att.entry && att.cmp) { att.entry.match = Math.round(att.cmp.score * 100) / 100; att.entry.late = true; saveLog().catch(() => {}); }
+    } catch (e) {
+      if (att.run !== run || att.wh === 'cancelled') return;
+      att.wh = 'error';
+      att.whCode = e.code || 'failed';
+      att.whErr = e.message;
+    } finally {
+      if (att.run === run) {
+        if (SP.drill?.rec !== att) { att.blob = null; att.res = null; }   // 画面から外れた答えの録音は、ここで手放す
+        paintAttempt(att);
+      }
+    }
+  }
+
+  const whSec = ms => `${Math.max(1, Math.round(ms / 1000))}秒`;
+  function whTimings(t) {
+    const parts = [];
+    if (t.loadMs) parts.push(`読み込み ${whSec(t.loadMs)}`);
+    if (t.inferMs) parts.push(`文字に ${whSec(t.inferMs)}`);
+    return parts.join(' · ');
+  }
+
   function textBlock(r) {
     if (!r.text) return '<p class="small">文字にできませんでした</p>';
-    return `<p class="heard"><span>聞き取り${r.whMs ? `（Whisper · ${secLabel(r.whMs)}）` : ''}</span>${esc(r.text)}</p>
+    const t = r.timings ? whTimings(r.timings) : '';
+    return `<p class="heard"><span>聞き取り${r.kind === 'rec' ? `（Whisper${t ? ` · ${t}` : ''}）` : ''}</span>${esc(r.text)}</p>
            <p class="diff" aria-label="答えの文で、聞き取れなかった文字に印">${r.cmp.marks.map(m => (m.ok ? esc(m.ch) : `<mark>${esc(m.ch)}</mark>`)).join('')}</p>
-           <p class="small">一致 ${Math.round(r.cmp.score * 100)}% · 印は聞き取りになかった文字。漢字とかなの違いでも印が付くので、目安です</p>`;
+           <p class="small">文字の一致（目安）${Math.round(r.cmp.score * 100)}%${r.cmp.extra > 0 ? ` · 余分な文字 ${r.cmp.extra}` : ''} · 印は聞き取りになかった文字。聞き取った文字の比較で、発音の良し悪しではありません。漢字とかなの違いでも印が付きます</p>`;
   }
 
   function voiceResult(d) {
@@ -708,9 +807,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     if (r.kind === 'sr') {
       body = textBlock(r);
     } else if (r.url) {
-      const wh = r.wh === 'running' ? '<p class="small wh-run">文字にしています…（スマホの中で。数秒かかります）</p>'
-        : r.wh === 'done' ? textBlock(r)
-        : r.wh === 'error' ? `<p class="msg err">文字にできませんでした（${esc(r.whErr || '')}）</p>` : '';
+      const wh = whStateHtml(r);
       body = `
         <div class="cmp-row">
           <button class="outline quiet" data-act="sp-mine">${ICON.speaker}自分の声</button>
@@ -718,6 +815,34 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
         </div>${wh}`;
     }
     return `<section class="voice-res">${times}${body}</section>`;
+  }
+
+  function whStateHtml(r) {
+    const smallToBase = r.model === 'small' && baseReady()
+      ? '<button class="outline quiet" data-act="sp-wh-retry" data-v="base">base でやり直す</button>' : '';
+    if (whRunning(r)) {
+      const label = { queued: '前の文を文字にし終わるのを待っています…', decoding: '録音を読み込んでいます…',
+        loading: 'モデルを読み込んでいます…（初めてや、しばらく使っていないときは時間がかかります）', transcribing: '文字にしています…（スマホの中で）' }[r.wh];
+      const sec = Math.floor((performance.now() - r.t0) / 1000);
+      const slow = r.slowShown ? '<p class="small">時間がかかっています。このまま待つか、やめられます。結果はあとからでも、この答えの記録に入ります</p>' : '';
+      return `<div class="wh-run" role="status"><p class="small">${label} <span class="wh-elapsed">${sec}秒</span></p>${slow}
+        <div class="cmp-row"><button class="outline quiet" data-act="sp-wh-cancel">やめる</button>${r.slowShown ? smallToBase : ''}</div></div>`;
+    }
+    if (r.wh === 'done') return textBlock(r);
+    if (r.wh === 'none') {
+      return `<div class="wh-none"><p class="small">声を見つけられませんでした（声が小さい・まわりがうるさい、など）。そのため文字にしていません</p>
+        <div class="cmp-row"><button class="outline quiet" data-act="sp-wh-anyway">それでも文字にする</button></div></div>`;
+    }
+    if (r.wh === 'cancelled') {
+      return `<div class="wh-none"><p class="small">文字にするのをやめました</p>
+        <div class="cmp-row"><button class="outline quiet" data-act="sp-wh-retry">もう一度文字にする</button>${smallToBase}</div></div>`;
+    }
+    if (r.wh === 'error') {
+      const why = { timeout: '時間がかかりすぎたので止めました', crashed: 'Whisper が止まりました（メモリが足りないのかもしれません）' }[r.whCode] || '文字にできませんでした';
+      return `<div class="wh-err"><p class="msg err">${why}（${esc(r.whErr || '')}）</p>
+        <div class="cmp-row"><button class="outline quiet" data-act="sp-wh-retry">もう一度</button>${smallToBase}</div></div>`;
+    }
+    return '';
   }
 
   let minePlayer = null;
@@ -738,6 +863,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
   function dropRec(d) {
     minePlayer?.pause();
     if (d?.rec?.url) URL.revokeObjectURL(d.rec.url);
+    if (d?.rec) { d.rec.url = null; if (!whRunning(d.rec)) { d.rec.blob = null; d.rec.res = null; } }   // 文字にしている途中なら、録音はその処理が終わるまで持っておく
     if (d) { d.rec = null; d.take?.cancel(); d.take = null; d.vstate = null; d.voiceMsg = null; d.heardLive = ''; d.onset = null; }
   }
 
@@ -747,7 +873,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     d.busy = true;
     const c = chunkById(d.ids[d.i]);
     const entry = { date: todayStr(), id: c.id, mode: d.mode, ms: Math.round(d.ms), peeks: d.peeks, ok, at: Date.now() };
-    if (d.rec) { entry.voice = d.rec.kind; if (d.onset != null) entry.onset = Math.round(d.onset); if (d.rec.cmp) entry.match = Math.round(d.rec.cmp.score * 100) / 100; }
+    if (d.rec) { entry.voice = d.rec.kind; if (d.onset != null) entry.onset = Math.round(d.onset); if (d.rec.cmp) entry.match = Math.round(d.rec.cmp.score * 100) / 100; d.rec.entry = entry; }
     SP.log.push(entry);
     d.results.push(entry);
     try { await saveLog(); } catch (e) { /* 保存に失敗しても練習は続ける */ }
@@ -885,6 +1011,9 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     },
     'sp-rate': el => rateDrill(el.dataset.ok === '1'),
     'sp-mine': () => { const u = SP.drill?.rec?.url; if (u) playMine(u); },
+    'sp-wh-cancel': () => { const att = SP.drill?.rec; if (!whRunning(att)) return; att.wh = 'cancelled'; att.abort?.abort(); paintAttempt(att); },
+    'sp-wh-retry': el => { const att = SP.drill?.rec; if (att && !whRunning(att)) runWhisper(att, { whole: !!att.whole, model: el.dataset.v || SP.voice.whModel }); },
+    'sp-wh-anyway': () => { const att = SP.drill?.rec; if (att && att.wh === 'none') runWhisper(att, { whole: true }); },
     'sp-cmp': async () => {
       const d = SP.drill;
       const c = chunkById(d?.ids[d.i]);
@@ -923,13 +1052,15 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
       if (SP.voice.whDl || SP.voice.whModel === el.dataset.v) return;
       SP.voice.whModel = el.dataset.v;
       SP.voice.whErr = null;
-      SP.voice.whBytes = await whisper.cachedBytes(SP.voice.whModel);
+      await refreshWhStatus();
       await saveVoice();
       renderSpeakKeep();
     },
     'sp-wh-del': async () => {
       await whisper.remove(SP.voice.whModel);
-      SP.voice.whBytes = 0;
+      delete SP.voice.whVerified[WH_MODELS[SP.voice.whModel].id];
+      saveVoice();
+      await refreshWhStatus();
       renderSpeakKeep();
     },
     'sp-edit': el => { SP.ui.open = SP.ui.open === el.dataset.id ? null : el.dataset.id; renderSpeak(); },
