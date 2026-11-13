@@ -27,6 +27,14 @@ try {
     const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block', colorScheme: scheme, deviceScaleFactor: shots ? 2 : 1 });
     const page = await ctx.newPage();
     const errors = []; page.on('pageerror', e => errors.push(e.message));
+    // a fake Japanese voice: record what the app reads aloud
+    await page.addInitScript(() => {
+      window.__said = [];
+      const voice = { lang: 'ja-JP', name: 'test' };
+      window.SpeechSynthesisUtterance = class { constructor(t) { this.text = t; } };
+      Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: { getVoices: () => [voice], cancel() {}, speak(u) { window.__said.push(u.text); }, addEventListener() {} } });
+    });
+    const lastSaid = () => page.evaluate(() => window.__said[window.__said.length - 1]);
     const shot = async name => { if (shots) await page.screenshot({ path: path.join(shots, `${scheme}-${name}.png`), fullPage: true }); };
 
     await page.goto(base + '/#/today');
@@ -52,6 +60,11 @@ try {
       await page.locator('[data-act="kt-pick"]').nth(q % 2 ? 0 : n - 1).click();
       await page.waitForSelector('.kt-fb');
       assert.equal(await page.locator('.kt-opt.right').count(), 1);
+      if (await page.locator('.kt-fb.ok').count()) {           // a right answer is read aloud
+        const right = await page.textContent('.kt-opt.right');
+        const label = await page.textContent('.kt-form span');
+        assert.equal(await lastSaid(), label === 'グループ' || label === 'い？な？' ? await page.textContent('.kt-word .w') : right);
+      }
       if (await page.locator('.kt-fb.ng').count()) {
         wrong++;
         assert.ok(await page.locator('.kt-rule').count(), 'rule path shown');
@@ -131,7 +144,12 @@ try {
     await page.click('[data-act="kt-tab"][data-v="rules"]');
     await page.waitForSelector('.kt-chant');
     assert.ok(await page.locator('.kt-mrow').count() >= 7);
+    assert.equal(await page.locator('.kt-tree:not(.focus) .kt-tstep').count(), 4, 'group decision picture');
+    assert.equal(await page.locator('.kt-dan .k').count(), 5, 'dan strip');
+    assert.equal(await page.locator('.kt-nd .f').count(), 3, 'んです formula');
     await shot('rules');
+    await page.locator('.kt-tree').scrollIntoViewIfNeeded();
+    await shot('tree');
 
     // stats are kept across a reload, and the Today row shows today's count
     await page.reload();
@@ -141,6 +159,37 @@ try {
     await page.goto(base + '/#/today');
     await page.waitForSelector('a[href="#/katsuyo"] .n');
     assert.match(await page.textContent('a[href="#/katsuyo"] .n'), /今日 1\d問/);
+
+    // グループ only: a wrong answer shows the decision picture with this word's path lit
+    await page.goto(base + '/#/katsuyo');
+    await page.waitForSelector('[data-act="kt-start"]');
+    for (const c of ['て形', 'た形', 'ない形', '受け身', '形容詞']) await page.click(`[data-act="kt-chip"][data-v="${c}"]`);
+    await page.click('[data-act="kt-chip"][data-v="グループ"]');
+    await page.click('[data-act="kt-start"]');
+    await page.waitForSelector('[data-act="kt-pick"]');
+    const gi = await rightIndex();
+    await page.locator('[data-act="kt-pick"]').nth(gi === 0 ? 1 : 0).click();
+    await page.waitForSelector('.kt-fb.ng .kt-tree.focus');
+    assert.equal(await page.locator('.kt-fb .kt-tleaf.on').count(), 1, 'one lit leaf');
+    await shot('tree-focus');
+    await page.click('[data-act="kt-quit"]');
+
+    // 可能形 and んです: right answers, read aloud
+    await page.click('[data-act="kt-chip"][data-v="グループ"]');
+    await page.click('[data-act="kt-chip"][data-v="可能形"]');
+    await page.click('[data-act="kt-chip"][data-v="んです"]');
+    await page.click('[data-act="kt-start"]');
+    for (let q = 1; q <= 3; q++) {
+      await page.waitForFunction(n => document.querySelector('.kt-top span')?.textContent.startsWith(`${n} /`) && document.querySelector('[data-act="kt-pick"]:not([disabled])'), q);
+      const label = await page.textContent('.kt-form span');
+      assert.ok(['可能形', '〜んです', '〜んです（過去）', '〜んです（形容詞）', '〜んです（形容詞・過去）'].includes(label), label);
+      await page.locator('[data-act="kt-pick"]').nth(await rightIndex()).click();
+      await page.waitForSelector('.kt-fb.ok');
+      assert.equal(await lastSaid(), await page.textContent('.kt-opt.right'));
+      if (q === 1) await shot('new-form');
+      await page.click('[data-act="kt-next"]');
+    }
+    await page.click('[data-act="kt-quit"]');
     assert.deepEqual(errors, []);
     await ctx.close();
   }

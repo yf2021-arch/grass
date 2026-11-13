@@ -120,16 +120,53 @@ assert.equal(conj(V('ある', '5'), 'te'), 'あって');
 assert.ok(makeOptions(V('ある', '5'), 'nai').options.includes('ない'));
 assert.ok(makeOptions(V('ある', '5'), 'nai').options.includes('あらない'));
 assert.equal(rulePath(V('ある', '5'), 'nai').rule, '例外：ある → ない');
-assert.deepEqual(formsFor(BASE_WORDS.find(b => b.w === 'ある')), ['group', 'te', 'ta', 'nai']);
+assert.deepEqual(formsFor(BASE_WORDS.find(b => b.w === 'ある')), ['group', 'te', 'ta', 'nai', 'nd', 'ndta']);   // 可能形・受け身・使役なし
 // 4. 正しい別の言い方は、間違いの選択肢に入れない（丁寧形・では〜）
+//    〜んです の形では、のです・んだ（同じ意味の別の言い方）を入れない
+//    可能形では、ら抜き（食べれる・これる：話し言葉で使う）を入れない
 const VALID_ALT = /(でした|です|ではない|ではなかった|ではありません|じゃありません|ます|ません)$/;
+const VALID_ALT_ND = /(のです|んだ|のだ|んでした|ではないんです)$/;
+const ND = new Set(['nd', 'ndta', 'and', 'andta']);
 for (const word of BASE_WORDS) for (const f of formsFor(word)) {
   if (f === 'group' || f === 'agroup') continue;
+  const ranuki = f === 'pot' ? new Set([word.w.slice(0, -1) + 'れる', word.w.replace(/(来る|くる)$/, 'これる')]) : new Set();
   for (let k = 0; k < 8; k++) {
     const { options, answer } = makeOptions(word, f);
-    options.forEach((o, i) => { if (i !== answer) assert.ok(!VALID_ALT.test(o), `${word.w} ${f}: valid alternative offered as wrong: ${o}`); });
+    options.forEach((o, i) => {
+      if (i === answer) return;
+      assert.ok(!(ND.has(f) ? VALID_ALT_ND : VALID_ALT).test(o), `${word.w} ${f}: valid alternative offered as wrong: ${o}`);
+      if (word.g === '1' || word.g === 'k') assert.ok(!ranuki.has(o), `${word.w} ${f}: ら抜き offered as wrong: ${o}`);
+    });
   }
 }
+// 可能形
+const forms2 = [
+  [V('書く', '5'), { pot: '書ける', nd: '書くんです', ndta: '書いたんです' }],
+  [V('行く', '5'), { pot: '行ける', nd: '行くんです', ndta: '行ったんです' }],
+  [V('言う', '5'), { pot: '言える' }],
+  [V('帰る', '5'), { pot: '帰れる' }],
+  [V('待つ', '5'), { pot: '待てる' }],
+  [V('話す', '5'), { pot: '話せる' }],
+  [V('読む', '5'), { pot: '読める', ndta: '読んだんです' }],
+  [V('食べる', '1'), { pot: '食べられる', nd: '食べるんです' }],
+  [V('見る', '1'), { pot: '見られる' }],
+  [V('確認する', 's'), { pot: '確認できる', ndta: '確認したんです' }],
+  [V('来る', 'k'), { pot: 'こられる', ndta: 'きたんです' }],
+  [V('持ってくる', 'k'), { pot: '持ってこられる' }],
+  [V('高い', 'i'), { and: '高いんです', andta: '高かったんです' }],
+  [V('いい', 'i'), { and: 'いいんです', andta: 'よかったんです' }],
+  [V('簡単', 'na'), { and: '簡単なんです', andta: '簡単だったんです' }],
+  [V('きれい', 'na'), { and: 'きれいなんです', andta: 'きれいだったんです' }],
+];
+for (const [word, forms] of forms2) for (const [f, want] of Object.entries(forms)) { assert.equal(conj(word, f), want, `${word.w} ${f}`); n++; }
+assert.equal(makeOptions(V('書く', '5'), 'pot').options.includes('書かれる'), true);     // 受け身と混ぜる間違い
+assert.ok(makeOptions(V('簡単', 'na'), 'and').options.includes('簡単んです'));          // な を落とす間違い
+assert.ok(makeOptions(V('きれい', 'na'), 'andta').options.includes('きれかったんです'));
+assert.ok(!formsFor(BASE_WORDS.find(b => b.w === '届く')).includes('pot'));           // 自然に起きること
+assert.ok(!formsFor(BASE_WORDS.find(b => b.w === '知る')).includes('pot'));
+assert.ok(formsFor(BASE_WORDS.find(b => b.w === '書く')).includes('pot'));
+assert.equal(rulePath(V('簡単', 'na'), 'and').rule, 'な形容詞 ＋ な ＋ んです');
+
 // 問う の て形
 assert.equal(conj(V('問う', '5'), 'te'), '問うて');
 assert.equal(conj(V('問う', '5'), 'ta'), '問うた');

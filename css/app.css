@@ -622,6 +622,8 @@ button.row-link { width: 100%; border: 0; text-align: left; font: inherit; color
 .katsuyo .fam-g5    { --f: var(--accent); --ft: var(--accent-tint); }
 .katsuyo .fam-iadj  { --f: var(--good);   --ft: var(--good-tint); }
 .katsuyo .fam-naadj { --f: var(--violet); --ft: var(--violet-tint); }
+.katsuyo .fam-erow  { --f: var(--violet); --ft: var(--violet-tint); }
+.katsuyo .fam-nd    { --f: var(--good);   --ft: var(--good-tint); }
 .katsuyo b[class^="fam-"] { color: var(--f); }
 .kt-hero, .kt-panel, .kt-end { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
 .kt-lead, .kt-meta, .kt-note { margin: 0; font-size: 13px; color: var(--muted); line-height: 1.6; }
@@ -701,9 +703,6 @@ button.row-link { width: 100%; border: 0; text-align: left; font: inherit; color
 .kt-table tbody th .g { display: block; font-size: 11px; color: var(--f); font-weight: 700; }
 .kt-table tbody th .s { font-weight: 500; }
 .kt-table u { text-decoration: none; color: var(--f); font-weight: 700; }
-.kt-flow { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; font-size: 14px; align-items: center; }
-.kt-flow .q { font-weight: 700; }
-.kt-flow .a { background: var(--ft); color: var(--f); border-radius: 10px; padding: 4px 9px; font-weight: 500; }
 .kt-map.kt-mini .kt-mrow .ex { display: none; }
 .kt-auto { display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: center; }
 .kt-auto .outline { position: relative; overflow: hidden; }
@@ -712,3 +711,46 @@ button.row-link { width: 100%; border: 0; text-align: left; font: inherit; color
 .kt-say p { margin: 0; font-size: 14px; color: var(--muted); }
 .kt-ask { margin: 0; font-size: 14px; font-weight: 700; }
 .kt-fb .grid2 .primary { height: 48px; font-size: 16px; border-radius: 14px; }
+
+/* 活用ドリル：判断の図・段の移動・んです・読み上げ（v1.17.0） */
+.kt-play { width: 36px; height: 36px; flex-shrink: 0; }
+.kt-kana { display: inline-flex; gap: 2px; margin: 2px 4px 2px 0; vertical-align: middle; }
+.kt-kana i { font-style: normal; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; min-width: 24px; height: 26px; padding: 0 3px; border-radius: 6px; background: var(--surface); border: 1px solid var(--border); font-size: 14px; font-weight: 500; color: var(--text); line-height: 1; }
+.kt-kana i.hl { background: var(--f, var(--accent)); border-color: var(--f, var(--accent)); color: var(--on-ink); height: 34px; font-weight: 700; }
+.kt-kana i.hl small { font-size: 9px; font-weight: 500; margin-top: 2px; opacity: .9; }
+.kt-tree { display: flex; flex-direction: column; font-size: 13px; }
+.kt-tstart { align-self: flex-start; width: 46%; text-align: center; font-size: 12px; color: var(--muted); padding-bottom: 4px; }
+.kt-tstep { display: grid; grid-template-columns: 46% 54px minmax(0, 1fr); align-items: center; }
+.kt-tq { border: 2px solid var(--text); border-radius: 12px; padding: 8px 6px; text-align: center; font-weight: 700; font-size: 14px; line-height: 1.35; background: var(--surface); }
+.kt-tarr { position: relative; height: 2px; background: var(--f); margin-right: 6px; }
+.kt-tarr::after { content: ''; position: absolute; right: -7px; top: -5px; border: 6px solid transparent; border-left-color: var(--f); }
+.kt-tarr span { position: absolute; bottom: 5px; left: 0; right: -4px; text-align: center; font-size: 10px; line-height: 1.15; color: var(--f); font-weight: 700; }
+.kt-tleaf { background: var(--ft); border-radius: 12px; padding: 6px 9px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.kt-tleaf b { color: var(--f); font-size: 15px; }
+.kt-tleaf .ex { font-size: 12px; color: var(--text-2); line-height: 1.5; }
+.kt-tdown { width: 46%; display: flex; justify-content: center; position: relative; padding: 4px 0 6px; min-height: 30px; }
+.kt-tdown::before { content: ''; position: absolute; left: 50%; top: 0; bottom: 6px; width: 2px; background: var(--muted); }
+.kt-tdown::after { content: ''; position: absolute; left: calc(50% - 5px); bottom: 0; border: 6px solid transparent; border-top-color: var(--muted); border-bottom: 0; }
+.kt-tdown span { position: relative; z-index: 1; background: var(--surface); padding: 0 4px; font-size: 11px; font-weight: 700; color: var(--text-2); align-self: center; text-align: center; line-height: 1.3; }
+.kt-fb.ok .kt-tdown span { background: var(--good-tint); }
+.kt-tend { width: 46%; align-items: center; text-align: center; padding: 8px 6px; }
+.kt-this { display: block; margin-top: 4px; font-size: 12px; font-weight: 700; color: var(--text); }
+.kt-tree.focus .off { opacity: .28; }
+.kt-tree.focus .kt-tleaf.on { box-shadow: inset 0 0 0 2px var(--f); }
+.kt-dan { display: grid; grid-template-columns: auto repeat(5, minmax(0, 1fr)); gap: 4px; align-items: stretch; }
+.kt-dan .stem { font-family: var(--serif); font-size: 26px; font-weight: 600; display: flex; align-items: center; padding-right: 2px; }
+.kt-dan .k { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 2px; border-radius: 10px; background: var(--chip); text-align: center; }
+.kt-dan .k b { font-size: 20px; line-height: 1.1; }
+.kt-dan .k small { font-size: 10px; color: var(--text-2); line-height: 1.25; }
+.kt-dan .k.fam-arow, .kt-dan .k.fam-erow { background: var(--ft); }
+.kt-dan .k.fam-arow b, .kt-dan .k.fam-erow b { color: var(--f); }
+.kt-dan .k.base { background: var(--surface); border: 1px dashed var(--muted); }
+.kt-dan.focus .k.off { opacity: .3; }
+.kt-dan.focus .k.on { box-shadow: inset 0 0 0 2px var(--f); }
+.kt-nd { display: flex; flex-direction: column; gap: 6px; }
+.kt-nd .f { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; background: var(--ft); border-radius: 12px; padding: 8px 10px; }
+.kt-nd .box { border: 2px solid var(--f); color: var(--f); border-radius: 8px; padding: 1px 8px; font-weight: 700; font-size: 13px; background: var(--surface); }
+.kt-nd .plus { color: var(--muted); }
+.kt-nd b { font-size: 16px; }
+.kt-nd b.na { color: var(--on-ink); background: var(--bad); border-radius: 6px; padding: 0 6px; }
+.kt-nd small { flex-basis: 100%; font-size: 12px; color: var(--text-2); }
