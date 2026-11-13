@@ -12,6 +12,7 @@ import { createKatsuyo } from './katsuyo.js';
 import { createWalk } from './walk.js';
 import { createRaw } from './raw.js';
 import { createCardAudio } from './cardaudio.js';
+import { parseFuri, furiHtml, furiToggle, initFuri } from './furi.js';
 
 const app = document.getElementById('app');
 
@@ -44,6 +45,10 @@ const val = (card, key) => String(card?.[key] ?? '').trim();
 const items = s => String(s ?? '').split('｜').map(x => x.trim()).filter(Boolean);
 const byId = id => S.cards.find(c => c.ID === id);
 const configured = () => !!(S.settings.apiUrl && S.settings.token);
+/** カードの「ふりがな」列（親友=しんゆう、…）。文はエスケープしてから、読みのある語にルビを付ける */
+const furiOf = card => parseFuri(card?.['ふりがな']);
+const fx = (card, text) => furiHtml(text, furiOf(card), card?.ID || '');
+const furiBtn = card => (furiOf(card).length ? furiToggle() : '');
 const WEEK = ['日', '月', '火', '水', '木', '金', '土'];
 
 /** カードのイメージ図：シートの「イメージ図」列（AC）が優先。空なら同梱の data/visuals.json */
@@ -378,8 +383,8 @@ function reviewHeader(card) {
   const isNew = ss.newIds.has(card.ID);
   const kind = val(card, '主分類');
   const right = ss.flipped
-    ? `<button class="used" data-act="used" aria-pressed="${ss.used}" aria-label="職場で使えた">${ICON.bag}<span>${ss.used ? '使えた' : ''}</span></button>`
-    : `<span style="display:flex;gap:4px;padding-right:8px">${isNew ? '<span class="pill new">新規</span>' : ''}${kind ? `<span class="pill">${esc(kind)}</span>` : ''}</span>`;
+    ? `<span class="furi-head">${furiBtn(card)}<button class="used" data-act="used" aria-pressed="${ss.used}" aria-label="職場で使えた">${ICON.bag}<span>${ss.used ? '使えた' : ''}</span></button></span>`
+    : `<span style="display:flex;gap:4px;padding-right:8px;align-items:center">${isNew ? '<span class="pill new">新規</span>' : ''}${kind ? `<span class="pill">${esc(kind)}</span>` : ''}${furiBtn(card)}</span>`;
   return `
     <header class="rv-head">
       <div class="rv-bar">
@@ -428,11 +433,11 @@ function renderReview() {
       <div class="hint pic">
         <span>${ICON.bulb}ヒント ${k + 1} · ${h.label}</span>
         ${visualHtml(h.pic, { alt: h.text })}
-        ${h.text ? `<p class="cap">${esc(h.text)}</p>` : ''}
+        ${h.text ? `<p class="cap">${fx(card, h.text)}</p>` : ''}
       </div>` : `
       <div class="hint">
         <span>${k === 0 && h.root ? ICON.bulb : ''}ヒント ${k + 1} · ${h.label}</span>
-        <p ${h.en ? 'lang="en"' : ''}>${esc(h.text)}</p>
+        <p ${h.en ? 'lang="en"' : ''}>${h.en ? esc(h.text) : fx(card, h.text)}</p>
       </div>`).join('');
     const nextHint = hints[ss.hint];
     const hintBtn = nextHint
@@ -443,8 +448,8 @@ function renderReview() {
       <div class="screen plain">
         ${reviewHeader(card)}
         <main class="scroll front">
-          <section class="sec"><h2>意味</h2><p class="meaning">${esc(val(card, '日本語の意味') || '（意味が未入力です）')}</p></section>
-          ${scene ? `<section class="sec"><h2>場面</h2><p class="scene">${esc(scene)}</p></section>` : ''}
+          <section class="sec"><h2>意味</h2><p class="meaning">${val(card, '日本語の意味') ? fx(card, val(card, '日本語の意味')) : '（意味が未入力です）'}</p></section>
+          ${scene ? `<section class="sec"><h2>場面</h2><p class="scene">${fx(card, scene)}</p></section>` : ''}
           <section class="hints" aria-label="ヒント">${shown}${hintBtn}</section>
         </main>
         <footer class="rv-foot">
@@ -495,16 +500,16 @@ function exampleHtml(card) {
   if (!ex) return '';
   const hit = srs.findHighlight(ex, val(card, '表現'));
   const text = hit
-    ? `${esc(ex.slice(0, hit[0]))}<mark>${esc(ex.slice(hit[0], hit[1]))}</mark>${esc(ex.slice(hit[1]))}`
-    : esc(ex);
+    ? `${fx(card, ex.slice(0, hit[0]))}<mark>${fx(card, ex.slice(hit[0], hit[1]))}</mark>${fx(card, ex.slice(hit[1]))}`
+    : fx(card, ex);
   const btn = playBtn(card.ID, 'ex');
   return btn ? `<div class="with-play"><p class="example">${text}</p>${btn}</div>` : `<p class="example">${text}</p>`;
 }
 
 /** よく合う組み合わせ：音声があれば1つずつボタン付き、なければ「／」でつなぐ */
 function fitHtml(card, fit) {
-  if (!fit.some((_, i) => cardAudio.has(card.ID, `c${i + 1}`))) return esc(fit.join('／'));
-  return `<span class="fit-items">${fit.map((f, i) => `<span class="fit-item">${esc(f)}${playBtn(card.ID, `c${i + 1}`, 'sm')}</span>`).join('')}</span>`;
+  if (!fit.some((_, i) => cardAudio.has(card.ID, `c${i + 1}`))) return fit.map(f => fx(card, f)).join('／');
+  return `<span class="fit-items">${fit.map((f, i) => `<span class="fit-item">${fx(card, f)}${playBtn(card.ID, `c${i + 1}`, 'sm')}</span>`).join('')}</span>`;
 }
 
 function panel(key, title, body, open, warn = false) {
@@ -515,13 +520,14 @@ function panel(key, title, body, open, warn = false) {
     </section>`;
 }
 
-function misuseLines(list, id = '') {
+function misuseLines(list, card) {
+  const id = card?.ID || '';
   return list.map((raw, i) => {
     const t = raw.replace(/^[✗✕×]\s*/, '');
     const [wrong, ...rest] = t.split('→');
     const right = rest.join('→').trim();
     // 音声は正しい言い方にだけ付ける（✕ の間違いは鳴らさない）
-    return `<p><span class="ng-c">✕</span> ${esc(wrong.trim())}</p>${right ? `<p class="ok-line"><span class="ok-c">→</span> ${esc(right)}${id ? playBtn(id, `ok${i + 1}`, 'sm') : ''}</p>` : ''}`;
+    return `<p><span class="ng-c">✕</span> ${fx(card, wrong.trim())}</p>${right ? `<p class="ok-line"><span class="ok-c">→</span> ${fx(card, right)}${id ? playBtn(id, `ok${i + 1}`, 'sm') : ''}</p>` : ''}`;
   }).join('');
 }
 
@@ -540,16 +546,16 @@ function backBody(card, panels) {
       <section class="panel fit">
         <h3>合う使い方・合わない使い方</h3>
         ${fit.length ? `<p class="fit-line"><b class="ok-c">合う</b><span>${fitHtml(card, fit)}</span></p>` : ''}
-        <div class="body" style="padding:0">${misuseLines(ng, card.ID)}</div>
+        <div class="body" style="padding:0">${misuseLines(ng, card)}</div>
       </section>`);
-    if (memo) out.push(panel('memo', '発見メモ', `<p>${esc(memo)}</p>`, panels.memo));
+    if (memo) out.push(panel('memo', '発見メモ', `<p>${fx(card, memo)}</p>`, panels.memo));
   } else if (memo) {
-    out.push(panel('misuse', '誤用・発見', `<p>${esc(memo)}</p>`, panels.misuse, true));
+    out.push(panel('misuse', '誤用・発見', `<p>${fx(card, memo)}</p>`, panels.misuse, true));
   }
   const pic = visualOf(card);
   if (roots.length || pic) {
     out.push(panel('roots', pic ? '語源・根源・イメージ図' : '語源・根源',
-      (pic ? visualHtml(pic, { alt: val(card, '根源イメージ') }) : '') + roots.map(r => `<p>${esc(r)}</p>`).join(''), panels.roots));
+      (pic ? visualHtml(pic, { alt: val(card, '根源イメージ') }) : '') + roots.map(r => `<p>${fx(card, r)}</p>`).join(''), panels.roots));
   }
   if (syn.length || (fit.length && !ng.length) || en) {
     const parts = [];
@@ -557,7 +563,7 @@ function backBody(card, panels) {
     if (syn.length) {
       parts.push(`<div class="syn">${syn.map(x => {
         const k = x.search(/[：:]/);
-        return k > 0 ? `<div><b>${esc(x.slice(0, k))}</b><span>${esc(x.slice(k + 1).trim())}</span></div>` : `<div><span>${esc(x)}</span></div>`;
+        return k > 0 ? `<div><b>${fx(card, x.slice(0, k))}</b><span>${fx(card, x.slice(k + 1).trim())}</span></div>` : `<div><span>${fx(card, x)}</span></div>`;
       }).join('')}</div>`);
     }
     if (en) parts.push(`<p class="note" lang="en">English: ${esc(en)}</p>`);
@@ -713,8 +719,8 @@ function renderInbox() {
           <h2>${esc(val(card, '表現'))}</h2>
           <p class="reading">${esc(val(card, '読み'))}</p>
         </div>
-        <p class="m">${esc(val(card, '日本語の意味'))}</p>
-        ${ex ? `<p class="ex">${esc(ex)}</p>` : ''}
+        <p class="m">${fx(card, val(card, '日本語の意味'))}</p>
+        ${ex ? `<p class="ex">${fx(card, ex)}</p>` : ''}
         <div class="meta"><span>出典：${esc(val(card, '出典') || '—')}</span>${added ? `<span>追加 ${added}</span>` : ''}</div>
       </article>
       <p class="hint-line">${isHeld ? '保留のカードは、自動では学習に入りません' : `判断しなくても、毎日${limit}枚が自動で「学ぶ」に入ります`}</p>`;
@@ -845,12 +851,12 @@ function renderDetail(id) {
     <div class="screen plain">
       <header class="detail-head">
         <button class="close" data-act="back" aria-label="戻る">${ICON.back}</button>
-        <span class="st s-${esc(st)}">${esc(st || '—')} · ${srs.nextLabel(card)}</span>
+        <span class="furi-head"><span class="st s-${esc(st)}">${esc(st || '—')} · ${srs.nextLabel(card)}</span>${furiBtn(card)}</span>
       </header>
       <main class="scroll back">
         ${backBody(card, S.ui.detailPanels[id])}
-        <section class="sec"><h2>意味</h2><p class="scene">${esc(val(card, '日本語の意味'))}</p></section>
-        ${val(card, '使用場面・語感') ? `<section class="sec"><h2>場面</h2><p class="scene">${esc(val(card, '使用場面・語感'))}</p></section>` : ''}
+        <section class="sec"><h2>意味</h2><p class="scene">${fx(card, val(card, '日本語の意味'))}</p></section>
+        ${val(card, '使用場面・語感') ? `<section class="sec"><h2>場面</h2><p class="scene">${fx(card, val(card, '使用場面・語感'))}</p></section>` : ''}
       </main>
     </div>`;
 }
@@ -975,7 +981,7 @@ function renderSettings() {
             <button class="outline quiet" data-act="${S.settings.demo ? 'demo-off' : 'demo-on'}">${S.settings.demo ? 'デモを終了' : 'デモデータで試す'}</button>
           </div>
         </section>
-        <p class="small" style="text-align:center">Grass v1.17.0</p>
+        <p class="small" style="text-align:center">Grass v1.18.0</p>
       </main>
       ${nav('settings')}
     </div>`;
@@ -1127,6 +1133,8 @@ Object.assign(actions, speak.actions, bjt.actions, katsuyo.actions, walk.actions
     render();
   },
 });
+
+initFuri();
 
 app.addEventListener('click', e => {
   const fam = e.target.closest('a.fam-link');
