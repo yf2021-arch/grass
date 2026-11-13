@@ -31,6 +31,11 @@ PC に残る .pack が、そのままバックアップになります。
   直した文だけ作り直します。職場の言葉が入るので、このファイルも公開しないでください
   表現（w）の音声は、まず漢字のまま作り、エンジンの読みが「読み」列と違うときだけ、かなで作り直します
 
+ふりがな列（v1.18.0・カードの「ふりがな」／話すの自分の文の「ふりがな」）
+  親友=しんゆう、空=から のように書いてあると、エンジンがその語を読み間違えた文だけ、その語をかなにして作ります
+  （入力値 を にゅうりょくあたい、空 を そら と読む、など）。合っている文は漢字のまま＝前の音声をそのまま使います。
+  調べた結果は grass-card-audio/furi-check.json に覚えるので、2回目からはエンジンに聞き直しません
+
 カードの読み込み元（どちらか）
   - シートの API（標準）：URL と TOKEN を聞かれるので、10_API設定 から貼る。
     毎回聞かれたくないときは、環境変数 GRASS_API_URL と GRASS_TOKEN に入れておく（ファイルには保存しません）
@@ -73,6 +78,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from make_audio import LEAD_SILENCE, LEAD_TAG, request, speakers, style_name, to_mp3  # noqa: E402
+from furi import Checker  # noqa: E402
 
 PACK_MAGIC = b'GRASSPK1'
 SEP = '｜'
@@ -320,12 +326,16 @@ def main():
     except (OSError, ValueError):
         pass
     files, made, skipped, shared, switched_words = {}, 0, 0, 0, []
-    jobs = [(val(c, 'ID'), k, t, y) for c in cards for k, t, y in parts(c)]
-    jobs += [(c['id'], k, t, y) for c in chunks for k, t, y in chunk_parts(c)]
-    for n, (cid, key, text, yomi) in enumerate(jobs, 1):
+    jobs = [(val(c, 'ID'), k, t, y, val(c, 'ふりがな')) for c in cards for k, t, y in parts(c)]
+    jobs += [(c['id'], k, t, y, str(c.get('furi') or '')) for c in chunks for k, t, y in chunk_parts(c)]
+    checker = Checker(lambda t: request(args.engine, '/audio_query', params={'text': t, 'speaker': args.speaker}),
+                      out / 'furi-check.json')
+    for n, (cid, key, text, yomi, furi) in enumerate(jobs, 1):
         spoken = apply_readings(text, readings)
         if spoken != text:
             yomi = ''                     # 読み替えを書いた語は、そちらを優先する
+        if key != 'w' and furi:
+            spoken = checker.spoken(spoken, furi, args.speaker)   # エンジンが読み間違えた語だけ、かなにする
         src = f'{spoken}|{args.speaker}|{args.speed}|{LEAD_TAG}'
         if key == 'w':
             src += f'|{yomi}|w2'              # 表現は「漢字で作り、読みが違えばかな」に変えたので作り直す
@@ -415,6 +425,9 @@ def main():
         print(f'漢字の読みが「読み」列と違ったので、かなで作った語：{"、".join(switched_words[:20])}{" ほか" if len(switched_words) > 20 else ""}')
     if readings:
         print(f'読み替え：{len(readings)}件を使いました（{out / READING_FILE}）')
+    checker.save()
+    if checker.report():
+        print(checker.report())
     if prev:
         new_ids = sorted({r.rsplit(':', 1)[0] for r in added})
         print(f'前回からの変化：追加 {len(added)}・変更 {len(changed)}・削除 {len(gone)}' + (f'（新しい ID：{", ".join(new_ids[:15])}{" ほか" if len(new_ids) > 15 else ""}）' if new_ids else ''))

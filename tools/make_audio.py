@@ -7,6 +7,7 @@
   3. 声を選んで音声を作る：python tools/make_audio.py --speaker 番号
 
   - data/chunks.json の「答え」と「言い換え3つ」を、1文ずつ音声にします（30個 × 4 = 120ファイル）
+    チャンクの furi（親友=しんゆう、…）の語をエンジンが読み間違えた文だけ、その語をかなにして作ります
   - data/quiz/bjt.json の聴解の会話も、1問1ファイルにします（会話 → 少し間 → 質問）。
     選択肢も「1番。〜」と読んだファイルを別に作ります（本番の聴解は選択肢も音声だけなので）。
     男の声は --speaker2 で選べます（なければ同じ声で読みます）
@@ -79,6 +80,10 @@ def style_name(sp_list, style_id):
             if st.get('id') == style_id:
                 return sp.get('name', ''), st.get('name', ''), sp
     return None, None, None
+
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from furi import Checker  # noqa: E402
 
 
 def texts(chunk):
@@ -196,6 +201,8 @@ def main():
     files = {}
     made = skipped = 0
     jobs = [(c['id'], k, t, None) for c in chunks for k, t in texts(c)]
+    furi = {c['id']: c.get('furi') or '' for c in chunks}     # ふりがな：エンジンが読み間違えた語だけ、かなで読ませる
+    checker = Checker(lambda t: request(args.engine, '/audio_query', params={'text': t, 'speaker': args.speaker}))
     for q in quiz:                     # 聴解：会話の各発言（話し手の声で）＋ 質問
         lines = [(voice.get(l.get('sp'), args.speaker), l['t'], LINE_GAP if i else 0) for i, l in enumerate(q['script'])]
         lines.append((args.speaker, q['question'], QUESTION_GAP))
@@ -213,6 +220,8 @@ def main():
             if ref in old:
                 files[ref] = old[ref]          # 対象外は前の結果をそのまま残す
             continue
+        if lines is None and furi.get(cid):
+            text = checker.spoken(text, furi[cid], args.speaker)
         sig = text if lines is None else '|'.join(f'{v}:{t}' for v, t, _ in lines) + {'q': f'|gap{LINE_GAP},{QUESTION_GAP}', 'o': f'|gap{OPTION_GAP}'}.get(key, '')
         tag = hashlib.sha1(f'{sig}|{args.speaker}|{args.speed}|{LEAD_TAG}'.encode('utf-8')).hexdigest()[:8]
         fname = f'{cid}-{key}.{tag}.{ext}'
@@ -252,6 +261,8 @@ def main():
     total = sum((OUT / f).stat().st_size for f in set(files.values()) if (OUT / f).exists())
     print(f'\n完了：作成 {made}・そのまま {skipped}・削除 {removed}。'
           f'{len(files)}ファイル、合計 {total / 1024 / 1024:.1f}MB（{OUT}）')
+    if checker.report():
+        print(checker.report())
     print('声のモデルのライセンスを確認し、必要なら README のクレジットを直してください。')
 
 

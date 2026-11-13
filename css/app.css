@@ -754,3 +754,15 @@ button.row-link { width: 100%; border: 0; text-align: left; font: inherit; color
 .kt-nd b { font-size: 16px; }
 .kt-nd b.na { color: var(--on-ink); background: var(--bad); border-radius: 6px; padding: 0 6px; }
 .kt-nd small { flex-basis: 100%; font-size: 12px; color: var(--text-2); }
+
+/* ふりがな（v1.18.0・js/furi.js）：読みはふだん隠し、語をタップするとその語だけ出る。「ふ」ボタンで全部出す。
+   隠している間は rt を消す（幅を取ると、読みの長い語の字の間が空いて見えるため） */
+.fw { cursor: pointer; border-radius: 3px; text-decoration: underline dotted var(--dash); text-decoration-thickness: 1px; text-underline-offset: 0.3em; -webkit-tap-highlight-color: transparent; }
+.fw:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.fw rt { display: none; font-size: 0.5em; font-weight: 400; font-family: var(--sans); color: var(--accent-strong); letter-spacing: 0; user-select: none; }
+.fw.on rt, .furi-all .fw rt { display: ruby-text; }
+.fw.on { background: var(--accent-tint); }
+.furi-all .fw { text-decoration: none; cursor: default; }
+.furi-btn { width: 36px; height: 36px; flex-shrink: 0; border-radius: 18px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); font-family: var(--serif); font-size: 15px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; padding: 0; }
+.furi-btn[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-tint); color: var(--accent-strong); }
+.furi-head { display: flex; align-items: center; gap: 6px; }

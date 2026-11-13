@@ -25,6 +25,7 @@
 //     モデルは「話す」画面からダウンロード（初回だけ）。音声認識（Google）より優先する。
 
 import { createVoice, compareSay, srSupported, micSupported } from './voice.js';
+import { parseFuri, furiHtml, furiToggle } from './furi.js';
 import { createWhisper, decodeForWhisper, WH_MODELS, WH_LIMITS, appModels, DEFAULT_WH_MODEL } from './whisper.js';
 
 const DRILL_SIZE = 5;
@@ -512,6 +513,9 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     go('#/drill');
   }
 
+  /** チャンクの furi（親友=しんゆう、…）で、読みのある語にルビを付ける（エスケープ済みの HTML） */
+  const fx = (c, text) => furiHtml(text, parseFuri(c?.furi), c?.id || '');
+
   function drillHead() {
     const d = SP.drill;
     const pct = Math.round((d.i / d.ids.length) * 1000) / 10;
@@ -521,7 +525,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
         <div class="rv-bar">
           <button class="close" data-act="sp-quit" aria-label="練習をやめる">${ICON.close}</button>
           <span class="counter">${d.i + 1} / ${d.ids.length}</span>
-          <span style="display:flex;gap:4px;padding-right:8px"><span class="pill">${esc(c?.fn || '')}</span>${c?.mine ? `<span class="pill">${MINE}</span>` : ''}</span>
+          <span style="display:flex;gap:4px;padding-right:8px;align-items:center"><span class="pill">${esc(c?.fn || '')}</span>${c?.mine ? `<span class="pill">${MINE}</span>` : ''}${parseFuri(c?.furi).length ? furiToggle() : ''}</span>
         </div>
         <div class="progress" aria-hidden="true"><div style="width:${pct}%"></div></div>
       </header>`;
@@ -537,9 +541,9 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     if (d.phase === 'front') {
       if (!d.t0) d.t0 = performance.now();
       const body = d.mode === 'scene'
-        ? `<section class="sec"><h2>場面</h2><p class="meaning">${esc(c.scene)}</p></section>`
-        : `<section class="sec"><h2>読んで覚える</h2><p class="look-text">${esc(c.say)}</p></section>
-           <section class="sec"><h2>場面</h2><p class="scene">${esc(c.scene)}</p></section>`;
+        ? `<section class="sec"><h2>場面</h2><p class="meaning">${fx(c, c.scene)}</p></section>`
+        : `<section class="sec"><h2>読んで覚える</h2><p class="look-text">${fx(c, c.say)}</p></section>
+           <section class="sec"><h2>場面</h2><p class="scene">${fx(c, c.scene)}</p></section>`;
       const foot = d.mode === 'scene'
         ? `<p>声に出して日本語で言ってから、答えを見る</p><button class="reveal" data-act="sp-reveal">答えを見る</button>`
         : `<p>覚えたら、画面から目を離す</p><button class="reveal" data-act="sp-lookup">顔を上げる</button>`;
@@ -558,7 +562,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
           ${drillHead()}
           <main class="scroll front lookup">
             <div class="lookup-box" aria-live="polite">
-              ${d.peeking ? `<p class="look-text">${esc(c.say)}</p>` : `<p class="lookup-say">顔を上げて、<br>だれかに話すつもりで言う</p>`}
+              ${d.peeking ? `<p class="look-text">${fx(c, c.say)}</p>` : `<p class="lookup-say">顔を上げて、<br>だれかに話すつもりで言う</p>`}
             </div>
             ${micRow(d)}
             <p class="small" style="text-align:center">言えなかったら、一度だけ見てもう一度${d.peeks ? `（見た回数 ${d.peeks}）` : ''}</p>
@@ -574,19 +578,19 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     // 答え
     const playable = key => hasClip(c.id, key) || 'speechSynthesis' in window;
     const vars = (c.v || []).map((x, k) => `
-      <li><div class="v-row"><p>${esc(x.t)}</p>${playable(`v${k + 1}`) ? `<button class="mini quiet play" data-act="sp-tts" data-k="v${k + 1}" aria-label="読み上げる">${ICON.speaker}</button>` : ''}</div><small>${esc(x.n)}</small></li>`).join('');
+      <li><div class="v-row"><p>${fx(c, x.t)}</p>${playable(`v${k + 1}`) ? `<button class="mini quiet play" data-act="sp-tts" data-k="v${k + 1}" aria-label="読み上げる">${ICON.speaker}</button>` : ''}</div><small>${esc(x.n)}</small></li>`).join('');
     app.innerHTML = `
       <div class="screen plain">
         ${drillHead()}
         <main class="scroll back drill-back">
           <div class="say-row">
-            <h1 class="say">${esc(c.say)}</h1>
+            <h1 class="say">${fx(c, c.say)}</h1>
             ${playable('say') ? `<button class="icon-btn" data-act="sp-tts" data-k="say" aria-label="読み上げる">${ICON.speaker}</button>` : ''}
           </div>
           ${SP.ui.ttsMsg ? `<p class="small">${esc(SP.ui.ttsMsg)}</p>` : ''}
           ${d.rec ? voiceResult(d) : `<p class="timer">${d.mode === 'scene' ? '答えを見るまで' : '顔を上げてから'} <b>${secLabel(d.ms)}</b>${d.mode === 'look' && d.peeks ? ` · 見た回数 ${d.peeks}` : ''}</p>`}
-          ${c.pattern ? `<section class="panel fit"><h3>型</h3><p class="pattern">${esc(c.pattern)}</p></section>` : ''}
-          ${c.note ? `<p class="scene" style="font-size:15px">${esc(c.note)}</p>` : ''}
+          ${c.pattern ? `<section class="panel fit"><h3>型</h3><p class="pattern">${fx(c, c.pattern)}</p></section>` : ''}
+          ${c.note ? `<p class="scene" style="font-size:15px">${fx(c, c.note)}</p>` : ''}
           ${vars ? `<section class="sec"><h2>1か所変えて、言い直す</h2><ul class="variants">${vars}</ul></section>` : ''}
         </main>
         <footer class="rate-foot">
