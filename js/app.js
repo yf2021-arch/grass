@@ -207,7 +207,7 @@ const cardAudio = createCardAudio({ store });
 const speak = createSpeak({ app, esc, go, nav, store, todayStr: srs.todayStr, addDays: srs.addDays, ICON, cardAudio });
 const raw = createRaw({ app, esc, nav, store, go, startChunks: ids => speak.startWith(ids), chunkSay: id => speak.chunkSay(id) });
 const bjt = createBjt({ app, esc, go, nav, store, todayStr: srs.todayStr, ICON, audio: { has: speak.hasClip, play: speak.playClip, stop: speak.stopClip }, extraBackup: [raw] });
-const katsuyo = createKatsuyo({ app, esc, nav, store, todayStr: srs.todayStr, ICON, cards: () => S.cards });
+const katsuyo = createKatsuyo({ app, esc, nav, store, todayStr: srs.todayStr, ICON, cards: () => S.cards, say: speak.say, canSay: speak.canSay });
 const walk = createWalk({
   app, esc, nav, store, todayStr: srs.todayStr, ICON, cardAudio,
   cards: () => S.cards, isDue: c => srs.isDue(c), clipUrl: speak.clipUrl, chunks: speak.chunks, quizItems: bjt.walkItems,
@@ -323,7 +323,7 @@ function renderToday() {
             <span class="n">${walk.todayMin() ? `今日 ${walk.todayMin()}分` : ''} ${ICON.chevron}</span>
           </a>
           <a class="row-link" href="#/katsuyo">
-            <span class="t"><b>活用ドリル</b><span>て形・た形・ない形・形容詞・受け身・使役を10問ずつ。色で覚えるルール図つき</span></span>
+            <span class="t"><b>活用ドリル</b><span>て・た・ない形・形容詞・受け身・使役・可能形・〜んです を10問ずつ。図で覚えるルールつき</span></span>
             <span class="n">${katsuyo.todayCount() ? `今日 ${katsuyo.todayCount()}問` : ''} ${ICON.chevron}</span>
           </a>
           <a class="row-link" href="#/bjt">
@@ -975,7 +975,7 @@ function renderSettings() {
             <button class="outline quiet" data-act="${S.settings.demo ? 'demo-off' : 'demo-on'}">${S.settings.demo ? 'デモを終了' : 'デモデータで試す'}</button>
           </div>
         </section>
-        <p class="small" style="text-align:center">Grass v1.16.1</p>
+        <p class="small" style="text-align:center">Grass v1.17.0</p>
       </main>
       ${nav('settings')}
     </div>`;

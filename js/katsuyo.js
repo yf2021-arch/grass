@@ -35,10 +35,15 @@ export const FORMS = {
   apast:  { label: '過去', en: 'was', chip: '形容詞' },
   apneg:  { label: '過去の否定', en: 'was not', chip: '形容詞' },
   ate:    { label: 'て形（形容詞）', en: '-te (…and)', chip: '形容詞' },
+  pot:    { label: '可能形', en: 'can do', chip: '可能形' },
+  nd:     { label: '〜んです', en: 'explaining (it’s that…)', chip: 'んです' },
+  ndta:   { label: '〜んです（過去）', en: 'explaining, past', chip: 'んです' },
+  and:    { label: '〜んです（形容詞）', en: 'explaining', chip: 'んです' },
+  andta:  { label: '〜んです（形容詞・過去）', en: 'explaining, past', chip: 'んです' },
 };
-export const CHIPS = ['グループ', 'て形', 'た形', 'ない形', '形容詞', '受け身', '使役'];
-const VERB_FORMS = ['group', 'te', 'ta', 'nai', 'pass', 'caus'];
-const ADJ_FORMS = ['agroup', 'aneg', 'apast', 'apneg', 'ate'];
+export const CHIPS = ['グループ', 'て形', 'た形', 'ない形', '形容詞', '受け身', '使役', '可能形', 'んです'];
+const VERB_FORMS = ['group', 'te', 'ta', 'nai', 'pass', 'caus', 'pot', 'nd', 'ndta'];
+const ADJ_FORMS = ['agroup', 'aneg', 'apast', 'apneg', 'ate', 'and', 'andta'];
 const GROUP_OPTS = ['五段（う動詞）', '一段（る動詞）', '不規則（する・来る）'];
 const AGROUP_OPTS = ['い形容詞', 'な形容詞'];
 
@@ -56,6 +61,8 @@ export const isAru = w => ARU.test(w);
 const aruNai = w => w.replace(/(ある|有る|在る)$/, 'ない');
 // 問う・請う・乞う の て形は「うて」（問うて・問うた）
 const isTou = w => /(問う|請う|乞う)$/.test(w);
+/** ます形の語幹（書き・食べ・確認し・き） */
+const masuStem = ({ w, g }) => (g === '5' ? w.slice(0, -1) + (ROWS[w.slice(-1)] || ROWS.る)[1] : g === '1' ? w.slice(0, -1) : g === 's' ? suruStem(w) + 'し' : kuruStem(w) + 'き');
 
 /** 正しい形。word = { w, g }。g は 5 | 1 | s | k | i | na */
 export function conj(word, form) {
@@ -81,6 +88,11 @@ export function conj(word, form) {
     case 'apast': return g === 'i' ? iStem(w) + 'かった' : w + 'だった';
     case 'apneg': return g === 'i' ? iStem(w) + 'くなかった' : w + 'じゃなかった';
     case 'ate': return g === 'i' ? iStem(w) + 'くて' : w + 'で';
+    case 'pot': return g === '5' ? s5 + ROWS[last][3] + 'る' : g === '1' ? s5 + 'られる' : g === 's' ? suruStem(w) + 'できる' : kuruStem(w) + 'こられる';
+    case 'nd': return w + 'んです';
+    case 'ndta': return conj(word, 'ta') + 'んです';
+    case 'and': return g === 'i' ? w + 'んです' : w + 'なんです';
+    case 'andta': return g === 'i' ? conj(word, 'apast') + 'んです' : w + 'だったんです';
   }
   return '';
 }
@@ -119,6 +131,29 @@ function wrongForms(word, form) {
     }
     const pri = g === '1' ? [s5 + 'せる', s5 + 'られる'] : [s5 + a + 'させる', s5 + a + 'れる'];
     return [...pri, ...ua, s5 + a + 'せる', s5 + 'させる', s5 + i + 'せる', s5 + 'せる', s5 + a + 'せられる'];
+  }
+  if (form === 'pot') {
+    // ら抜き（食べれる・これる）は話し言葉で使われるので、間違いの選択肢には入れない
+    if (g === 's') { const st = suruStem(w); return [st + 'される', st + 'させる', st + 'しれる', st + 'すれる', st + 'できれる']; }
+    if (g === 'k') { const st = kuruStem(w); return [st + 'こさせる', st + 'きられる', st + 'くられる', st + 'こされる']; }
+    if (g === '1') return [s5 + 'させる', s5 + 'られれる', s5 + 'らせる', s5 + 'りれる'];
+    return [s5 + a + 'れる', s5 + e + 'られる', s5 + a + 'られる', s5 + i + 'れる', s5 + 'られる', s5 + e + 'れる'];   // 書かれる（受け身と混ぜる）・書けられる
+  }
+  if (form === 'nd' || form === 'ndta') {
+    const ms = masuStem(word);
+    if (form === 'nd') return [w + 'なんです', w + 'だんです', ms + 'んです', w + 'んだです'];
+    const ta = conj(word, 'ta');
+    return [ta + 'なんです', ta + 'だんです', w + 'たんです', ms + 'たんです', ta + 'んだです'];
+  }
+  if (form === 'and' || form === 'andta') {
+    const st = w.slice(0, -1);
+    const wi = g === 'na' && w.endsWith('い') ? w.slice(0, -1) : null;
+    if (g === 'i') return form === 'and'
+      ? [w + 'なんです', w + 'だんです', st + 'くんです', w + 'のんです']
+      : [w + 'だったんです', conj(word, 'apast') + 'なんです', st + 'くかったんです', w + 'かったんです'];
+    return form === 'and'
+      ? [w + 'んです', w + 'だんです', w + 'のんです', w + 'ななんです']                     // 簡単んです（な を落とす）
+      : [...(wi ? [wi + 'かったんです'] : []), w + 'なだったんです', w + 'かったんです', w + 'だったなんです', w + 'なかったんです'];
   }
   if (g === 'i') {
     const st = w.slice(0, -1);          // いい → い（いくない・いかった：いちばん多い間違い）。普通の い形容詞では正しい形と同じなので除かれる
@@ -188,6 +223,18 @@ export function rulePath(word, form) {
     if (g === 's') return { fam: 'irr', rule: `する → ${end[2]}`, trap: form === 'caus' ? '〜させていただきます ＝「〜してもいいですか」の丁寧な言い方' : trap };
     return { fam: 'irr', rule: `来る → ${end[3]}`, trap };
   }
+  if (form === 'pot') {
+    if (g === '5') return { fam: 'erow', rule: `五段：${last} → ${ROWS[last][3]}＋る`, trap: trap || `受け身（${w.slice(0, -1) + a}れる）と混ぜない。可能は え段＋る` };
+    if (g === '1') return { fam: 'ichi', rule: '一段：る → られる', trap: trap || 'ら抜き（見れる・食べれる）は話し言葉で聞くが、仕事・試験では 見られる・食べられる' };
+    if (g === 's') return { fam: 'irr', rule: 'する → できる', trap };
+    return { fam: 'irr', rule: '来る → こられる', trap: 'ら抜き（来れる）は話し言葉。仕事・試験では 来られる（こられる）' };
+  }
+  if (form === 'nd' || form === 'ndta') return { fam: 'nd', rule: form === 'nd' ? '普通形 ＋ んです' : 'た形 ＋ んです', trap };
+  if (form === 'and' || form === 'andta') {
+    const past = form === 'andta';
+    if (g === 'i') return { fam: 'iadj', rule: past ? 'い形容詞：かった ＋ んです' : 'い形容詞 ＋ んです', trap };
+    return { fam: 'naadj', rule: past ? 'な形容詞：だった ＋ んです' : 'な形容詞 ＋ な ＋ んです', trap: past ? trap : `な を忘れない：${w}なんです（名詞も 会議なんです）` };
+  }
   const yoi = isYoi(w);
   const ia = { aneg: 'くない', apast: 'かった', apneg: 'くなかった', ate: 'くて' }[form];
   const na = { aneg: 'じゃない', apast: 'だった', apneg: 'じゃなかった', ate: 'で' }[form];
@@ -196,6 +243,8 @@ export function rulePath(word, form) {
 }
 const famKeys = last => ({ tte: 'う・つ・る', nde: 'む・ぶ・ぬ', ite: last === 'ぐ' ? 'ぐ' : 'く', shite: 'す' }[FAM[last]]);
 const rowOf = ch => (ROW_I.includes(ch) ? 'い' : ROW_E.includes(ch) ? 'え' : '');
+const DAN = { あ: 'あかがさざただなはばぱまやらわ', い: 'いきぎしじちぢにひびぴみり', う: 'うくぐすずつづぬふぶぷむゆる', え: 'えけげせぜてでねへべぺめれ', お: 'おこごそぞとどのほぼぽもよろを' };
+const danOf = ch => { for (const [k, v] of Object.entries(DAN)) if (v.includes(ch)) return k + '段'; return ''; };
 
 function trapNote({ w, g }) {
   if (g === '5' && w.endsWith('る') && GODAN_RU.some(x => w.endsWith(x))) return `${w} は い段・え段＋る に見えますが五段：${conj({ w, g }, 'te')}・${conj({ w, g }, 'nai')}`;
@@ -208,7 +257,7 @@ function trapNote({ w, g }) {
 
 /* ============================== 基本語 ============================== */
 
-// 語|読み|グループ|英語|目的語・主語|フラグ（n＝自然に起きること・受け身と使役なし／v＝自動詞・受け身なし）|受け身の文（＿が答え）
+// 語|読み|グループ|英語|目的語・主語|フラグ（n＝自然に起きること・受け身・使役・可能なし／v＝自動詞・受け身なし／x＝可能形なし）|受け身の文（＿が答え）
 const BANK = `
 書く|かく|5|write|報告書を
 行く|いく|5|go|取引先に|v
@@ -242,7 +291,7 @@ const BANK = `
 溜まる|たまる|5|pile up|仕事が|n
 帰る|かえる|5|go home||v
 入る|はいる|5|enter|会議室に|v
-知る|しる|5|know|結果を||この会社は海外でも＿。
+知る|しる|5|know|結果を|x|この会社は海外でも＿。
 要る|いる|5|need|お金が|n
 切る|きる|5|hang up; cut|電話を||話の途中で電話を＿。
 走る|はしる|5|run||v
@@ -335,7 +384,7 @@ const BANK = `
 元気|げんき|na|well; lively|みんな
 `.trim().split('\n').map(line => {
   const [w, r, g, en, o = '', f = '', p = ''] = line.split('|');
-  return { w, r, g, en, o, n: f.includes('n'), v: f.includes('v') || f.includes('n'), p };
+  return { w, r, g, en, o, n: f.includes('n'), v: f.includes('v') || f.includes('n'), x: f.includes('x'), p };
 });
 export const BASE_WORDS = BANK;
 
@@ -390,9 +439,12 @@ export function ruGroup(w, r = '') {
 /** 例文の枠（＿ に答えが入る）。空ならラベルだけ出す */
 export function frameOf(word, form) {
   if (form === 'group' || form === 'agroup') return '';
-  if (word.mine) return { te: '＿、…', ta: 'もう＿。', nai: '＿と、困る。' }[form] || '';
+  if (word.mine) return { te: '＿、…', ta: 'もう＿。', nai: '＿と、困る。', pot: '一人で＿？', nd: '実は、＿。', ndta: '実は、＿。', and: '実は、＿。', andta: '実は、＿。' }[form] || '';
   const o = word.o || '';
+  if (form === 'nd' || form === 'and' || form === 'andta') return `実は、${o}＿。`;
+  if (form === 'ndta') return `実は、もう${o}＿。`;
   if (!isVerb(word.g)) return form === 'ate' ? `${o}＿、…` : `${o}＿。`;
+  if (form === 'pot') return `一人で${o}＿？`;
   if (form === 'te') return word.n ? `${o}＿、…` : `${o}＿ください。`;
   if (form === 'ta') return `もう${o}＿。`;
   if (form === 'nai') return `${o}＿と、困る。`;
@@ -404,10 +456,29 @@ export function frameOf(word, form) {
 /** この語で出せる形 */
 export function formsFor(word) {
   if (!isVerb(word.g)) return ADJ_FORMS;
-  return VERB_FORMS.filter(f => !(f === 'pass' && word.v) && !(f === 'caus' && word.n));
+  // 可能形：自然に起きること（届く・経つ）、ある、知る（知れる は別の意味）は出さない
+  return VERB_FORMS.filter(f => !(f === 'pass' && word.v) && !(f === 'caus' && word.n) && !(f === 'pot' && (word.n || word.x || isAru(word.w))));
+}
+
+/** 単語ごとの読み上げる文（語そのもの＋すべての答えの形）と、その読み（かな）。
+ *  tools/export_katsuyo_words.mjs が data/katsuyo-words.json に書き出し、PC の音声ツールが読む */
+export function audioTexts(words = BASE_WORDS) {
+  return words.map(word => {
+    const seen = new Map();
+    const add = (t, yomi) => { if (t && !seen.has(t)) seen.set(t, yomi); };
+    add(word.w, word.r || '');
+    for (const f of formsFor(word)) {
+      if (f === 'group' || f === 'agroup') continue;
+      add(conj(word, f), word.r ? conj({ ...word, w: word.r }, f) : '');
+    }
+    return { w: word.w, r: word.r || '', texts: [...seen].map(([t, yomi]) => ({ t, yomi })) };
+  });
 }
 
 /* ============================== 画面 ============================== */
+
+const KA_DIR = 'data/katsuyo-audio/';          // AivisSpeech で作った音声（基本語。公開してよい内容だけ）
+const KA_CACHE = 'grass-audio-katsuyo';
 
 const ROUND = 10;
 const LIMIT_S = 8;                       // この秒数より速いほど＋点（時間切れはなし）
@@ -415,7 +486,7 @@ const LIMIT_SAY_S = 12;                  // 「先に言う」のときは考え
 const AUTO_MS = 2500;                    // 正解のあと自動で次へ（「止めて読む」で止まる）
 const BOX_W = [6, 3, 1.5, 0.7, 0.35];   // 箱ごとの出やすさ（間違えると箱 0 に戻る）
 
-export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = () => [] }) {
+export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = () => [], say = null, canSay = () => null }) {
   const K = {
     tab: 'play',
     chips: ['て形', 'た形', 'ない形'],
@@ -423,6 +494,12 @@ export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = ()
     say: false,     // 選択肢を見る前に、答えを言う（頭の中・声で）。正解のあと「言えた／言えなかった」を自分で付ける
     auto: true,     // 正解なら 2.5秒で自動的に次へ
     timed: true,    // 速さで＋点（タイマーの帯を出す）。オフなら時間を気にせず練習
+    voice: true,    // 正解したら、その形を読み上げる（AivisSpeech の音声。なければ端末の日本語の声）
+    clips: {},      // 文 → 音声ファイル名（data/katsuyo-audio/manifest.json）
+    clipWords: {},  // 語 → 文 → ファイル名（同じ字で読みが違う文：出させる＝ださせる／でさせる）
+    credit: '',
+    cached: 0,
+    dl: null,       // まとめてダウンロードの進み具合
     stats: {},      // `${w}|${form}` → { b, ok, ng, at }
     hist: {},       // form → [1,0,…]（最近 40 回）
     best: 0,
@@ -431,7 +508,80 @@ export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = ()
   };
   let advanceTimer = null;
 
+  /* ---------- 音声（単語ごとに PC で作ったファイル） ---------- */
+
+  async function loadClips() {
+    try {
+      const res = await fetch(`${KA_DIR}manifest.json`, { cache: 'no-cache' });
+      if (res.ok) { const m = await res.json(); K.clips = m.files || {}; K.clipWords = m.words || {}; K.credit = m.credit || ''; }
+    } catch { /* 音声なし */ }
+    await countClips(true);
+  }
+
+  async function countClips(prune = false) {
+    if (!('caches' in window)) return;
+    try {
+      const cache = await caches.open(KA_CACHE);
+      const want = new Set(allClipNames());
+      let n = 0;
+      for (const req of await cache.keys()) {
+        const name = decodeURIComponent(new URL(req.url).pathname.split('/').pop());
+        if (want.has(name)) n += 1;
+        else if (prune && want.size) await cache.delete(req);      // 作り直して使わなくなった音声
+      }
+      K.cached = n;
+    } catch { /* キャッシュが使えない */ }
+  }
+
+  const allClipNames = () => [...new Set([...Object.values(K.clips), ...Object.values(K.clipWords).flatMap(m => Object.values(m))])];
+  const clipTotal = () => allClipNames().length;
+  let player = null, playerUrl = null;
+
+  /** 音声ファイルがあればそれを、なければ端末の日本語の声で読む */
+  async function playText(t, w = '') {
+    const f = K.clipWords[w]?.[t] || K.clips[t];
+    if (f) {
+      try {
+        const res = await fetch(KA_DIR + encodeURIComponent(f));
+        if (!res.ok) throw new Error(String(res.status));
+        const blob = await res.blob();
+        if (player) player.pause();
+        if (playerUrl) URL.revokeObjectURL(playerUrl);
+        playerUrl = URL.createObjectURL(blob);
+        player = new Audio(playerUrl);
+        await player.play();
+        return true;
+      } catch { /* オフラインでまだ入っていない など → 端末の声へ */ }
+    }
+    return say ? say(t) : false;
+  }
+
+  async function downloadClips() {
+    const names = allClipNames();
+    if (!names.length || K.dl?.running) return;
+    K.dl = { running: true, done: 0, total: names.length, failed: 0 };
+    render();
+    const cache = 'caches' in window ? await caches.open(KA_CACHE) : null;
+    for (const name of names) {
+      const url = KA_DIR + encodeURIComponent(name);
+      try {
+        if (!(cache && await cache.match(url))) {
+          const res = await fetch(url);
+          if (!res.ok) throw new Error(String(res.status));
+          if (cache && !(await cache.match(url))) await cache.put(url, res.clone());
+          await res.arrayBuffer();
+        }
+      } catch { K.dl.failed += 1; }
+      K.dl.done += 1;
+      if (K.dl.done % 20 === 0) render();
+    }
+    K.dl.running = false;
+    await countClips();
+    render();
+  }
+
   async function load() {
+    loadClips();                                   // 起動を待たせない
     const d = await store.get('meta', 'katsuyo');
     if (d && typeof d === 'object') {
       K.stats = d.stats || {}; K.hist = d.hist || {}; K.best = d.best || 0; K.days = d.days || {};
@@ -440,9 +590,10 @@ export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = ()
       if (typeof d.say === 'boolean') K.say = d.say;
       if (typeof d.auto === 'boolean') K.auto = d.auto;
       if (typeof d.timed === 'boolean') K.timed = d.timed;
+      if (typeof d.voice === 'boolean') K.voice = d.voice;
     }
   }
-  const save = () => store.put('meta', { stats: K.stats, hist: K.hist, best: K.best, days: pruneDays(K.days), chips: K.chips, mine: K.mine, say: K.say, auto: K.auto, timed: K.timed }, 'katsuyo');
+  const save = () => store.put('meta', { stats: K.stats, hist: K.hist, best: K.best, days: pruneDays(K.days), chips: K.chips, mine: K.mine, say: K.say, auto: K.auto, timed: K.timed, voice: K.voice }, 'katsuyo');
   const pruneDays = d => Object.fromEntries(Object.entries(d).sort().slice(-60));
 
   const myWords = () => {
@@ -530,8 +681,14 @@ export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = ()
     if (!s.self) record(x, ok);
     K.days[todayStr()] = (K.days[todayStr()] || 0) + 1;
     render();
+    if (ok && K.voice) sayForm(x);
     await save();
     if (ok && !s.self) autoNext(s);
+  }
+
+  /** 答えの形を読み上げる（グループの問題は語そのもの） */
+  function sayForm(x) {
+    playText(x.form === 'group' || x.form === 'agroup' ? x.word.w : x.options[x.answer], x.word.w).catch(() => {});
   }
 
   async function selfCheck(said) {
@@ -577,7 +734,7 @@ export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = ()
       <div class="screen">
         <div class="scroll">
           <header class="top">
-            <div><p class="date">て・た・ない・形容詞・受け身・使役</p><h1>活用ドリル</h1></div>
+            <div><p class="date">て・た・ない・形容詞・受け身・使役・可能・んです</p><h1>活用ドリル</h1></div>
             ${s && !s.done ? `<button class="text-btn" data-act="kt-quit">やめる</button>` : ''}
           </header>
           ${tabs}
@@ -620,12 +777,29 @@ export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = ()
           <button class="chip" aria-pressed="${K.say}" data-act="kt-set" data-v="say">選ぶ前に答えを言う</button>
           <button class="chip" aria-pressed="${K.auto}" data-act="kt-set" data-v="auto">正解なら自動で次へ</button>
           <button class="chip" aria-pressed="${K.timed}" data-act="kt-set" data-v="timed">速さで＋点</button>
+          <button class="chip" aria-pressed="${K.voice}" data-act="kt-set" data-v="voice">正解を読み上げ</button>
         </div>
+        ${clipLine()}
         <button class="primary ink kt-start" data-act="kt-start" ${K.chips.length ? '' : 'disabled'}>スタート</button>
         <p class="kt-meta">今日 ${today}問 · ベスト ${K.best}点</p>
       </section>
       <section class="kt-panel"><h2>形ごとの正解率（最近 40 問）</h2>${bars}</section>
       ${weakRows ? `<section class="kt-panel"><div class="kt-head"><h2>苦手（最近まちがえた）</h2><button class="text-btn" data-act="kt-weak">これだけ練習</button></div><ul class="kt-weak">${weakRows}</ul></section>` : ''}`;
+  }
+
+  /** 音声の状態：まとめて入れるボタン／声がないときの案内 */
+  function clipLine() {
+    if (!K.voice) return '';
+    const total = clipTotal();
+    if (K.dl?.running) return `<p class="kt-note">音声を入れています… ${K.dl.done} / ${K.dl.total}</p>`;
+    if (total) {
+      const left = total - K.cached;
+      const fail = K.dl?.failed ? `（${K.dl.failed}個は入らなかったので、もう一度）` : '';
+      return left > 0
+        ? `<button class="text-btn kt-dl" data-act="kt-dl">音声をまとめて入れる（あと ${left}・Wi-Fi で）</button>${fail ? `<p class="kt-note">${fail}</p>` : ''}`
+        : `<p class="kt-note">音声：${total}個 すべてスマホに入っています（オフラインでも鳴ります）</p>`;
+    }
+    return canSay() === false ? '<p class="kt-note">まだドリル用の音声がなく、このスマホには日本語の読み上げ音声もないため、音は出ません。</p>' : '';
   }
 
   function wordHead(word) {
@@ -650,10 +824,10 @@ export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = ()
     const fb = answered ? `
       <div class="kt-fb ${ok ? 'ok' : 'ng'}" role="status">
         <p class="kt-verdict">${verdict(s, ok, right)}</p>
-        <div class="kt-path"><span>${esc(x.word.w)}</span><span class="kt-rule fam-${rp.fam}">${esc(rp.rule)}</span>${x.form === 'group' || x.form === 'agroup' ? '' : `<b>${esc(right)}</b>`}</div>
+        <div class="kt-path">${say || clipTotal() ? `<button class="icon-btn kt-play" data-act="kt-play" aria-label="読み上げ">${ICON.speaker}</button>` : ''}<span>${esc(x.word.w)}</span><span class="kt-rule fam-${rp.fam}">${esc(rp.rule)}</span>${x.form === 'group' || x.form === 'agroup' ? '' : `<b>${esc(right)}</b>`}</div>
         ${filled ? `<p class="kt-sent">${filled.split(/(<b[^>]*>.*?<\/b>)/).map((p, i) => (i % 2 ? p : esc(p))).join('')}</p>` : ''}
         ${rp.trap ? `<p class="kt-trap">⚠ ${esc(rp.trap)}</p>` : ''}
-        ${ok ? '' : ruleRow(rp.fam, x.form)}
+        ${ok ? '' : ruleRow(rp.fam, x.form, x.word)}
         ${s.self === 'ask'
           ? `<p class="kt-ask">選ぶ前に、この形を言えましたか？</p>
              <div class="grid2"><button class="outline quiet" data-act="kt-said" data-v="0">言えなかった</button><button class="primary ink kt-said" data-act="kt-said" data-v="1">言えた</button></div>`
@@ -718,14 +892,16 @@ export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = ()
     { fam: 'irr', keys: ['する', '来る'], te: 'して／きて', ta: 'した／きた', ex: '確認して・来て（きて）' },
   ];
 
-  function ruleRow(fam, form) {
+  function ruleRow(fam, form, word = null) {
+    if (form === 'pot') return `${danStrip('pot')}<div class="kt-map kt-mini">${aRowTable('pot')}</div>`;
+    if (form === 'nd' || form === 'ndta' || form === 'and' || form === 'andta') return ndFormula();
     if (form === 'te' || form === 'ta') {
       const r = TE_ROWS.filter(x => x.fam === fam);
       if (!r.length) return '';
       return `<div class="kt-map kt-mini">${r.map(x => teRow(x, form === 'ta')).join('')}</div>`;
     }
-    if (form === 'nai' || form === 'pass' || form === 'caus') return `<div class="kt-map kt-mini">${aRowTable(form)}</div>`;
-    if (form === 'group' || form === 'agroup') return form === 'group' ? groupFlow() : adjTable();
+    if (form === 'nai' || form === 'pass' || form === 'caus') return `${danStrip(form)}<div class="kt-map kt-mini">${aRowTable(form)}</div>`;
+    if (form === 'group' || form === 'agroup') return form === 'group' ? groupTree(word) : adjTable();
     return adjTable();
   }
 
@@ -738,15 +914,21 @@ export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = ()
     </div>`;
 
   function aRowTable(only = null) {
-    const cols = [['nai', 'ない'], ['pass', '受け身'], ['caus', '使役']].filter(([k]) => !only || k === only);
-    const rows = [
-      ['arow', '五段', '書く → 書<u>か</u>', ['書かない', '書かれる', '書かせる']],
-      ['arow', '五段 う', '言う → 言<u>わ</u>', ['言わない', '言われる', '言わせる']],
-      ['ichi', '一段', '食べる → 食べ', ['食べない', '食べられる', '食べさせる']],
-      ['irr', 'する', '確認する', ['確認しない', '確認される', '確認させる']],
-      ['irr', '来る', 'くる', ['こない', 'こられる', 'こさせる']],
+    const cols = [['nai', 'ない'], ['pass', '受け身'], ['caus', '使役'], ['pot', '可能']].filter(([k]) => !only || k === only);
+    const rows = only === 'pot' ? [
+      ['erow', '五段', '書く → 書<u>け</u>', ['', '', '', '書ける']],
+      ['erow', '五段 う', '言う → 言<u>え</u>', ['', '', '', '言える']],
+      ['ichi', '一段', '食べる → 食べ', ['', '', '', '食べられる']],
+      ['irr', 'する', '確認する', ['', '', '', '確認できる']],
+      ['irr', '来る', 'くる', ['', '', '', 'こられる']],
+    ] : [
+      ['arow', '五段', '書く → 書<u>か</u>／<u>け</u>', ['書かない', '書かれる', '書かせる', '書ける']],
+      ['arow', '五段 う', '言う → 言<u>わ</u>／<u>え</u>', ['言わない', '言われる', '言わせる', '言える']],
+      ['ichi', '一段', '食べる → 食べ', ['食べない', '食べられる', '食べさせる', '食べられる']],
+      ['irr', 'する', '確認する', ['確認しない', '確認される', '確認させる', '確認できる']],
+      ['irr', '来る', 'くる', ['こない', 'こられる', 'こさせる', 'こられる']],
     ];
-    const idx = cols.map(([k]) => ['nai', 'pass', 'caus'].indexOf(k));
+    const idx = cols.map(([k]) => ['nai', 'pass', 'caus', 'pot'].indexOf(k));
     return `
       <table class="kt-table">
         <thead><tr><th></th>${cols.map(([, l]) => `<th>${l}</th>`).join('')}</tr></thead>
@@ -754,13 +936,67 @@ export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = ()
       </table>`;
   }
 
-  const groupFlow = () => `
-    <div class="kt-flow">
-      <div class="q">する・来る？</div><div class="a fam-irr">→ はい：不規則</div>
-      <div class="q">「る」で終わる？</div><div class="a fam-g5">→ いいえ：五段（書く・読む・話す）</div>
-      <div class="q">る の前が い段・え段？</div><div class="a fam-ichi">→ はい：一段（見る・食べる・決める）</div>
-      <div class="q"></div><div class="a fam-g5">→ いいえ：五段（取る・作る・終わる）</div>
-      <div class="q">⚠ 例外</div><div class="a fam-g5">帰る・入る・知る・要る・切る・走る・限る・減る は五段</div>
+  /** かなのタイル。key 番目の字に色と「〇段」 */
+  function tiles(kana, key) {
+    return `<span class="kt-kana">${[...kana].map((c, i) => i === key
+      ? `<i class="hl">${esc(c)}<small>${esc(danOf(c))}</small></i>`
+      : `<i>${esc(c)}</i>`).join('')}</span>`;
+  }
+
+  /** 五段？一段？の判断を図にする。word を渡すと、その語の通り道だけ明るく、決め手の段にその語の読みを出す */
+  function groupTree(word = null) {
+    const steps = [
+      { q: 'する・来る？', yes: 'はい', leaf: ['irr', '不規則', 'する・来る・確認する'], down: 'いいえ' },
+      { q: '最後の字は<br>「る」？', yes: 'いいえ', leaf: ['g5', '五段', '書く・読む・話す・待つ'], down: 'はい' },
+      { q: 'る の前の音は？', yes: 'あ・う・お段', leaf: ['g5', '五段', `${tiles('とる', 0)}${tiles('つくる', 1)}${tiles('おわる', 1)}`],
+        down: `い段・え段 ${tiles('みる', 0)}${tiles('たべる', 1)}` },
+      { q: '例外の語？', yes: 'はい', leaf: ['g5', '五段（例外）', '帰る・入る・知る・要る・切る・走る・限る・減る'], down: 'いいえ' },
+    ];
+    let d = -1;
+    if (word) {
+      const { w, g } = word;
+      d = g === 's' || g === 'k' ? 0 : g === '1' ? 4 : !w.endsWith('る') ? 1 : GODAN_RU.some(x => w.endsWith(x)) ? 3 : 2;
+    }
+    const st = (i, part) => (d < 0 ? '' : part === 'q' ? (i <= d ? 'on' : 'off') : part === 'down' ? (i < d ? 'on' : 'off') : i === d ? 'on' : 'off');
+    const r = word?.r || '';
+    const mine = word && r.endsWith('る') && r.length > 1 ? `<span class="kt-this">${esc(word.w)}：${tiles(r, r.length - 2)}</span>` : '';
+    const html = steps.map((x, i) => `
+      <div class="kt-tstep">
+        <div class="kt-tq ${st(i, 'q')}">${x.q}</div>
+        <div class="kt-tarr fam-${x.leaf[0]} ${st(i, 'leaf')}"><span>${x.yes}</span></div>
+        <div class="kt-tleaf fam-${x.leaf[0]} ${st(i, 'leaf')}"><b>${x.leaf[1]}</b><span class="ex">${x.leaf[2]}</span>${d === i ? mine : ''}</div>
+      </div>
+      <div class="kt-tdown ${st(i, 'down')}"><span>${x.down}</span></div>`).join('');
+    return `
+      <div class="kt-tree ${d < 0 ? '' : 'focus'}">
+        <div class="kt-tstart">辞書形から ↓</div>
+        ${html}
+        <div class="kt-tleaf kt-tend fam-ichi ${d < 0 ? '' : d === 4 ? 'on' : 'off'}"><b>一段</b><span class="ex">見る・食べる・決める・起きる</span>${d === 4 ? mine : ''}</div>
+      </div>`;
+  }
+
+  /** 五段の「段の移動」：書く の く が か・き・け・こ に動く */
+  function danStrip(form = null) {
+    const cols = [
+      ['か', 'ない<br>れる<br>せる', 'arow', ['nai', 'pass', 'caus']],
+      ['き', 'ます', '', []],
+      ['く', '辞書形', 'base', []],
+      ['け', 'る<br>可能', 'erow', ['pot']],
+      ['こ', 'う<br>意向', '', []],
+    ];
+    return `
+      <div class="kt-dan ${form ? 'focus' : ''}">
+        <span class="stem">書</span>
+        ${cols.map(([k, l, fam, fs]) => `<span class="k ${fam ? 'fam-' + fam : ''} ${form && fs.includes(form) ? 'on' : form ? 'off' : ''}"><b>${k}</b><small>${l}</small></span>`).join('')}
+      </div>`;
+  }
+
+  /** 〜んです：普通形＋んです。な形容詞・名詞は な が入る */
+  const ndFormula = () => `
+    <div class="kt-nd">
+      <div class="f fam-nd"><span class="box">普通形</span><span class="plus">＋</span><b>んです</b><small>行くんです・行ったんです・行かないんです</small></div>
+      <div class="f fam-iadj"><span class="box">い形容詞</span><span class="plus">＋</span><b>んです</b><small>高いんです・高かったんです</small></div>
+      <div class="f fam-naadj"><span class="box">な形容詞・名詞</span><span class="plus">＋</span><b class="na">な</b><span class="plus">＋</span><b>んです</b><small>簡単なんです・会議なんです（過去：簡単だったんです）</small></div>
     </div>`;
 
   const adjTable = () => `
@@ -784,18 +1020,25 @@ export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = ()
         <p class="kt-note">た形は て → た、で → だ にするだけ（書いて → 書いた・読んで → 読んだ）。</p>
       </section>
       <section class="kt-panel">
-        <h2>ない・受け身・使役：五段は「あ段」へ</h2>
+        <h2>ない・受け身・使役は「あ段」、可能は「え段」</h2>
+        ${danStrip()}
         <div class="kt-scroll">${aRowTable()}</div>
-        <p class="kt-note">使役の よくある間違い：書<s>かさせる</s> → 書かせる（さ を入れない）。<br>〜させていただきます ＝ 丁寧に「〜します」：確認させていただきます。</p>
+        <p class="kt-note">使役の よくある間違い：書<s>かさせる</s> → 書かせる（さ を入れない）。<br>〜させていただきます ＝ 丁寧に「〜します」：確認させていただきます。<br>一段の可能は 受け身と同じ形（食べられる）。ら抜き（食べれる）は話し言葉。</p>
       </section>
       <section class="kt-panel">
-        <h2>五段？一段？（る で終わるとき）</h2>
-        ${groupFlow()}
+        <h2>五段？一段？ 上から順に</h2>
+        ${groupTree()}
+      </section>
+      <section class="kt-panel">
+        <h2>〜んです：説明・理由</h2>
+        ${ndFormula()}
+        <p class="kt-note">「実は、明日休むんです」のように、事情や理由を伝えるときの言い方。かたい文章では 〜のです。</p>
       </section>
       <section class="kt-panel">
         <h2>い形容詞・な形容詞</h2>
         <div class="kt-scroll">${adjTable()}</div>
-      </section>`;
+      </section>
+      ${K.credit ? `<p class="kt-note">${esc(K.credit)}</p>` : ''}`;
   }
 
   /* ---------- 操作 ---------- */
@@ -808,8 +1051,10 @@ export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = ()
       render(); await save();
     },
     'kt-mine': async () => { K.mine = !K.mine; render(); await save(); },
-    'kt-set': async el => { const k = el.dataset.v; if (['say', 'auto', 'timed'].includes(k)) { K[k] = !K[k]; render(); await save(); } },
+    'kt-set': async el => { const k = el.dataset.v; if (['say', 'auto', 'timed', 'voice'].includes(k)) { K[k] = !K[k]; render(); await save(); } },
     'kt-said': el => selfCheck(el.dataset.v === '1'),
+    'kt-dl': () => downloadClips(),
+    'kt-play': () => { const x = K.session?.items[K.session.i]; if (x) sayForm(x); },
     'kt-show': () => { if (K.session) { K.session.shown = true; render(); } },
     'kt-hold': () => { if (K.session) { K.session.hold = true; clearTimeout(advanceTimer); render(); } },
     'kt-start': () => start(),
