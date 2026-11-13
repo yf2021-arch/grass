@@ -172,4 +172,14 @@ assert.equal(conj(V('問う', '5'), 'te'), '問うて');
 assert.equal(conj(V('問う', '5'), 'ta'), '問うた');
 
 
+// data/katsuyo-words.json（PC の音声ツールが読む）が js/katsuyo.js と合っている
+{
+  const fs = await import('node:fs');
+  const { build } = await import('../tools/export_katsuyo_words.mjs');
+  const file = JSON.parse(fs.readFileSync(new URL('../data/katsuyo-words.json', import.meta.url), 'utf8'));
+  assert.deepEqual(file, JSON.parse(JSON.stringify(build())), 'data/katsuyo-words.json is stale: run node tools/export_katsuyo_words.mjs');
+  const w = file.words.find(x => x.w === '開く');
+  assert.ok(w.texts.some(t => t.t === '開ける' && t.yomi === 'ひらける'), 'reading follows the word, not the kanji');
+  assert.equal(file.words.find(x => x.w === '来る').texts.find(t => t.t === 'こない').yomi, 'こない');
+}
 console.log(`ok — ${n} forms, ${opts} option sets, ${BASE_WORDS.length} base words`);

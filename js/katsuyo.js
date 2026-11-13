@@ -460,7 +460,25 @@ export function formsFor(word) {
   return VERB_FORMS.filter(f => !(f === 'pass' && word.v) && !(f === 'caus' && word.n) && !(f === 'pot' && (word.n || word.x || isAru(word.w))));
 }
 
+/** 単語ごとの読み上げる文（語そのもの＋すべての答えの形）と、その読み（かな）。
+ *  tools/export_katsuyo_words.mjs が data/katsuyo-words.json に書き出し、PC の音声ツールが読む */
+export function audioTexts(words = BASE_WORDS) {
+  return words.map(word => {
+    const seen = new Map();
+    const add = (t, yomi) => { if (t && !seen.has(t)) seen.set(t, yomi); };
+    add(word.w, word.r || '');
+    for (const f of formsFor(word)) {
+      if (f === 'group' || f === 'agroup') continue;
+      add(conj(word, f), word.r ? conj({ ...word, w: word.r }, f) : '');
+    }
+    return { w: word.w, r: word.r || '', texts: [...seen].map(([t, yomi]) => ({ t, yomi })) };
+  });
+}
+
 /* ============================== 画面 ============================== */
+
+const KA_DIR = 'data/katsuyo-audio/';          // AivisSpeech で作った音声（基本語。公開してよい内容だけ）
+const KA_CACHE = 'grass-audio-katsuyo';
 
 const ROUND = 10;
 const LIMIT_S = 8;                       // この秒数より速いほど＋点（時間切れはなし）
@@ -476,7 +494,12 @@ export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = ()
     say: false,     // 選択肢を見る前に、答えを言う（頭の中・声で）。正解のあと「言えた／言えなかった」を自分で付ける
     auto: true,     // 正解なら 2.5秒で自動的に次へ
     timed: true,    // 速さで＋点（タイマーの帯を出す）。オフなら時間を気にせず練習
-    voice: true,    // 正解したら、その形を読み上げる（端末の日本語の声）
+    voice: true,    // 正解したら、その形を読み上げる（AivisSpeech の音声。なければ端末の日本語の声）
+    clips: {},      // 文 → 音声ファイル名（data/katsuyo-audio/manifest.json）
+    clipWords: {},  // 語 → 文 → ファイル名（同じ字で読みが違う文：出させる＝ださせる／でさせる）
+    credit: '',
+    cached: 0,
+    dl: null,       // まとめてダウンロードの進み具合
     stats: {},      // `${w}|${form}` → { b, ok, ng, at }
     hist: {},       // form → [1,0,…]（最近 40 回）
     best: 0,
@@ -485,7 +508,80 @@ export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = ()
   };
   let advanceTimer = null;
 
+  /* ---------- 音声（単語ごとに PC で作ったファイル） ---------- */
+
+  async function loadClips() {
+    try {
+      const res = await fetch(`${KA_DIR}manifest.json`, { cache: 'no-cache' });
+      if (res.ok) { const m = await res.json(); K.clips = m.files || {}; K.clipWords = m.words || {}; K.credit = m.credit || ''; }
+    } catch { /* 音声なし */ }
+    await countClips(true);
+  }
+
+  async function countClips(prune = false) {
+    if (!('caches' in window)) return;
+    try {
+      const cache = await caches.open(KA_CACHE);
+      const want = new Set(allClipNames());
+      let n = 0;
+      for (const req of await cache.keys()) {
+        const name = decodeURIComponent(new URL(req.url).pathname.split('/').pop());
+        if (want.has(name)) n += 1;
+        else if (prune && want.size) await cache.delete(req);      // 作り直して使わなくなった音声
+      }
+      K.cached = n;
+    } catch { /* キャッシュが使えない */ }
+  }
+
+  const allClipNames = () => [...new Set([...Object.values(K.clips), ...Object.values(K.clipWords).flatMap(m => Object.values(m))])];
+  const clipTotal = () => allClipNames().length;
+  let player = null, playerUrl = null;
+
+  /** 音声ファイルがあればそれを、なければ端末の日本語の声で読む */
+  async function playText(t, w = '') {
+    const f = K.clipWords[w]?.[t] || K.clips[t];
+    if (f) {
+      try {
+        const res = await fetch(KA_DIR + encodeURIComponent(f));
+        if (!res.ok) throw new Error(String(res.status));
+        const blob = await res.blob();
+        if (player) player.pause();
+        if (playerUrl) URL.revokeObjectURL(playerUrl);
+        playerUrl = URL.createObjectURL(blob);
+        player = new Audio(playerUrl);
+        await player.play();
+        return true;
+      } catch { /* オフラインでまだ入っていない など → 端末の声へ */ }
+    }
+    return say ? say(t) : false;
+  }
+
+  async function downloadClips() {
+    const names = allClipNames();
+    if (!names.length || K.dl?.running) return;
+    K.dl = { running: true, done: 0, total: names.length, failed: 0 };
+    render();
+    const cache = 'caches' in window ? await caches.open(KA_CACHE) : null;
+    for (const name of names) {
+      const url = KA_DIR + encodeURIComponent(name);
+      try {
+        if (!(cache && await cache.match(url))) {
+          const res = await fetch(url);
+          if (!res.ok) throw new Error(String(res.status));
+          if (cache && !(await cache.match(url))) await cache.put(url, res.clone());
+          await res.arrayBuffer();
+        }
+      } catch { K.dl.failed += 1; }
+      K.dl.done += 1;
+      if (K.dl.done % 20 === 0) render();
+    }
+    K.dl.running = false;
+    await countClips();
+    render();
+  }
+
   async function load() {
+    loadClips();                                   // 起動を待たせない
     const d = await store.get('meta', 'katsuyo');
     if (d && typeof d === 'object') {
       K.stats = d.stats || {}; K.hist = d.hist || {}; K.best = d.best || 0; K.days = d.days || {};
@@ -592,8 +688,7 @@ export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = ()
 
   /** 答えの形を読み上げる（グループの問題は語そのもの） */
   function sayForm(x) {
-    if (!say) return;
-    try { say(x.form === 'group' || x.form === 'agroup' ? x.word.w : x.options[x.answer]); } catch { /* 声がない端末 */ }
+    playText(x.form === 'group' || x.form === 'agroup' ? x.word.w : x.options[x.answer], x.word.w).catch(() => {});
   }
 
   async function selfCheck(said) {
@@ -684,12 +779,27 @@ export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = ()
           <button class="chip" aria-pressed="${K.timed}" data-act="kt-set" data-v="timed">速さで＋点</button>
           <button class="chip" aria-pressed="${K.voice}" data-act="kt-set" data-v="voice">正解を読み上げ</button>
         </div>
-        ${K.voice && canSay() === false ? '<p class="kt-note">このスマホには日本語の読み上げ音声がないようです。Android の設定の「テキスト読み上げ」で日本語の音声を追加すると鳴ります。</p>' : ''}
+        ${clipLine()}
         <button class="primary ink kt-start" data-act="kt-start" ${K.chips.length ? '' : 'disabled'}>スタート</button>
         <p class="kt-meta">今日 ${today}問 · ベスト ${K.best}点</p>
       </section>
       <section class="kt-panel"><h2>形ごとの正解率（最近 40 問）</h2>${bars}</section>
       ${weakRows ? `<section class="kt-panel"><div class="kt-head"><h2>苦手（最近まちがえた）</h2><button class="text-btn" data-act="kt-weak">これだけ練習</button></div><ul class="kt-weak">${weakRows}</ul></section>` : ''}`;
+  }
+
+  /** 音声の状態：まとめて入れるボタン／声がないときの案内 */
+  function clipLine() {
+    if (!K.voice) return '';
+    const total = clipTotal();
+    if (K.dl?.running) return `<p class="kt-note">音声を入れています… ${K.dl.done} / ${K.dl.total}</p>`;
+    if (total) {
+      const left = total - K.cached;
+      const fail = K.dl?.failed ? `（${K.dl.failed}個は入らなかったので、もう一度）` : '';
+      return left > 0
+        ? `<button class="text-btn kt-dl" data-act="kt-dl">音声をまとめて入れる（あと ${left}・Wi-Fi で）</button>${fail ? `<p class="kt-note">${fail}</p>` : ''}`
+        : `<p class="kt-note">音声：${total}個 すべてスマホに入っています（オフラインでも鳴ります）</p>`;
+    }
+    return canSay() === false ? '<p class="kt-note">まだドリル用の音声がなく、このスマホには日本語の読み上げ音声もないため、音は出ません。</p>' : '';
   }
 
   function wordHead(word) {
@@ -714,7 +824,7 @@ export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = ()
     const fb = answered ? `
       <div class="kt-fb ${ok ? 'ok' : 'ng'}" role="status">
         <p class="kt-verdict">${verdict(s, ok, right)}</p>
-        <div class="kt-path">${say ? `<button class="icon-btn kt-play" data-act="kt-play" aria-label="読み上げ">${ICON.speaker}</button>` : ''}<span>${esc(x.word.w)}</span><span class="kt-rule fam-${rp.fam}">${esc(rp.rule)}</span>${x.form === 'group' || x.form === 'agroup' ? '' : `<b>${esc(right)}</b>`}</div>
+        <div class="kt-path">${say || clipTotal() ? `<button class="icon-btn kt-play" data-act="kt-play" aria-label="読み上げ">${ICON.speaker}</button>` : ''}<span>${esc(x.word.w)}</span><span class="kt-rule fam-${rp.fam}">${esc(rp.rule)}</span>${x.form === 'group' || x.form === 'agroup' ? '' : `<b>${esc(right)}</b>`}</div>
         ${filled ? `<p class="kt-sent">${filled.split(/(<b[^>]*>.*?<\/b>)/).map((p, i) => (i % 2 ? p : esc(p))).join('')}</p>` : ''}
         ${rp.trap ? `<p class="kt-trap">⚠ ${esc(rp.trap)}</p>` : ''}
         ${ok ? '' : ruleRow(rp.fam, x.form, x.word)}
@@ -927,7 +1037,8 @@ export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = ()
       <section class="kt-panel">
         <h2>い形容詞・な形容詞</h2>
         <div class="kt-scroll">${adjTable()}</div>
-      </section>`;
+      </section>
+      ${K.credit ? `<p class="kt-note">${esc(K.credit)}</p>` : ''}`;
   }
 
   /* ---------- 操作 ---------- */
@@ -942,6 +1053,7 @@ export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = ()
     'kt-mine': async () => { K.mine = !K.mine; render(); await save(); },
     'kt-set': async el => { const k = el.dataset.v; if (['say', 'auto', 'timed', 'voice'].includes(k)) { K[k] = !K[k]; render(); await save(); } },
     'kt-said': el => selfCheck(el.dataset.v === '1'),
+    'kt-dl': () => downloadClips(),
     'kt-play': () => { const x = K.session?.items[K.session.i]; if (x) sayForm(x); },
     'kt-show': () => { if (K.session) { K.session.shown = true; render(); } },
     'kt-hold': () => { if (K.session) { K.session.hold = true; clearTimeout(advanceTimer); render(); } },

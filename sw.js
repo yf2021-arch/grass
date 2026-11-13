@@ -33,6 +33,7 @@ const SHELL = [
 const FONT_CACHE = 'grass-fonts';
 const AUDIO_CACHE = 'grass-audio';
 const CARD_AUDIO_CACHE = 'grass-audio-cards';
+const KATSUYO_AUDIO_CACHE = 'grass-audio-katsuyo';   // 活用ドリルの音声（data/katsuyo-audio）
 const LIB_CACHE = 'grass-lib';                  // Whisper のライブラリ（jsDelivr・版の付いたファイルなので、取り直さない）
 const MODEL_CACHE = 'transformers-cache';       // Whisper のモデル（Transformers.js が入れる）。アプリを更新しても消さない   // カードの音声（スマホに読み込んだもの）。絶対に消さない   // 話す練習の音声。アプリを更新しても残す（古いファイルはアプリ側が片付ける）
 
@@ -43,7 +44,7 @@ self.addEventListener('install', event => {
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(k => ![VERSION, FONT_CACHE, AUDIO_CACHE, CARD_AUDIO_CACHE, LIB_CACHE, MODEL_CACHE].includes(k)).map(k => caches.delete(k))))
+      .then(keys => Promise.all(keys.filter(k => ![VERSION, FONT_CACHE, AUDIO_CACHE, CARD_AUDIO_CACHE, KATSUYO_AUDIO_CACHE, LIB_CACHE, MODEL_CACHE].includes(k)).map(k => caches.delete(k))))
       .then(() => self.clients.claim()),
   );
 });
@@ -88,9 +89,10 @@ self.addEventListener('fetch', event => {
   if (url.origin !== self.location.origin) return;
 
   // 音声：キャッシュ優先。ファイル名に文の記号が入っているので、一度取ったら取り直さない
-  if (/\/data\/audio\/[^/]+\.(mp3|wav)$/.test(url.pathname)) {
+  const audioDir = url.pathname.match(/\/data\/(audio|katsuyo-audio)\/[^/]+\.(mp3|wav)$/);
+  if (audioDir) {
     event.respondWith(
-      caches.open(AUDIO_CACHE).then(async cache => {
+      caches.open(audioDir[1] === 'audio' ? AUDIO_CACHE : KATSUYO_AUDIO_CACHE).then(async cache => {
         const hit = await cache.match(req, { ignoreSearch: true });
         if (hit) return hit;
         const res = await fetch(req);

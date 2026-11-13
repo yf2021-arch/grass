@@ -190,6 +190,39 @@ try {
       await page.click('[data-act="kt-next"]');
     }
     await page.click('[data-act="kt-quit"]');
+
+    // AivisSpeech clips (data/katsuyo-audio): a right answer plays the clip of that word, not the phone voice,
+    // and 音声をまとめて入れる stores every clip
+    const words = JSON.parse(fs.readFileSync(path.join(root, 'data/katsuyo-words.json'), 'utf8')).words;
+    const manifest = { credit: '音声：AivisSpeech（テスト）', words: {}, files: {} };
+    words.forEach((w, i) => { manifest.words[w.w] = {}; w.texts.forEach((t, j) => { const f = `k-${i}-${j}.wav`; manifest.words[w.w][t.t] = f; manifest.files[t.t] ??= f; }); });
+    const wav = Buffer.concat([Buffer.from('RIFF$\0\0\0WAVEfmt \x10\0\0\0\x01\0\x01\0\xc0\x5d\0\0\x80\xbb\0\0\x02\0\x10\0data\0\0\0\0', 'latin1')]);
+    const fetched = [];
+    await page.route('**/data/katsuyo-audio/**', route => {
+      const name = decodeURIComponent(new URL(route.request().url()).pathname.split('/').pop());
+      if (name === 'manifest.json') return route.fulfill({ contentType: 'application/json', body: JSON.stringify(manifest) });
+      fetched.push(name);
+      return route.fulfill({ contentType: 'audio/wav', body: wav });
+    });
+    await page.evaluate(() => { window.__played = 0; HTMLMediaElement.prototype.play = function () { window.__played++; return Promise.resolve(); }; });
+    await page.reload();
+    await page.evaluate(() => { window.__played = 0; HTMLMediaElement.prototype.play = function () { window.__played++; return Promise.resolve(); }; });
+    await page.waitForSelector('[data-act="kt-dl"]');
+    const saidBefore = await page.evaluate(() => window.__said.length);
+    await page.click('[data-act="kt-start"]');
+    await page.waitForSelector('[data-act="kt-pick"]');
+    const w0 = await page.textContent('.kt-word .w');
+    await page.locator('[data-act="kt-pick"]').nth(await rightIndex()).click();
+    await page.waitForSelector('.kt-fb.ok');
+    const right0 = await page.textContent('.kt-opt.right');
+    await page.waitForFunction(() => window.__played > 0);
+    assert.equal(fetched[fetched.length - 1], manifest.words[w0][right0], 'clip of this word');
+    assert.equal(await page.evaluate(() => window.__said.length), saidBefore, 'phone voice not used');
+    await page.click('[data-act="kt-quit"]');
+    await page.click('[data-act="kt-dl"]');
+    await page.waitForFunction(() => /すべてスマホに入っています/.test(document.querySelector('.kt-hero')?.textContent || ''), null, { timeout: 60000 });
+    const total = new Set(Object.values(manifest.words).flatMap(m => Object.values(m))).size;
+    assert.match(await page.textContent('.kt-hero'), new RegExp(`音声：${total}個`));
     assert.deepEqual(errors, []);
     await ctx.close();
   }
