@@ -1,0 +1,286 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>ことぐさ promo</title>
+<style>
+  /* 縦 1080×1920。暗い場面＝外国語の壁（問題）、明るい場面＝ことぐさ（答え） */
+  :root {
+    --night: #13201a; --night-2: #1d2e25; --on-night: #f2f5f0; --on-night-2: #a9bbb0;
+    --paper: #eef2ec; --card: #ffffff; --ink: #142019; --muted: #5d6c63; --line: #d5ddd6;
+    --grass: #3c8a55; --grass-2: #9fd6ae; --grass-tint: #dbeadf;
+    --accent: #2f55d4; --warn: #d0573f; --warn-tint: #f6dfd8;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; width: 1080px; height: 1920px; overflow: hidden; background: #000; }
+  #stage { position: absolute; inset: 0; width: 1080px; height: 1920px; overflow: hidden; font-family: var(--font); }
+  .bg-night { background: radial-gradient(120% 70% at 20% 10%, var(--night-2), var(--night) 60%); color: var(--on-night); }
+  .bg-paper { background: var(--paper); color: var(--ink); }
+  .content { position: absolute; inset: 0; }
+  .abs { position: absolute; }
+  .pad { left: 90px; right: 90px; }
+  h1, h2, p { margin: 0; }
+  /* 日本語は文節で折り返す（「毎日にな／い」のように切れない） */
+  h1, h2, p, .bubble, .badge span, .grid .cell { word-break: auto-phrase; text-wrap: balance; }
+  .body { text-wrap: pretty; }
+  .tag { display: inline-block; font-size: 34px; font-weight: 700; letter-spacing: .04em; padding: 10px 26px; border-radius: 40px; }
+  .tag.warn { background: var(--warn); color: #fff; }
+  .tag.grass { background: var(--grass); color: #fff; }
+  .h-xl { font-size: 92px; font-weight: 900; line-height: 1.25; letter-spacing: .01em; }
+  .h-l { font-size: 80px; font-weight: 900; line-height: 1.25; }
+  .body { font-size: 40px; font-weight: 500; line-height: 1.65; }
+  .bg-night .body { color: var(--on-night-2); }
+  .bg-paper .body { color: var(--muted); }
+  /* phone */
+  .phone { position: absolute; width: 600px; border-radius: 70px; background: #0c0f0d; padding: 16px; box-shadow: 0 40px 90px rgba(20, 32, 25, .28), 0 8px 24px rgba(20, 32, 25, .18); }
+  .phone img { display: block; width: 100%; border-radius: 56px; }
+  /* bubbles */
+  .bubble { position: absolute; border-radius: 44px; padding: 34px 44px; font-size: 52px; font-weight: 700; }
+  .bubble small { display: block; font-size: 30px; font-weight: 500; margin-bottom: 10px; opacity: .75; }
+  .bubble::after { content: ''; position: absolute; bottom: -26px; width: 0; height: 0; border: 26px solid transparent; border-bottom: 0; }
+  .bubble.a { background: var(--night-2); color: var(--on-night-2); border: 3px solid #3a4d42; }
+  .bubble.a::after { left: 70px; border-top-color: #3a4d42; }
+  .bubble.c { background: var(--card); color: var(--ink); box-shadow: 0 0 0 6px var(--grass-2); }
+  .bubble.c::after { right: 80px; border-top-color: var(--card); }
+  .strike { position: absolute; height: 8px; background: var(--warn); border-radius: 4px; transform-origin: left center; }
+  /* cliffs */
+  .cliff { position: absolute; top: 1380px; height: 600px; background: linear-gradient(#2c4236, #1a2a21); border-radius: 18px 18px 0 0; }
+  .cliff span { position: absolute; top: -86px; left: 0; right: 0; text-align: center; font-size: 46px; font-weight: 700; color: var(--on-night); }
+  .chip { position: absolute; font-size: 44px; font-weight: 700; background: var(--card); color: var(--ink); padding: 18px 30px; border-radius: 22px; white-space: nowrap; }
+  /* pile */
+  .counter { font-size: 230px; font-weight: 900; color: var(--warn); line-height: 1; font-variant-numeric: tabular-nums; }
+  .counter-l { font-size: 44px; font-weight: 700; color: var(--on-night-2); }
+  .card-r { position: absolute; width: 380px; height: 120px; border-radius: 20px; background: #2a3c32; border: 3px solid #3d5246; }
+  /* compare */
+  .grid { position: absolute; left: 60px; right: 60px; display: grid; grid-template-columns: 170px 1fr 1fr; column-gap: 18px; }
+  .grid .cell { padding: 30px 26px; font-size: 36px; line-height: 1.45; display: flex; align-items: center; }
+  .grid .lab { font-size: 32px; font-weight: 700; color: var(--muted); padding-left: 0; }
+  .grid .an { color: var(--muted); background: #e3e8e3; border-radius: 22px; }
+  .grid .ko { color: var(--ink); font-weight: 700; background: var(--card); border-radius: 22px; box-shadow: inset 0 0 0 4px var(--grass); }
+  .grid .head { justify-content: center; font-size: 40px; font-weight: 900; border-radius: 30px; padding: 20px; }
+  .grid .head.an { background: #d3d9d3; color: #4d5a52; box-shadow: none; }
+  .grid .head.ko { background: var(--grass); color: #fff; box-shadow: none; }
+  .row-gap { height: 18px; grid-column: 1 / -1; }
+  .badge { position: absolute; left: 90px; right: 90px; display: flex; align-items: center; gap: 36px; padding: 44px 50px; background: var(--card); border-radius: 36px; font-size: 52px; font-weight: 700; box-shadow: 0 10px 30px rgba(20, 32, 25, .08); }
+  .badge svg { flex: none; width: 92px; height: 92px; }
+  .cta { display: inline-block; background: var(--accent); color: #fff; font-size: 54px; font-weight: 700; padding: 34px 64px; border-radius: 80px; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<script>
+const SVG_NS = 'http://www.w3.org/2000/svg';
+let SCRIPT = null, L = null, current = { i: -1 }, built = null;
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const easeOut = p => 1 - Math.pow(1 - p, 3);
+const easeIn = p => p * p * p;
+const easeBack = p => { const c = 1.6; return 1 + (c + 1) * Math.pow(p - 1, 3) + c * Math.pow(p - 1, 2); };
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const br = s => esc(s).replace(/\n/g, '<br>');
+
+/** ロゴ：吹き出しの中から芽が出る（言葉 × 草） */
+function logo(size = 300, color = 'var(--grass)', leaf = 'var(--grass)') {
+  return `<svg viewBox="0 0 200 200" width="${size}" height="${size}" style="overflow:visible">
+    <path d="M40 30 H160 Q180 30 180 50 V122 Q180 142 160 142 H86 L50 174 L56 142 H40 Q20 142 20 122 V50 Q20 30 40 30 Z" fill="none" stroke="${color}" stroke-width="12" stroke-linejoin="round"/>
+    <g class="sprout" style="transform-origin:100px 124px">
+      <path d="M100 124 V82" stroke="${leaf}" stroke-width="10" stroke-linecap="round" fill="none"/>
+      <path class="leafL" d="M100 92 C78 92 62 78 60 58 C82 58 98 70 100 92 Z" fill="${leaf}" style="transform-origin:100px 92px"/>
+      <path class="leafR" d="M100 84 C104 62 122 50 144 52 C142 74 124 86 100 84 Z" fill="${leaf}" style="transform-origin:100px 84px"/>
+    </g>
+  </svg>`;
+}
+
+const ICONS = {
+  install: '<svg viewBox="0 0 48 48" fill="none" stroke="var(--grass)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><rect x="12" y="4" width="24" height="40" rx="5"/><path d="M20 38h8"/><path d="M17 20l5 5 9-10"/></svg>',
+  offline: '<svg viewBox="0 0 48 48" fill="none" stroke="var(--grass)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18a26 26 0 0 1 36 0"/><path d="M12 25a17 17 0 0 1 24 0"/><path d="M18 32a8 8 0 0 1 12 0"/><circle cx="24" cy="39" r="2.5" fill="var(--grass)"/></svg>',
+  data: '<svg viewBox="0 0 48 48" fill="none" stroke="var(--grass)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><rect x="10" y="20" width="28" height="22" rx="5"/><path d="M16 20v-6a8 8 0 0 1 16 0v6"/><circle cx="24" cy="31" r="3" fill="var(--grass)"/></svg>',
+};
+
+/* ---------- 場面 ---------- */
+// data-in="秒"：その時刻にふわっと出る。data-pop="秒"：はずんで出る。data-rise="秒"：下から上がる（スマホ）
+const BUILD = {
+  hook(s, T) {
+    return { bg: 'night', html: `
+      <div class="abs pad" style="top:640px">
+        <p class="h-xl" data-in="0.25">${br(T.l1)}</p>
+        <p class="h-xl" data-in="1.5" style="color:var(--grass-2)">${br(T.l2)}</p>
+      </div>
+      <div class="abs" style="left:90px; top:1240px" data-pop="2.6">
+        <div class="bubble a" style="position:relative; font-size:90px; padding:10px 60px 30px; letter-spacing:.2em">……</div>
+      </div>` };
+  },
+  title(s, T) {
+    return { bg: 'night', html: `
+      <div class="abs pad" style="top:560px">
+        <p style="font-size:64px; font-weight:700; color:var(--on-night-2)" data-in="0.15">${br(T.title)}</p>
+        <p style="font-size:210px; font-weight:900; line-height:1.15" data-in="0.45">${br(T.big)}</p>
+      </div>
+      ${[0, 1, 2].map(k => `<div class="abs wallbar" data-k="${k}" style="left:${150 + k * 300}px; width:180px; bottom:0; height:0; background:${k === 1 ? '#2f4639' : '#25382d'}; border-radius:14px 14px 0 0"></div>`).join('')}`,
+      update(t, root) {
+        root.querySelectorAll('.wallbar').forEach(el => {
+          const k = +el.dataset.k;
+          el.style.height = `${easeOut(clamp((t - 0.5 - k * 0.22) / 0.9)) * (520 + k * 60)}px`;
+        });
+      } };
+  },
+  wall(s, T) {
+    const head = `
+      <div class="abs pad" style="top:250px">
+        <span class="tag warn" data-in="0.1">${esc(T.tag)}</span>
+        <h2 class="h-l" style="margin-top:40px" data-in="0.3">${br(T.h)}</h2>
+        <p class="body" style="margin-top:34px" data-in="0.75">${br(T.b)}</p>
+      </div>`;
+    if (s.vis === 'bubbles') return { bg: 'night', html: head + `
+      <div class="bubble a" style="left:90px; top:1150px" data-in="1.2"><small>${esc(T.a)}</small>${esc(T.aText)}<div class="strike" style="left:40px; right:40px; top:118px"></div></div>
+      <div class="bubble c" style="right:90px; top:1420px; font-size:62px" data-pop="2.6"><small style="color:var(--grass)">${esc(T.c)}</small>${esc(T.cText)}</div>`,
+      update(t, root) {
+        const st = root.querySelector('.strike');
+        st.style.transform = `scaleX(${easeOut(clamp((t - 2.0) / 0.45))})`;
+        root.querySelector('.bubble.a').style.filter = t > 2.2 ? `opacity(${1 - 0.45 * clamp((t - 2.2) / 0.4)})` : '';
+      } };
+    if (s.vis === 'gap') return { bg: 'night', html: head + `
+      <div class="cliff" style="left:0; width:430px" data-in="1.0"><span>${esc(T.a)}</span></div>
+      <div class="cliff" style="left:650px; width:430px" data-in="1.0"><span>${esc(T.c)}</span></div>
+      <div class="chip" data-in="1.4">${esc(T.chip)}</div>`,
+      update(t, root) {
+        const chip = root.querySelector('.chip');
+        const w = 300, startX = 70, edgeX = 430 - w * 0.55;
+        const slide = easeOut(clamp((t - 1.8) / 1.0));
+        const fall = easeIn(clamp((t - 2.9) / 0.9));
+        const x = startX + (edgeX - startX) * slide + fall * 60;
+        const y = 1250 + fall * 560;
+        chip.style.left = `${x}px`; chip.style.top = `${y}px`;
+        chip.style.rotate = `${fall * 38}deg`;
+        if (t > 2.9) chip.style.opacity = String(1 - clamp((t - 3.4) / 0.4));
+      } };
+    return { bg: 'night', html: head + `
+      <div class="abs pad" style="top:1130px" data-in="0.9">
+        <p class="counter-l">${esc(T.counter)}</p>
+        <p class="counter"><span class="num">0</span><span style="font-size:80px; margin-left:12px">${esc(T.unit)}</span></p>
+      </div>
+      <div class="abs pile" style="left:600px; top:1820px"></div>`,
+      update(t, root) {
+        const p = easeOut(clamp((t - 1.0) / 2.6));
+        root.querySelector('.num').textContent = String(Math.round(12 + p * 470));
+        const n = Math.round(p * 11);
+        const pile = root.querySelector('.pile');
+        if (pile.childElementCount !== n) pile.innerHTML = Array.from({ length: n }, (_, k) => `<div class="card-r" style="left:${(k % 2) * 24}px; top:${-k * 44}px; rotate:${(k % 3 - 1) * 3}deg"></div>`).join('');
+      } };
+  },
+  reveal(s, T) {
+    return { bg: 'paper', html: `
+      <div class="abs" style="left:0; right:0; top:520px; display:flex; flex-direction:column; align-items:center; text-align:center; gap:26px">
+        <div class="logo" data-pop="0.15">${logo(300)}</div>
+        <p style="font-size:${L.name.length > 6 ? 150 : 180}px; font-weight:900; letter-spacing:.06em; line-height:1.1" data-in="0.7">${esc(L.name)}</p>
+        <p style="font-size:38px; color:var(--muted); font-weight:500" data-in="1.1">${esc(L.nameSub)}</p>
+        <p style="font-size:${L.tagline.length > 20 ? 50 : 64}px; font-weight:700; color:var(--grass); margin-top:40px; padding:0 80px; line-height:1.4" data-in="1.7">${br(L.tagline)}</p>
+      </div>`,
+      update(t, root) { growLeaves(root, t - 0.45); } };
+  },
+  feature(s, T) {
+    const shots = s.shots.map(n => `shots/${L.shots}/${n}.jpg`);
+    const phones = shots.length === 1
+      ? `<div class="phone" style="left:240px; top:820px" data-rise="0.5"><img src="${shots[0]}"></div>`
+      : `<div class="phone" style="left:40px; top:860px; width:520px; rotate:-3deg" data-rise="0.5"><img src="${shots[0]}"></div>
+         <div class="phone" style="left:520px; top:960px; width:520px; rotate:3deg" data-rise="0.95"><img src="${shots[1]}"></div>`;
+    return { bg: 'paper', html: `
+      <div class="abs pad" style="top:200px">
+        <span class="tag grass" data-in="0.1">${esc(T.k)}</span>
+        <h2 class="h-l" style="margin-top:34px; font-size:${T.h.length > 16 ? 66 : 80}px" data-in="0.25">${br(T.h)}</h2>
+        <p class="body" style="margin-top:26px; font-size:${T.b.length > 60 ? 34 : 38}px" data-in="0.6">${br(T.b)}</p>
+      </div>${phones}`,
+      update(t, root) { root.querySelectorAll('.phone').forEach(el => { el.style.translate = `0 ${-t * 8}px`; }); } };
+  },
+  compare(s, T) {
+    const rows = T.rows.map((r, k) => {
+      const d = 1.1 + k * 0.75;
+      return `<div class="cell lab" data-in="${d}">${esc(r[0])}</div><div class="cell an" data-in="${d}">${esc(r[1])}</div><div class="cell ko" data-in="${d + 0.25}">${esc(r[2])}</div><div class="row-gap"></div>`;
+    }).join('');
+    return { bg: 'paper', html: `
+      <div class="abs pad" style="top:170px"><h2 class="h-l" style="font-size:${T.title.length > 14 ? 64 : 80}px" data-in="0.1">${esc(T.title)}</h2></div>
+      <div class="grid" style="top:400px">
+        <div></div><div class="cell head an" data-in="0.5">${esc(T.a)}</div><div class="cell head ko" data-in="0.6">${esc(T.c)}</div><div class="row-gap"></div>
+        ${rows}
+      </div>
+      <div class="abs pad" style="top:1520px">
+        <p style="font-size:42px; color:var(--muted); font-weight:500" data-in="5.0">${esc(T.foot1)}</p>
+        <p style="font-size:${T.foot2.length > 22 ? 46 : 54}px; font-weight:900; margin-top:18px; color:var(--ink)" data-in="5.6">${esc(T.foot2).replace(esc(T.c), `<span style="color:var(--grass)">${esc(T.c)}</span>`)}</p>
+      </div>` };
+  },
+  badges(s, T) {
+    const keys = ['install', 'offline', 'data'];
+    return { bg: 'paper', html: `
+      <div class="abs pad" style="top:330px"><h2 class="h-l" style="font-size:${T.title.length > 14 ? 64 : 76}px" data-in="0.1">${esc(T.title)}</h2></div>
+      ${T.items.map((it, k) => `<div class="badge" style="top:${700 + k * 260}px; font-size:${it.length > 14 ? 42 : 52}px" data-in="${0.5 + k * 0.45}">${ICONS[keys[k]]}<span>${esc(it)}</span></div>`).join('')}` };
+  },
+  end(s, T) {
+    return { bg: 'night', html: `
+      <div class="abs" style="left:0; right:0; top:430px; display:flex; flex-direction:column; align-items:center; text-align:center; gap:24px">
+        <div data-pop="0.1">${logo(240, 'var(--grass-2)', 'var(--grass-2)')}</div>
+        <p style="font-size:${L.name.length > 6 ? 130 : 160}px; font-weight:900; letter-spacing:.06em; line-height:1.1" data-in="0.4">${esc(L.name)}</p>
+        <p style="font-size:${L.tagline.length > 20 ? 46 : 58}px; font-weight:700; color:var(--grass-2); padding:0 80px; line-height:1.4" data-in="0.8">${br(L.tagline)}</p>
+        <div style="margin-top:110px" data-pop="1.5"><span class="cta">${esc(T.cta)}</span></div>
+        ${SCRIPT.url ? `<p style="margin-top:70px; font-size:34px; color:var(--on-night-2); letter-spacing:.02em" data-in="2.0">${esc(SCRIPT.url)}</p>` : ''}
+      </div>`,
+      update(t, root) { growLeaves(root, t - 0.3); } };
+  },
+};
+
+function growLeaves(root, t) {
+  const a = easeBack(clamp(t / 0.6)), b = easeBack(clamp((t - 0.2) / 0.6));
+  root.querySelectorAll('.leafL').forEach(el => { el.style.transform = `scale(${a})`; });
+  root.querySelectorAll('.leafR').forEach(el => { el.style.transform = `scale(${b})`; });
+}
+
+/* ---------- 時間 → 見た目 ---------- */
+function apply(t, dur) {
+  const root = built.root;
+  root.querySelectorAll('[data-in]').forEach(el => {
+    const p = easeOut(clamp((t - +el.dataset.in) / 0.7));
+    el.style.opacity = String(p);
+    el.style.transform = `translateY(${(1 - p) * 40}px)`;
+  });
+  root.querySelectorAll('[data-pop]').forEach(el => {
+    const q = clamp((t - +el.dataset.pop) / 0.55);
+    el.style.opacity = String(clamp(q * 2));
+    el.style.transform = `scale(${0.82 + 0.18 * easeBack(q)})`;
+  });
+  root.querySelectorAll('[data-rise]').forEach(el => {
+    const p = easeOut(clamp((t - +el.dataset.rise) / 0.9));
+    el.style.opacity = String(clamp(p * 1.5));
+    el.style.transform = `translateY(${(1 - p) * 520}px)`;
+  });
+  if (built.update) built.update(t, root);
+  root.style.opacity = String(clamp((dur - t) / 0.3));       // 場面の終わり：中身だけ消える（背景は残す）
+}
+
+window.prepare = async (lang = 'ja') => {
+  SCRIPT = await (await fetch('script.json', { cache: 'no-cache' })).json();
+  L = SCRIPT.langs[lang];
+  if (!L) throw new Error('no lang ' + lang);
+  document.documentElement.lang = lang;
+  document.getElementById('stage').style.setProperty('--font', L.font);
+  // 画像を先に読み込む
+  const names = [...new Set(SCRIPT.scenes.flatMap(s => s.shots || []))];
+  await Promise.all(names.map(n => new Promise(res => { const im = new Image(); im.onload = im.onerror = res; im.src = `shots/${L.shots}/${n}.jpg`; })));
+  await document.fonts.ready;
+  return SCRIPT.scenes.map(s => ({ id: s.id, dur: s.dur, say: (L[s.id] || {}).say || '' }));
+};
+
+window.show = (i, t, dur) => {
+  const s = SCRIPT.scenes[i];
+  if (current.i !== i) {
+    const T = L[s.id] || {};
+    const b = BUILD[s.kind](s, T);
+    const stage = document.getElementById('stage');
+    stage.className = b.bg === 'night' ? 'bg-night' : 'bg-paper';
+    stage.innerHTML = `<div class="content">${b.html}</div>`;
+    built = { root: stage.firstElementChild, update: b.update };
+    current.i = i;
+  }
+  apply(t, dur ?? s.dur);
+  return document.fonts.ready.then(() => true);
+};
+</script>
+</body>
+</html>

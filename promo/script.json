@@ -1,0 +1,544 @@
+{
+ "note": "宣伝動画の台本。言語を足すときは langs に同じ形で書き足し、node promo/render.mjs --lang <言語> で作る。say はナレーション（--aivis のときだけ使う）",
+ "fps": 30,
+ "width": 1080,
+ "height": 1920,
+ "url": "yf2021-arch.github.io/grass",
+ "scenes": [
+  {
+   "id": "hook",
+   "kind": "hook",
+   "dur": 4.6
+  },
+  {
+   "id": "walls",
+   "kind": "title",
+   "dur": 2.8
+  },
+  {
+   "id": "wall1",
+   "kind": "wall",
+   "n": 1,
+   "vis": "bubbles",
+   "dur": 5.6
+  },
+  {
+   "id": "wall2",
+   "kind": "wall",
+   "n": 2,
+   "vis": "gap",
+   "dur": 5.6
+  },
+  {
+   "id": "wall3",
+   "kind": "wall",
+   "n": 3,
+   "vis": "pile",
+   "dur": 5.6
+  },
+  {
+   "id": "reveal",
+   "kind": "reveal",
+   "dur": 4.8
+  },
+  {
+   "id": "collect",
+   "kind": "feature",
+   "shots": [
+    "inbox"
+   ],
+   "dur": 6.2
+  },
+  {
+   "id": "see",
+   "kind": "feature",
+   "shots": [
+    "review-front",
+    "family"
+   ],
+   "dur": 6.4
+  },
+  {
+   "id": "say",
+   "kind": "feature",
+   "shots": [
+    "speak"
+   ],
+   "dur": 5.6
+  },
+  {
+   "id": "lookup",
+   "kind": "feature",
+   "shots": [
+    "look-read",
+    "look-up"
+   ],
+   "dur": 6.2
+  },
+  {
+   "id": "voice",
+   "kind": "feature",
+   "shots": [
+    "look-voice"
+   ],
+   "dur": 6.4
+  },
+  {
+   "id": "walk",
+   "kind": "feature",
+   "shots": [
+    "walk-setup",
+    "walk-run"
+   ],
+   "dur": 6.4
+  },
+  {
+   "id": "use",
+   "kind": "feature",
+   "shots": [
+    "katsuyo-tree"
+   ],
+   "dur": 6.2
+  },
+  {
+   "id": "keep",
+   "kind": "feature",
+   "shots": [
+    "today",
+    "review-back"
+   ],
+   "dur": 6.2
+  },
+  {
+   "id": "anki",
+   "kind": "compare",
+   "dur": 9.5
+  },
+  {
+   "id": "how",
+   "kind": "badges",
+   "dur": 4.4
+  },
+  {
+   "id": "end",
+   "kind": "end",
+   "dur": 5.4
+  }
+ ],
+ "langs": {
+  "ja": {
+   "font": "\"Noto Sans CJK JP\", \"Noto Sans JP\", sans-serif",
+   "shots": "ja",
+   "name": "ことぐさ",
+   "nameSub": "言種 ＝ 口ぐせ",
+   "tagline": "覚えた言葉を、口ぐせに。",
+   "hook": {
+    "l1": "意味は分かる。",
+    "l2": "なのに、口から出てこない。",
+    "say": "意味は分かる。なのに、口から出てこない。"
+   },
+   "walls": {
+    "title": "外国語の",
+    "big": "3つの壁",
+    "say": "外国語には、3つの壁があります。"
+   },
+   "wall1": {
+    "tag": "壁 1",
+    "h": "例文が、自分の毎日にない",
+    "b": "教科書は「駅はどこですか」。\n職場で要るのは「一旦、持ち帰ります」。",
+    "a": "教科書",
+    "aText": "駅はどこですか？",
+    "c": "職場",
+    "cText": "一旦、持ち帰ります。",
+    "say": "教科書の例文は、自分の毎日にありません。"
+   },
+   "wall2": {
+    "tag": "壁 2",
+    "h": "分かる ≠ 言える",
+    "b": "活用、聞き取り、とっさの一言。\n「読める」と「使える」の間には、深い溝がある。",
+    "a": "読める",
+    "c": "使える",
+    "chip": "腹落ちする",
+    "say": "分かることと、言えることの間には、深い溝があります。"
+   },
+   "wall3": {
+    "tag": "壁 3",
+    "h": "続かない",
+    "b": "カードを自分で作る手間。積み上がる復習。\n気づけば、アプリを開かない日が続く。",
+    "counter": "今日の復習",
+    "unit": "枚",
+    "say": "そして、続きません。"
+   },
+   "reveal": {
+    "say": "ことぐさ。覚えた言葉を、口ぐせに。"
+   },
+   "collect": {
+    "k": "拾う",
+    "h": "あなたの毎日が、教材になる",
+    "b": "職場のチャット、YouTube、本の写真。\n貼るだけで AI が、意味・語源・イメージ図つきのカードに。",
+    "say": "職場のチャットも、動画も、本の写真も。貼るだけで、AIがカードにします。"
+   },
+   "see": {
+    "k": "見る",
+    "h": "絵で、腹落ちする",
+    "b": "言葉の根っこのイメージを、1枚の図に。\n似た言葉は「家族」で並べて、違いが見える。",
+    "say": "言葉のイメージを、一枚の絵で。似た言葉は、並べて違いを見ます。"
+   },
+   "say": {
+    "k": "話す",
+    "h": "場面を見て、日本語で言う",
+    "b": "朝会で報告する、上司に相談する。\n場面だけを見て言ってから、答えと比べる。",
+    "say": "場面を見て、日本語で言う。言ってから、答えと比べます。"
+   },
+   "use": {
+    "k": "使う",
+    "h": "活用は、図で決める",
+    "b": "て形・ない形・受け身・使役・可能・〜んです。\n間違えた形ほど、また出てくる。",
+    "say": "活用は、図で決める。間違えた形ほど、また出てきます。"
+   },
+   "keep": {
+    "k": "続く",
+    "h": "1日5枚、約4分",
+    "b": "新しい言葉は1日5枚まで。\nゴールは「覚えた」ではなく「職場で使えた」。",
+    "say": "新しい言葉は、一日五枚。ゴールは、職場で使えたこと。"
+   },
+   "anki": {
+    "title": "Anki との違い",
+    "a": "Anki",
+    "c": "ことぐさ",
+    "rows": [
+     [
+      "カード",
+      "自分で作る／人のデッキを借りる",
+      "自分の素材を貼れば、AI が作る"
+     ],
+     [
+      "覚え方",
+      "表と裏の文字で思い出す",
+      "イメージ図と言葉の家族でつかむ"
+     ],
+     [
+      "練習",
+      "見て、思い出す",
+      "声に出す・活用する"
+     ],
+     [
+      "ゴール",
+      "忘れないこと",
+      "職場で使えること"
+     ]
+    ],
+    "foot1": "Anki は、覚えるための道具。",
+    "foot2": "ことぐさ は、使えるようになるための道具。",
+    "say": "Ankiは、覚えるための道具。ことぐさは、使えるようになるための道具です。"
+   },
+   "how": {
+    "title": "スマホのブラウザで、今すぐ",
+    "items": [
+     "インストール不要",
+     "オフラインでも動く",
+     "データは自分のシートとスマホに"
+    ],
+    "say": "インストールは不要。オフラインでも動きます。"
+   },
+   "end": {
+    "cta": "今日の5枚から、始めよう。",
+    "say": "今日の五枚から、始めよう。"
+   },
+   "lookup": {
+    "k": "顔を上げる",
+    "h": "読んで、顔を上げて言う",
+    "b": "文を覚えたら、画面から目を離す。\nだれかに話すつもりで、声に出す。",
+    "say": "読んで、顔を上げて、だれかに話すつもりで言う。"
+   },
+   "voice": {
+    "k": "聞き比べる",
+    "h": "自分の声 → お手本",
+    "b": "言った声を録音して、お手本と聞き比べ。\nスマホの中で文字にして、言えなかった所に印。録音は送信しない。",
+    "say": "自分の声とお手本を聞き比べ。言えなかった所に、印が付きます。"
+   },
+   "walk": {
+    "k": "歩きながら",
+    "h": "散歩しながら、耳で復習",
+    "b": "画面を見ずに、手も使わない。単語・話す・聴解を順に流して、間であとについて言う。\nイヤホンのボタンで操作、画面を消しても続く。",
+    "say": "散歩しながら、耳で復習。画面を消しても続きます。"
+   }
+  },
+  "zh": {
+   "font": "\"Noto Sans CJK SC\", \"Noto Sans SC\", sans-serif",
+   "shots": "ja",
+   "name": "ことぐさ",
+   "nameSub": "Kotogusa · 言种＝口头禅",
+   "tagline": "把学过的话，变成你的口头禅。",
+   "hook": {
+    "l1": "意思都懂。",
+    "l2": "可就是说不出口。",
+    "say": "意思都懂，可就是说不出口。"
+   },
+   "walls": {
+    "title": "学外语的",
+    "big": "3 道墙",
+    "say": "学外语，有三道墙。"
+   },
+   "wall1": {
+    "tag": "第 1 道墙",
+    "h": "例句，不在你的生活里",
+    "b": "课本教「车站在哪里？」\n职场需要的是「这个我先带回去研究一下」。",
+    "a": "课本",
+    "aText": "駅はどこですか？",
+    "c": "职场",
+    "cText": "一旦、持ち帰ります。",
+    "say": "课本上的例句，不在你的生活里。"
+   },
+   "wall2": {
+    "tag": "第 2 道墙",
+    "h": "看得懂 ≠ 说得出",
+    "b": "动词变形、听力、临场一句话。\n「能读懂」和「能用上」之间，隔着一道深沟。",
+    "a": "能读懂",
+    "c": "能用上",
+    "chip": "腹落ちする",
+    "say": "看得懂和说得出之间，隔着一道深沟。"
+   },
+   "wall3": {
+    "tag": "第 3 道墙",
+    "h": "坚持不下去",
+    "b": "自己做卡片太费事，复习越堆越多。\n不知不觉，就再也没打开过。",
+    "counter": "今天要复习",
+    "unit": "张",
+    "say": "然后，就坚持不下去了。"
+   },
+   "reveal": {
+    "say": "ことぐさ。把学过的话，变成你的口头禅。"
+   },
+   "collect": {
+    "k": "捡",
+    "h": "你的每一天，就是教材",
+    "b": "工作聊天、YouTube、书页照片。\n贴进来，AI 就做成带释义、词源和意象图的卡片。",
+    "say": "工作聊天、视频、书页照片，贴进来，AI 就做成卡片。"
+   },
+   "see": {
+    "k": "看",
+    "h": "看图，一下就懂",
+    "b": "把词的核心意象画成一张图。\n近义词按「词族」排开，差别一目了然。",
+    "say": "一张图看懂词的意象，近义词排在一起，差别一目了然。"
+   },
+   "say": {
+    "k": "说",
+    "h": "看场景，用日语说出来",
+    "b": "晨会汇报、找上司商量。\n只看场景先说，再和答案对比。",
+    "say": "看着场景，用日语说出来，再和答案对比。"
+   },
+   "use": {
+    "k": "用",
+    "h": "变形，用图来判断",
+    "b": "て形・ない形・被动・使役・可能・〜んです。\n错得越多的形式，出现得越多。",
+    "say": "动词变形，用图来判断。错得越多，练得越多。"
+   },
+   "keep": {
+    "k": "坚持",
+    "h": "每天 5 张，约 4 分钟",
+    "b": "新词每天最多 5 个。\n目标不是「背下来」，而是「在工作中用上了」。",
+    "say": "每天五张。目标是在工作中用上。"
+   },
+   "anki": {
+    "title": "和 Anki 有什么不同",
+    "a": "Anki",
+    "c": "ことぐさ",
+    "rows": [
+     [
+      "卡片",
+      "自己做／借别人的卡组",
+      "贴上自己的素材，AI 来做"
+     ],
+     [
+      "记法",
+      "看正反面文字回忆",
+      "用意象图和词族理解"
+     ],
+     [
+      "练习",
+      "看着回想",
+      "开口说・练变形"
+     ],
+     [
+      "目标",
+      "不忘记",
+      "在工作中用得上"
+     ]
+    ],
+    "foot1": "Anki 是帮你记住的工具。",
+    "foot2": "ことぐさ 是帮你用起来的工具。",
+    "say": "Anki 帮你记住，ことぐさ 帮你用起来。"
+   },
+   "how": {
+    "title": "手机浏览器，马上就能用",
+    "items": [
+     "无需安装",
+     "离线也能用",
+     "数据在你自己的表格和手机里"
+    ],
+    "say": "无需安装，离线也能用。"
+   },
+   "end": {
+    "cta": "从今天的 5 张开始。",
+    "say": "从今天的五张开始。"
+   },
+   "lookup": {
+    "k": "抬头",
+    "h": "读完，抬起头说",
+    "b": "记住句子后，把眼睛从屏幕上移开。\n像在跟人说话一样，大声说出来。",
+    "say": "读完，抬起头，像跟人说话一样说出来。"
+   },
+   "voice": {
+    "k": "对比",
+    "h": "自己的声音 → 示范音",
+    "b": "录下自己说的，和示范音对比着听。\n手机本地转成文字，没说出来的地方会标出来。录音不上传。",
+    "say": "把自己的声音和示范音对比，没说出来的地方会标出来。"
+   },
+   "walk": {
+    "k": "散步",
+    "h": "边散步，边用耳朵复习",
+    "b": "不看屏幕，不用动手。单词、口语、听力依次播放，停顿时跟着说。\n用耳机按键操作，锁屏也不会停。",
+    "say": "边散步，边用耳朵复习。锁屏也不会停。"
+   }
+  },
+  "en": {
+   "font": "\"Noto Sans\", \"Noto Sans CJK JP\", sans-serif",
+   "shots": "ja",
+   "name": "Kotogusa",
+   "nameSub": "kotogusa · the phrases you always say",
+   "tagline": "Turn the words you learn into the words you use.",
+   "hook": {
+    "l1": "You know what it means.",
+    "l2": "So why can't you say it?",
+    "say": "You know what it means. So why can't you say it?"
+   },
+   "walls": {
+    "title": "Learning a language:",
+    "big": "3 walls",
+    "say": "Learning a language has three walls."
+   },
+   "wall1": {
+    "tag": "Wall 1",
+    "h": "Textbook sentences aren't your life",
+    "b": "Textbooks teach “Where is the station?”\nAt work you need “Let me take that back and check.”",
+    "a": "Textbook",
+    "aText": "駅はどこですか？",
+    "c": "Work",
+    "cText": "一旦、持ち帰ります。",
+    "say": "Textbook sentences aren't your life."
+   },
+   "wall2": {
+    "tag": "Wall 2",
+    "h": "Understanding ≠ speaking",
+    "b": "Conjugation, listening, the quick reply.\nThere's a gap between reading a word and using it.",
+    "a": "Can read",
+    "c": "Can use",
+    "chip": "腹落ちする",
+    "say": "There's a gap between understanding and speaking."
+   },
+   "wall3": {
+    "tag": "Wall 3",
+    "h": "You stop",
+    "b": "Making every card yourself. Reviews piling up.\nOne day you just stop opening the app.",
+    "counter": "Reviews due today",
+    "unit": "",
+    "say": "And then you stop."
+   },
+   "reveal": {
+    "say": "Kotogusa. Turn the words you learn into the words you use."
+   },
+   "collect": {
+    "k": "Collect",
+    "h": "Your day is the textbook",
+    "b": "Work chat, YouTube, a photo of a book page.\nPaste it in, and AI makes cards with meaning, roots and a picture.",
+    "say": "Paste in your work chat, a video, a book page. AI turns it into cards."
+   },
+   "see": {
+    "k": "See",
+    "h": "Get it at a glance",
+    "b": "The core image of a word, in one picture.\nSimilar words side by side, as a family.",
+    "say": "One picture for the core of a word. Similar words side by side."
+   },
+   "say": {
+    "k": "Speak",
+    "h": "See the scene, say it in Japanese",
+    "b": "Report at the morning meeting, ask your manager.\nSay it from the scene alone, then check the answer.",
+    "say": "See the scene and say it in Japanese, then check the answer."
+   },
+   "use": {
+    "k": "Use",
+    "h": "Conjugation, by picture",
+    "b": "-te, negative, passive, causative, potential, -n desu.\nThe forms you miss come back more often.",
+    "say": "Conjugation, decided by a picture. The forms you miss come back."
+   },
+   "keep": {
+    "k": "Keep going",
+    "h": "5 words a day, about 4 minutes",
+    "b": "At most 5 new words a day.\nThe goal isn't “memorized”. It's “used it at work”.",
+    "say": "Five words a day. The goal is using them at work."
+   },
+   "anki": {
+    "title": "How it differs from Anki",
+    "a": "Anki",
+    "c": "Kotogusa",
+    "rows": [
+     [
+      "Cards",
+      "You make them, or borrow a deck",
+      "Paste your material, AI makes them"
+     ],
+     [
+      "Learning",
+      "Recall text on front and back",
+      "Pictures and word families"
+     ],
+     [
+      "Practice",
+      "Look and recall",
+      "Speak and conjugate"
+     ],
+     [
+      "Goal",
+      "Don't forget",
+      "Use it at work"
+     ]
+    ],
+    "foot1": "Anki helps you remember.",
+    "foot2": "Kotogusa helps you use.",
+    "say": "Anki helps you remember. Kotogusa helps you use."
+   },
+   "how": {
+    "title": "Right in your phone's browser",
+    "items": [
+     "No install",
+     "Works offline",
+     "Your data stays in your sheet and phone"
+    ],
+    "say": "No install. Works offline."
+   },
+   "end": {
+    "cta": "Start with today's 5 words.",
+    "say": "Start with today's five words."
+   },
+   "lookup": {
+    "k": "Look up",
+    "h": "Read it, look up, say it",
+    "b": "Once you have the sentence, look away from the screen.\nSay it as if you were talking to someone.",
+    "say": "Read it, look up, and say it as if to someone."
+   },
+   "voice": {
+    "k": "Compare",
+    "h": "Your voice → the model",
+    "b": "Record yourself and compare with the model voice.\nYour phone writes it down and marks what you missed. Nothing is uploaded.",
+    "say": "Compare your voice with the model. What you missed gets marked."
+   },
+   "walk": {
+    "k": "Walk",
+    "h": "Review by ear on a walk",
+    "b": "No screen, no hands. Words, phrases and listening play in turn, with a pause to repeat.\nEarphone buttons work, even with the screen off.",
+    "say": "Review by ear on a walk. It keeps going with the screen off."
+   }
+  }
+ }
+}
