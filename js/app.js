@@ -13,6 +13,7 @@ import { createWalk } from './walk.js';
 import { createRaw } from './raw.js';
 import { createCardAudio } from './cardaudio.js';
 import { parseFuri, furiHtml, furiToggle, initFuri } from './furi.js';
+import { LEAD_CHOICES, leadKeep, setLeadKeep } from './lead.js';
 
 const app = document.getElementById('app');
 
@@ -945,6 +946,10 @@ function renderSettings() {
             <button class="outline" data-act="ca-import" ${S.ui.caBusy ? 'disabled' : ''}>${S.ui.caBusy ? esc(S.ui.caBusy) : '音声パックを読み込む'}</button>
             ${cardAudio.count() ? '<button class="outline quiet" data-act="ca-clear">このスマホの音声を消す</button>' : ''}
             <p class="small">パックは PC の tools/make_card_audio.py で作ります。例文に職場の内容が入ることがあるので、公開リポジトリには入れません。PC に残るパックがバックアップです。</p>
+            <div class="line">
+              <span class="t"><b>鳴り始めまでの無音</b><span>音声の頭の無音を短くして、すぐ鳴らします（カード・話す・散歩）。最初の言葉が切れるときは長くします</span></span>
+            </div>
+            <div class="chips">${LEAD_CHOICES.map(v => `<button class="chip" aria-pressed="${leadKeep() === v}" data-act="lead" data-v="${v}">${v}秒${v === 0.4 ? '（そのまま）' : ''}</button>`).join('')}</div>
           </div>
         </section>
 
@@ -981,7 +986,7 @@ function renderSettings() {
             <button class="outline quiet" data-act="${S.settings.demo ? 'demo-off' : 'demo-on'}">${S.settings.demo ? 'デモを終了' : 'デモデータで試す'}</button>
           </div>
         </section>
-        <p class="small" style="text-align:center">Grass v1.18.1</p>
+        <p class="small" style="text-align:center">Grass v1.19.0</p>
       </main>
       ${nav('settings')}
     </div>`;
@@ -1123,6 +1128,12 @@ Object.assign(actions, speak.actions, bjt.actions, katsuyo.actions, walk.actions
   'ca-import': () => document.getElementById('ca-file')?.click(),
   'ca-list': () => {
     S.ui.caList = !S.ui.caList;
+    const top = app.querySelector('.scroll')?.scrollTop || 0;
+    render();
+    app.querySelector('.scroll')?.scrollTo(0, top);
+  },
+  lead: el => {
+    setLeadKeep(Number(el.dataset.v));
     const top = app.querySelector('.scroll')?.scrollTop || 0;
     render();
     app.querySelector('.scroll')?.scrollTo(0, top);

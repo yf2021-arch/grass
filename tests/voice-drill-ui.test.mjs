@@ -75,6 +75,20 @@ try {
   await page.waitForSelector('.heard', { timeout: 5000 });
   assert.equal(await live(), 0, 'no live microphone track after the take');
   assert.match(await page.locator('.voice-res').innerText(), /文字の一致（目安）/);
+  assert.equal(await page.locator('[data-act="sp-mine"]').count(), 0, '「自分の声」だけのボタンは出さない（v1.19.0）');
+  assert.equal(await page.locator('[data-act="sp-cmp"]').count(), 1);
+
+  // 1b. 何度でも言い直せる（v1.19.0）：もう一度言う → 答えを隠してまた録る → 結果が出る
+  await page.click('[data-act="sp-retake"]');
+  await page.waitForSelector('[data-act="sp-said"]');
+  await page.waitForFunction(() => window.__tracks.some(t => t.readyState === 'live'));
+  await page.waitForTimeout(900);
+  await page.click('[data-act="sp-said"]');
+  await page.waitForSelector('.voice-res');
+  if (await page.locator('[data-act="sp-wh-anyway"]').count()) await page.click('[data-act="sp-wh-anyway"]');
+  await page.waitForSelector('.heard', { timeout: 5000 });
+  assert.equal(await page.locator('[data-act="sp-retake"]').count(), 1, '何回目でも、もう一度言える');
+  assert.equal(await live(), 0, 'no live microphone track after the second take');
 
   // 2. stall: elapsed time + slow prompt, then timeout error (not endless), retry recovers
   await page.click('[data-act="sp-rate"][data-ok="1"]');

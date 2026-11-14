@@ -114,6 +114,8 @@ export function createVoice() {
     //   3. 声のかたまり（300ms未満の切れ目はつなぐ）が300ms未満なら、物音として数えない
     const hist = [];              // { t, rms, v（しきい値を超えたか） }
     let onsetAt = null;
+    let anyVoiceAt = null;        // しきい値を一度でも超えた最初の時刻（短い声・小さい声も含む。切り出しの目安）
+    let recStart = null;          // 録音が実際に始まった時刻（start イベント）。t0 より遅れることがある
     let voiced = 0;
     let lastVoice = 0;
     let holdUntil = 0;
@@ -165,9 +167,11 @@ export function createVoice() {
       if (reason === 'cancel') return;
       const blob = new Blob(parts, { type: rec.mimeType || mime || 'audio/webm' });
       const url = blob.size ? URL.createObjectURL(blob) : null;
-      onEnd({ kind: 'rec', url, blob: blob.size ? blob : null, startAt: t0, onsetAt, endAt: lastVoice || performance.now(), reason });
+      // startAt は録音ファイルの 0 秒にあたる時刻。録音の開始は t0 より遅れることがあるので、start イベントの時刻を使う（v1.19.0）
+      onEnd({ kind: 'rec', url, blob: blob.size ? blob : null, startAt: recStart ?? t0, onsetAt, anyVoiceAt: anyVoiceAt != null && onsetAt != null ? Math.min(anyVoiceAt, onsetAt) : onsetAt, endAt: lastVoice || performance.now(), reason });
     };
     rec.onstop = emit;
+    rec.onstart = () => { recStart = performance.now(); };
     rec.onerror = () => { done = true; clearInterval(timer); reason = reason === 'cancel' ? 'cancel' : 'error'; emit(); };
 
     const timer = setInterval(() => {
@@ -179,6 +183,7 @@ export function createVoice() {
       for (let i = hist.length - 1; i >= 0 && now - hist[i].t <= FLOOR_WIN; i -= 1) if (hist[i].rms < floor) floor = hist[i].rms;
       const thr = Math.max(MIN_THR, floor * 3);
       hist[hist.length - 1].v = rms > thr;
+      if (anyVoiceAt == null && rms > thr && now - t0 > TICK) anyVoiceAt = now;
       // 直近3秒は、いまのしきい値で見直す（声→雑音への見直しだけ。前の声を後から増やすことはしない）
       for (let i = hist.length - 2; i >= 0 && now - hist[i].t <= FLOOR_WIN; i -= 1) if (hist[i].v && hist[i].rms <= thr) hist[i].v = false;
       analyse();
