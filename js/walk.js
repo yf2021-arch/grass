@@ -1,3 +1,4 @@
+import { skipLead } from './lead.js';
 // 散歩モード（v1.9.0）：画面を見ずに、手を使わずに聞く
 //   #/walk … 設定 → 始める → あとはイヤホンのボタンかロック画面で操作
 //
@@ -141,6 +142,7 @@ export function createWalk({ app, esc, nav, store, todayStr, ICON, cards, isDue,
     }
     if (!url) { r.j += 1; return playStep(); }        // 音声がない部分は飛ばす
     el.src = url;
+    if (st.t !== 'gap') skipLead(el);               // 頭の無音を短くする（v1.19.0）
     el.playbackRate = st.t === 'gap' ? 1 : W.settings.speed;
     el.preservesPitch = true;
     try {

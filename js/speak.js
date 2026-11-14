@@ -26,6 +26,7 @@
 
 import { createVoice, compareSay, srSupported, micSupported } from './voice.js';
 import { parseFuri, furiHtml, furiToggle } from './furi.js';
+import { skipLead } from './lead.js';
 import { createWhisper, decodeForWhisper, WH_MODELS, WH_LIMITS, appModels, DEFAULT_WH_MODEL } from './whisper.js';
 
 const DRILL_SIZE = 5;
@@ -205,6 +206,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
         const p = new Audio(playerUrl);
         p.playbackRate = rate;              // 0.8 倍など（音の高さは変えない）
         p.preservesPitch = true;
+        skipLead(p);                        // 頭の無音を短くする（v1.19.0）
         player = p;
         const done = wait ? new Promise(res => { p.onended = () => res(true); p.onpause = () => res(!p.ended ? false : true); p.onerror = () => res(false); }) : null;
         await p.play();
@@ -758,7 +760,10 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     tickWhisper();
     try {
       const d0 = performance.now();
-      const from = whole ? 0 : Math.max(0, (res.onsetAt - res.startAt) / 1000 - 0.35);
+      // 話し始めの少し前から切り出す（v1.19.0：0.35 → 1.0 秒。最初のかたまりより前の小さな声も含める）。
+      //   「すみません、（間）今の部分を…」の「すみません」が落ちていた
+      const first = Math.min(res.onsetAt, res.anyVoiceAt ?? res.onsetAt);
+      const from = whole ? 0 : Math.max(0, (first - res.startAt) / 1000 - 1.0);
       const to = whole ? Infinity : (res.endAt - res.startAt) / 1000 + 0.5;
       const pcm = await decodeForWhisper(att.blob || att.url, from, to);
       att.timings.decodeMs = performance.now() - d0;
@@ -825,11 +830,13 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
       const wh = whStateHtml(r);
       body = `
         <div class="cmp-row">
-          <button class="outline quiet" data-act="sp-mine">${ICON.speaker}自分の声</button>
-          <button class="outline" data-act="sp-cmp">自分 → お手本</button>
+          <button class="outline" data-act="sp-cmp">${ICON.speaker}自分 → お手本</button>
         </div>${wh}`;
     }
-    return `<section class="voice-res">${times}${body}</section>`;
+    // 何度でも言い直せる（v1.19.0）。答えを隠して、もう一度録る
+    const again = d.mode === 'look' && SP.voice.on && micSupported()
+      ? `<div class="cmp-row"><button class="outline quiet" data-act="sp-retake">もう一度言う</button></div>` : '';
+    return `<section class="voice-res">${times}${body}${again}</section>`;
   }
 
   function whStateHtml(r) {
@@ -996,10 +1003,21 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
       renderDrill();
       app.querySelector('.scroll')?.scrollTo(0, 0);
     },
+    'sp-retake': () => {
+      const d = SP.drill;
+      if (!d || d.phase !== 'back') return;
+      d.takes = (d.takes || 1) + 1;
+      d.phase = 'hidden';
+      d.t0 = performance.now();
+      dropRec(d);
+      if (SP.voice.on && micSupported()) beginVoice(d);
+      renderDrill();
+    },
     'sp-lookup': () => {
       const d = SP.drill;
       d.phase = 'hidden';
       d.t0 = performance.now();      // 顔を上げてから計る
+      d.takes = 1;
       dropRec(d);
       if (SP.voice.on && micSupported()) beginVoice(d);
       renderDrill();

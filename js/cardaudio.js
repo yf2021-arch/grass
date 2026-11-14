@@ -1,3 +1,4 @@
+import { skipLead } from './lead.js';
 // カードの音声（v1.4.0）：このスマホの中だけに置く
 //   PC の tools/make_card_audio.py が作った「音声パック」（.pack）を、設定から読み込む。
 //   音声は Cache Storage の grass-audio-cards に入れ、ネットには出さない（公開リポジトリにも置かない）。
@@ -80,6 +81,7 @@ export function createCardAudio({ store }) {
       if (playerUrl) URL.revokeObjectURL(playerUrl);
       playerUrl = URL.createObjectURL(blob);
       player = new Audio(playerUrl);
+      skipLead(player);                    // 頭の無音を短くする（v1.19.0）
       await player.play();
       return true;
     } catch (e) {
