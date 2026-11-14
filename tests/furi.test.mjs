@@ -34,6 +34,15 @@ assert.equal(seg('入力値が空です', '入力値=にゅうりょくち、空
 assert.equal(seg('その時までに、3時に', 'その時=そのとき、時=じ'), '[その時:そのとき]までに、3[時:じ]に', 'かなで始まる語');
 assert.equal(seg('空く', '空=から、空く=あく'), '[空く:あく]', '書いたままの語が先');
 assert.equal(seg('読みのない文', ''), '読みのない文');
+// ほかの熟語の一部には付けない（JP-0086：置く=おく が 位置・配置 の「置」に付いていた）
+assert.equal(seg('物をある位置に置く。物理配置から考える。置き場所', '置く=おく'), '物をある位置に[置く:おく]。物理配置から考える。[置:お]き場所');
+assert.equal(seg('名前の前に', '前=まえ'), '名前の[前:まえ]に', '漢字1字は熟語の中に付けない');
+assert.equal(seg('リリース後と承認後', '後=ご'), 'リリース[後:ご]と承認後');
+assert.equal(seg('承認後に開始', '承認=しょうにん、後=ご'), '[承認:しょうにん][後:ご]に開始', '隣が読みのある語なら付く');
+assert.equal(seg('一度声に出す。手段と手', '一度=いちど、声=こえ、手=て'), '[一度:いちど][声:こえ]に出す。手段と[手:て]');
+assert.equal(seg('一文に', '一=いち、文=ぶん'), '[一:いち][文:ぶん]に');
+assert.equal(seg('3時と10時', '時=じ'), '3[時:じ]と10[時:じ]', '数字の後ろは付く');
+assert.equal(seg('散らばった情報', '散らばった=ちらばった'), '[散らばった:ちらばった]情報', '書いたままの語は後ろに漢字があっても付く');
 assert.equal(words({ furi: '' }).length, 0);
 
 // HTML：エスケープ・ルビ・タップの印
@@ -79,16 +88,18 @@ print(json.dumps(out, ensure_ascii=False))`;
     ['親友に悩みを打ち明ける', '親友=しんゆう、悩み=なやみ、打ち明けた=うちあけた'],
     ['この作業は今日中に', '今日=きょう、今日中=きょうじゅう、作業=さぎょう'],
     ['その時までに、3時に', 'その時=そのとき、時=じ'],
+    ['物をある位置に置く。物理配置から', '置く=おく'],
+    ['名前の前に承認後', '前=まえ、後=ご'],
   ];
   const res = JSON.parse(execFileSync('python3', ['-c', py], { input: JSON.stringify(cases), encoding: 'utf8' }));
   cases.forEach(([text, furi], k) => {
     const js = segment(text, parseFuri(furi)).map(x => (typeof x === 'string' ? x : [x.w, x.r]));
     assert.deepEqual(res[k], js, `tools/furi.py と js/furi.js の分け方が違う：${text}`);
   });
-  assert.deepEqual(res[3], [['入力値', 'にゅうりょくち'], ['空', 'から']], '読み間違えた語');
-  assert.equal(res[4], 'にゅうりょくちがからです');
-  assert.deepEqual(res[5], [], '長音の書き方が違うだけなら、合っている');
-  assert.deepEqual(res[6], [true, true, true, true, false], '長音・を の直後の語');
+  assert.deepEqual(res[5], [['入力値', 'にゅうりょくち'], ['空', 'から']], '読み間違えた語');
+  assert.equal(res[6], 'にゅうりょくちがからです');
+  assert.deepEqual(res[7], [], '長音の書き方が違うだけなら、合っている');
+  assert.deepEqual(res[8], [true, true, true, true, false], '長音・を の直後の語');
 } catch (e) {
   if (e.code === 'ENOENT') console.log('（python3 がないので、音声側の確認は飛ばしました）');
   else throw e;
