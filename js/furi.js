@@ -6,6 +6,7 @@
 //   「ふ」ボタン（setAll）で、全部出したままにもできる（このスマホに保存）。
 //   送りがなは読みと突き合わせて、漢字の上にだけ読みを付ける（打ち明けた → 打(う)ち明(あ)けた）。
 //   活用した形にも合う：「打ち明けた」の行は「打ち明ける」にも付く（後ろのかなを外して探す）。
+//   ほかの熟語の一部には付けない：「置く=おく」は 位置・配置 の「置」には付かない（fits）。
 //
 //   音声（tools/make_card_audio.py・make_audio.py）も同じ列を使い、エンジンが読み間違えた語だけ かなで読ませる。
 
@@ -54,6 +55,25 @@ export function variants(pairs) {
   return list.sort((a, b) => b.w.length - a.w.length || (b.w === b.full) - (a.w === a.full));
 }
 
+const HIRA = /[\u3041-\u3096]/;
+
+/**
+ * その位置で、この語を当ててよいか（ほかの熟語の一部に読みを付けないため）
+ *   隣の漢字が「読みのある語」なら、つながっていてよい（勉強|用、散歩|中、一度|声、承認|後）。
+ *   隣の漢字が読みのない字なら、熟語の一部とみなして当てない：
+ *   - 漢字1字の語（前・後・手 など）：名前・手段 の中の字には付けない
+ *   - 送りがなを外した形（置く → 置）：前が漢字なら当てない（位置・配置）。後ろは送りがな（ひらがな）のときだけ
+ */
+export function fits(s, i, v, vs, prevEnd) {
+  const prev = s[i - 1] || '';
+  const next = s[i + v.w.length] || '';
+  const prevOk = !KANJI.test(prev) || prevEnd === i;
+  const nextOk = !KANJI.test(next) || vs.some(x => x.w.length > 0 && s.startsWith(x.w, i + v.w.length));
+  if (v.w !== v.full) return prevOk && HIRA.test(next);
+  if (v.w.length === 1) return prevOk && nextOk;
+  return true;
+}
+
 /** 文を [文字列 | { w, r }] に分ける */
 export function segment(text, pairs) {
   const s = String(text ?? '');
@@ -62,12 +82,14 @@ export function segment(text, pairs) {
   const out = [];
   let plain = '';
   let i = 0;
+  let prevEnd = -1;
   while (i < s.length) {
-    const hit = vs.find(v => s.startsWith(v.w, i));     // 「その時」のように、かなで始まる語もある
+    const hit = vs.find(v => s.startsWith(v.w, i) && fits(s, i, v, vs, prevEnd));     // 「その時」のように、かなで始まる語もある
     if (hit) {
       if (plain) { out.push(plain); plain = ''; }
       out.push({ w: hit.w, r: hit.r });
       i += hit.w.length;
+      prevEnd = i;
     } else {
       plain += s[i];
       i += 1;

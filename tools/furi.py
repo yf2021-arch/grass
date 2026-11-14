@@ -59,20 +59,38 @@ def variants(pairs):
     return sorted(out, key=lambda v: (-len(v[0]), not v[2]))
 
 
+HIRA = re.compile(r'[\u3041-\u3096]')
+
+
+def fits(text, i, v, vs, prev_end):
+    """ほかの熟語の一部に読みを付けない（js/furi.js の fits と同じ）"""
+    w, _, full = v
+    prev = text[i - 1] if i > 0 else ' '
+    nxt = text[i + len(w)] if i + len(w) < len(text) else ' '
+    prev_ok = not KANJI.match(prev) or prev_end == i
+    next_ok = not KANJI.match(nxt) or any(text.startswith(x[0], i + len(w)) for x in vs)
+    if not full:
+        return prev_ok and bool(HIRA.match(nxt))
+    if len(w) == 1:
+        return prev_ok and next_ok
+    return True
+
+
 def segment(text, pairs):
     """文を [文字列 | (語, 読み)] に分ける（js/furi.js の segment と同じ）"""
     if not text or not pairs:
         return [text] if text else []
     vs = variants(pairs)
-    out, plain, i = [], '', 0
+    out, plain, i, prev_end = [], '', 0, -1
     while i < len(text):
-        hit = next((v for v in vs if text.startswith(v[0], i)), None)     # 「その時」のように、かなで始まる語もある
+        hit = next((v for v in vs if text.startswith(v[0], i) and fits(text, i, v, vs, prev_end)), None)     # 「その時」のように、かなで始まる語もある
         if hit:
             if plain:
                 out.append(plain)
                 plain = ''
             out.append((hit[0], hit[1]))
             i += len(hit[0])
+            prev_end = i
         else:
             plain += text[i]
             i += 1
