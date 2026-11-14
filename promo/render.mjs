@@ -19,7 +19,8 @@ const has = k => process.argv.includes(`--${k}`);
 const lang = arg('lang', 'ja');
 const only = (arg('only', '') || '').split(',').filter(Boolean);
 const OUT = path.join(DIR, 'out');
-const TMP = path.join(OUT, `tmp-${lang}`);
+const voiceDir = arg('voice-dir');                 // AivisSpeech で作った <場面id>.wav のフォルダ（make_kotogusa_voice.ps1 の出力）
+const TMP = path.join(OUT, `tmp-${lang}${voiceDir || arg('aivis') ? '-voice' : ''}`);
 fs.mkdirSync(TMP, { recursive: true });
 const FPS = 30;
 
@@ -90,6 +91,12 @@ function music(seconds, revealAt, file) {
 }
 
 // ---------- AivisSpeech のナレーション（任意） ----------
+function wavSeconds(wav) {
+  const rate = wav.readUInt32LE(28);           // bytes per second
+  const i = wav.indexOf('data');
+  return (wav.readUInt32LE(i + 4) || (wav.length - (i + 8))) / rate;
+}
+
 async function narrate(engine, speaker, text, file) {
   const q = await (await fetch(`${engine}/audio_query?${new URLSearchParams({ text, speaker })}`, { method: 'POST' })).json();
   q.prePhonemeLength = 0.1; q.postPhonemeLength = 0.2;
@@ -97,9 +104,7 @@ async function narrate(engine, speaker, text, file) {
   if (!res.ok) throw new Error(`AivisSpeech ${res.status}`);
   const wav = Buffer.from(await res.arrayBuffer());
   fs.writeFileSync(file, wav);
-  const rate = wav.readUInt32LE(28);          // bytes per second
-  const i = wav.indexOf('data');
-  return (wav.length - (i + 8)) / rate;
+  return wavSeconds(wav);
 }
 
 // ---------- 撮影 ----------
@@ -121,7 +126,16 @@ try {
   // ナレーションがあれば、場面の長さをそれに合わせる（言い終わって 0.7 秒は残す）
   const engine = arg('aivis'), speaker = arg('speaker');
   const voice = {};
-  if (engine && !has('stills')) {
+  if (voiceDir && !has('stills')) {
+    for (const [i, s] of scenes.entries()) {
+      const file = path.join(voiceDir, `${s.id}.wav`);
+      if (!fs.existsSync(file)) continue;
+      const sec = wavSeconds(fs.readFileSync(file));
+      voice[i] = { file, sec };
+      s.dur = Math.max(s.dur, 0.5 + sec + 0.7);
+      console.log(`声 ${s.id}: ${sec.toFixed(1)}秒 → 場面 ${s.dur.toFixed(1)}秒`);
+    }
+  } else if (engine && !has('stills')) {
     if (!speaker) throw new Error('--aivis には --speaker 番号 も付けてください');
     for (const [i, s] of scenes.entries()) {
       if (!s.say) continue;
@@ -174,7 +188,7 @@ try {
     const revealAt = starts[scenes.findIndex(s => s.id === 'reveal')] ?? total / 3;
     const bgm = path.join(TMP, 'music.wav');
     music(total, revealAt, bgm);
-    const out = arg('out', path.join(OUT, `kotogusa-${lang}${engine ? '-voice' : ''}.mp4`));
+    const out = arg('out', path.join(OUT, `kotogusa-${lang}${engine || voiceDir ? '-voice' : ''}.mp4`));
     const vs = Object.entries(voice);
     if (vs.length) {
       const ins = vs.flatMap(([, v]) => ['-i', v.file]);
