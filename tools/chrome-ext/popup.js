@@ -8,7 +8,7 @@ const toSec = v => {
   if (!p.length || p.some(n => !Number.isFinite(n) || n < 0)) return null;
   return p.reduce((a, n) => a * 60 + n, 0);
 };
-let page = null;   // { videoId, title, now }
+let page = null;   // { videoId, title, now, duration }
 let pack = null;
 
 async function inTab(fn, args = []) {
@@ -24,7 +24,7 @@ function readPage() {
   const v = document.querySelector('video');
   const id = new URL(location.href).searchParams.get('v');
   const title = (document.querySelector('h1.ytd-watch-metadata, h1 yt-formatted-string')?.textContent || document.title).trim();
-  return { videoId: id, title, now: v ? v.currentTime : 0 };
+  return { videoId: id, title, now: v ? v.currentTime : 0, duration: v && Number.isFinite(v.duration) ? v.duration : null };
 }
 
 // YouTube の文字起こしパネルは2種類ある（0.2.0）
@@ -75,8 +75,7 @@ async function init() {
     const b = document.createElement('b'); b.textContent = page.title || page.videoId;
     const m = document.createElement('div'); m.className = 'muted'; m.textContent = `動画 ${page.videoId} · 今 ${mmss(page.now)}`;
     $('info').append(b, m);
-    $('s').value = mmss(Math.floor(page.now));
-    $('e').value = mmss(Math.floor(page.now) + 60);
+    // 0.3.0：時間は空欄から始める。空欄のまま「字幕を読む」と、最初から／最後まで（両方空欄なら全部）
   } catch (e) {
     $('info').innerHTML = `<span class="err"></span>`; $('info').firstChild.textContent = e.message;
     ['ns', 'ne', 'read'].forEach(id => { $(id).disabled = true; });
@@ -89,18 +88,24 @@ async function nowTo(field) {
 }
 
 async function read() {
-  const start = toSec($('s').value);
-  const end = toSec($('e').value);
+  const sRaw = $('s').value.trim();
+  const eRaw = $('e').value.trim();
   const prev = $('prev');
   prev.hidden = false;
   pack = null; $('save').disabled = true; $('copy').disabled = true;
-  if (start == null || end == null || end <= start) { prev.innerHTML = '<span class="err">始まりと終わりの時間を確かめてください</span>'; return; }
+  const start = sRaw ? toSec(sRaw) : 0;
+  const endIn = eRaw ? toSec(eRaw) : null;
+  if (start == null || (eRaw && endIn == null) || (endIn != null && endIn <= start)) { prev.innerHTML = '<span class="err">始まりと終わりの時間を確かめてください（空欄なら、最初から／最後まで）</span>'; return; }
   const r = await inTab(readTranscript);
   if (!r.panelOpen) { prev.innerHTML = '<span class="err">文字起こしが見つかりません。動画の説明の「文字起こしを表示」を押して、右の「動画の関連情報」で「文字起こし」のタブを開いてから、もう一度押してください。字幕のない動画では使えません。</span>'; return; }
   const all = r.cues.map((c, i) => ({ ...c, e: r.cues[i + 1]?.s ?? c.s + 5 }));
+  // 終わりが空欄：動画の長さ（分からなければ最後の行の終わり）まで
+  const lastEnd = all.length ? Math.ceil(all[all.length - 1].e) : 0;
+  const end = endIn ?? Math.max(Math.ceil(page?.duration || 0), lastEnd);
+  const whole = !sRaw && !eRaw;
   const cues = all.filter(c => c.s >= start - 1 && c.s <= end);
   const kind = /自動|auto-generated|automatically/i.test(r.lang) ? 'auto' : r.lang ? 'unknown' : 'unknown';
-  $('len').textContent = `${end - start}秒 · ${cues.length}行`;
+  $('len').textContent = `${whole ? '全部 · ' : ''}${mmss(start)}〜${mmss(end)} · ${cues.length}行`;
   if (!cues.length) { prev.innerHTML = '<span class="err">この範囲に字幕がありません（不完全なまま保存はしません）</span>'; return; }
   pack = { app: 'grass-rawpack', version: 1, videoId: page.videoId, url: `https://www.youtube.com/watch?v=${page.videoId}`, title: page.title, lang: r.lang || null, captionKind: kind, start, end, cues, takenAt: new Date().toISOString() };
   prev.innerHTML = `<div class="muted">${kind === 'auto' ? '自動字幕（未確認）' : '字幕の種類：分からない（未確認）'}${r.lang ? ` · ${r.lang}` : ''}</div><ol></ol>`;
