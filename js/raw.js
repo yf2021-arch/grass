@@ -11,6 +11,7 @@
 
 // 自分で追加した YouTube の場面（候補）に出す、どの場面にも使える問い
 import { call as gasCall } from './sync.js';
+import { compactTitle, youtubeUrl } from './source.js';
 const GENERIC_QS = ['だれが、だれに話していますか。', '何について話していますか。', 'いちばん大事だと思った一言は何でしたか。'];
 const CAPTION_KIND = { manual: '字幕（人が作成）', auto: '自動字幕・未確認', unknown: '種類不明・未確認' };
 
@@ -58,7 +59,8 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay, get
   ['touchstart', 'touchmove', 'wheel'].forEach(ev => app.addEventListener(ev, () => { follow.touched = Date.now(); }, { passive: true }));
 
   async function load() {
-    const [l, cs, pk] = await Promise.all([store.get('meta', 'rawLog'), store.get('meta', 'rawCands'), store.get('meta', 'rawPicks')]);
+    const [l, cs, pk, origin] = await Promise.all([store.get('meta', 'rawLog'), store.get('meta', 'rawCands'), store.get('meta', 'rawPicks'), store.get('meta', 'rawPickOrigin')]);
+    R.pickOrigin = origin || null;
     R.picks = Array.isArray(pk) ? pk : [];
     R.log = l && typeof l === 'object' ? l : {};
     R.cands = Array.isArray(cs) ? cs : [];
@@ -71,12 +73,27 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay, get
   const saveCands = () => store.put('meta', R.cands, 'rawCands');
   const savePicks = () => store.put('meta', R.picks, 'rawPicks');
 
+  function rememberPlace() {
+    const c = findClip(R.viewId);
+    if (!c) return;
+    const r = rec(c.id);
+    let seconds = r.resume?.seconds ?? c.startSec;
+    try { const t = R.yt?.getCurrentTime?.(); if (Number.isFinite(t)) seconds = t; } catch { /* player closed */ }
+    r.resume = { seconds, top: R.scroller?.scrollTop ?? r.resume?.top ?? 0, rate: R.ui.rate || r.resume?.rate || 1 };
+    save();
+  }
+  const rememberOrigin = id => { R.pickOrigin = id; store.put('meta', id, 'rawPickOrigin'); rememberPlace(); };
+  app.addEventListener('click', e => {
+    if (e.target.closest?.('a[href="#/raw/picks"]')) { rememberOrigin(R.viewId); }
+  }, true);
+  window.addEventListener('pagehide', rememberPlace);
+
   /** 候補（このスマホだけ）を、素材と同じ形にして使う */
   const fromCand = k => ({
     id: k.id, cand: true, title: k.title || 'YouTube の場面', provider: 'youtube', url: k.url, videoId: k.videoId,
     startSec: k.start, endSec: k.end, embed: 'youtube', level: '自分の候補（メモなし）',
     copyright: '動画の権利は投稿者にあります。YouTube 公式プレーヤーで再生しています。この候補はこのスマホの中だけにあります。',
-    firstQs: GENERIC_QS, cues: k.cues || null, captionKind: k.captionKind || null,
+    firstQs: GENERIC_QS, cues: k.cues || null, captionKind: k.captionKind || null, originalTitle: k.originalTitle,
   });
   const findClip = id => R.clips.find(x => x.id === id) || (R.cands.find(k => k.id === id) && fromCand(R.cands.find(k => k.id === id)));
   const rec = id => (R.log[id] ||= { draft: '', subs: false, first: null, check: null, opens: 0, replays: 0 });
@@ -93,14 +110,14 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay, get
       const hide = c.transferFor && !R.log[c.id]?.first;
       return `
         <a class="row-link" href="#/raw/${encodeURIComponent(c.id)}">
-          <span class="t"><b>${esc(c.id)} · ${hide ? 'テスト用の場面（内容は伏せています）' : esc(c.title)}</b>
+          <span class="t"><b title="${hide ? '' : esc(c.title)}">${esc(c.id)} · ${hide ? 'テスト用の場面（内容は伏せています）' : esc(compactTitle(c.title))}</b>
             <span>${esc(span(c))} · ${c.embed === 'youtube' ? 'アプリ内で再生' : '公式サイトで再生'}</span></span>
           <span class="n">${esc(st)}</span>
         </a>`;
     }).join('');
     const mine = R.cands.map(k => `
         <a class="row-link" href="#/raw/${encodeURIComponent(k.id)}">
-          <span class="t"><b>${esc(k.title || 'YouTube の場面')}</b>
+          <span class="t"><b title="${esc(k.originalTitle || k.title || '')}">${esc(compactTitle(k.title) || 'YouTube の場面')}</b>
             <span>${esc(span({ startSec: k.start, endSec: k.end }))}${k.cues ? ` · ${esc(CAPTION_KIND[k.captionKind] || CAPTION_KIND.unknown)}` : ''}</span></span>
           <span class="n">${esc(stateOf(k.id))}</span>
         </a>`).join('');
@@ -122,7 +139,7 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay, get
       return `
         <div class="raw-player" aria-label="動画"><div id="raw-yt"></div></div>
         <div class="grid2">
-          <button class="primary" data-act="raw-yt" data-id="${esc(c.id)}">▶ 場面を再生（${c.endSec - c.startSec}秒）</button>
+          <button class="primary" data-act="raw-yt" data-id="${esc(c.id)}">${r.resume?.seconds > c.startSec && r.resume.seconds < c.endSec ? `▶ 続きから再生（${mmss(Math.floor(r.resume.seconds))}）` : `▶ 場面を再生（${c.endSec - c.startSec}秒）`}</button>
           <button class="outline" data-act="raw-open" data-id="${esc(c.id)}">YouTube で開く</button>
         </div>
         <p class="msg err" id="raw-yt-err" hidden>プレーヤーを読み込めませんでした。「YouTube で開く」から見てください。</p>`;
@@ -143,7 +160,8 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay, get
     const head = `
       <section class="card-box raw-head">
         <p class="label">${esc(c.id)} · ${esc(c.level || '')}</p>
-        <p class="raw-title">${c.transferFor && !r.first ? 'テスト用の場面' : esc(c.title)}</p>
+        <p class="raw-title">${c.transferFor && !r.first ? 'テスト用の場面' : esc(compactTitle(c.title))}</p>
+        ${!(c.transferFor && !r.first) && (c.originalTitle || c.title) !== compactTitle(c.title) ? `<details class="raw-full-title"><summary>元のタイトル</summary><p>${esc(c.originalTitle || c.title)}</p></details>` : ''}
         <p class="small" style="margin:0">${esc(span(c))}</p>
         ${flash ? `<p class="msg ok" style="margin:0">${esc(flash)}</p>` : ''}
       </section>`;
@@ -247,16 +265,23 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay, get
   const pickedOf = c => new Set(R.picks.filter(p => p.videoId === c.videoId && p.status !== 'gone').map(p => p.s));
   const hasApi = () => { const st = getSettings() || {}; return !!(st.apiUrl && st.token); };
   const pickPayload = p => ({ app: 'grass-pick', version: 1, id: p.id, kind: p.kind, text: p.text, memo: p.memo || '', before: p.before || '', after: p.after || '',
-    title: p.title || '', videoId: p.videoId, url: `https://www.youtube.com/watch?v=${p.videoId}${p.s > 0 ? `&t=${Math.floor(p.s)}s` : ''}`, s: p.s, at: p.at });
+    title: compactTitle(p.title), videoId: p.videoId, url: youtubeUrl(p.videoId, p.s), s: p.s, at: p.at });
+
+  const PICK_SETUP = 'Google 側の「拾う」機能が未更新です。Picks.gs と doPost の分岐を追加し、同じデプロイを新バージョンで公開してください。文はこのスマホに保存済みです。「コピー」で手動でも頼めます。';
+  const pickError = e => {
+    if (/不明な\s*action|unknown\s*action/i.test(e.message)) { R.pickApiMissing = true; return PICK_SETUP; }
+    return e.message;
+  };
 
   /** 待ち行列に送る（local と、直したあとの queued） */
   async function pushPick(p) {
     if (!hasApi() || !['local', 'queued'].includes(p.status)) return;
+    if (R.pickApiMissing) { p.err = PICK_SETUP; await savePicks(); return; }
     try {
       await gasCall(getSettings(), { action: 'pickPut', pick: pickPayload(p) });
       p.status = 'queued';
       p.err = null;
-    } catch (e) { p.err = e.message; }
+    } catch (e) { p.err = pickError(e); }
     await savePicks();
   }
 
@@ -264,19 +289,22 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay, get
   async function syncPicks() {
     if (!hasApi()) return;
     for (const p of R.picks.filter(x => x.status === 'local')) await pushPick(p);
+    if (R.pickApiMissing) throw new Error(PICK_SETUP);
     for (const p of R.picks.filter(x => x.status === 'manual' && x.undone)) {
       try { await gasCall(getSettings(), { action: 'pickDone', id: p.id }); p.undone = false; } catch (e) { /* 次に */ }
     }
     const r = await gasCall(getSettings(), { action: 'pickList' });
+    if (!Array.isArray(r.ids)) throw new Error('待ち行列の応答を読めません。あとでもう一度更新してください。');
     const pending = new Set(r.ids || []);
     R.picks.forEach(p => { if (p.status === 'queued' && !pending.has(p.id)) p.status = 'done'; });
     await savePicks();
+    if (R.picks.some(p => p.status === 'local' && p.err)) throw new Error('未送信の文があります。通信を確認して、もう一度「状態を更新」を押してください。');
   }
 
   function pickRequest(p) {
     const ja = /[\u3040-\u30ff\u4e00-\u9fff]/.test(p.text);
     const ctx = [p.before, p.text, p.after].filter(Boolean).join(' ');
-    const src = `出典：${p.title || 'YouTube'}（${pickPayload(p).url}）`;
+    const src = `出典：${compactTitle(p.title) || 'YouTube'}（${pickPayload(p).url}）`;
     if (p.kind === 'speak') return `SPEAK: ${p.text}\n文脈：${ctx}\n${src}`;
     if (p.kind === 'word') return `${ja ? '登録' : 'REGISTER'} ${p.memo || p.text}\n文脈：${ctx}\n${src}`;
     return `EXTRACT:\n${ctx}\n${p.memo ? `気になるところ：${p.memo}\n` : ''}${src}`;
@@ -286,7 +314,7 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay, get
     const d = R.ui.picks || {};
     const items = [...R.picks].reverse().map(p => `
       <section class="card-box rawpick" data-pick="${esc(p.id)}">
-        <p class="label">${esc(p.title || 'YouTube')} · ${esc(mmss(Math.floor(p.s)))} · <span class="pk-st s-${esc(p.status)}">${esc(PICK_STATE[p.status] || p.status)}</span></p>
+        <p class="label" title="${esc(p.title || '')}">${esc(compactTitle(p.title) || 'YouTube')} · ${esc(mmss(Math.floor(p.s)))} · <span class="pk-st s-${esc(p.status)}">${esc(PICK_STATE[p.status] || p.status)}</span></p>
         <p class="pk-text">${p.before ? `<i>${esc(p.before)} </i>` : ''}<b>${esc(p.text)}</b>${p.after ? `<i> ${esc(p.after)}</i>` : ''}</p>
         ${['local', 'queued'].includes(p.status) ? `
         <div class="frow" role="group" aria-label="何にするか">${Object.entries(PICK_KIND).map(([k, l]) => `<button class="chip" aria-pressed="${p.kind === k}" data-act="raw-pick-kind" data-id="${esc(p.id)}" data-v="${k}">${esc(l)}</button>`).join('')}</div>
@@ -303,6 +331,7 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay, get
           : '設定で Apps Script の URL とトークンを入れると、Claude が自動で単語カードや話す練習にします。いまは「コピー」して Claude に貼ってください。'}</p>
         ${hasApi() ? `<button class="outline" data-act="raw-pick-sync" ${d.busy ? 'disabled' : ''}>${d.busy ? '確かめています…' : '状態を更新'}</button>` : ''}
         ${d.msg ? `<p class="msg ${d.msg.ok ? 'ok' : 'err'}" style="margin:0">${esc(d.msg.text)}</p>` : ''}
+        ${findClip(R.pickOrigin) ? `<a class="primary ink raw-return" href="#/raw/${encodeURIComponent(R.pickOrigin)}">元の字幕に戻る（${mmss(Math.floor(rec(R.pickOrigin).resume?.seconds || 0))}）</a>` : ''}
         <a class="text-btn" href="#/raw" style="display:flex;align-items:center;justify-content:center">一覧へ</a>
       </section>
       ${items || '<p class="small" style="padding:0 16px">まだありません。字幕の行の ＋ を押すと、ここに入ります。</p>'}`;
@@ -364,7 +393,7 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay, get
     if (d?.files) {
       list = d.files.length ? `<ul class="drive-list">${d.files.map(f => {
         const done = have.has(packKey(f.name));
-        return `<li><span class="t"><b>${esc(f.note || f.name)}</b><small>${esc(new Date(f.updated).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }))}${done ? ' · 読み込み済み' : ''}</small></span>
+        return `<li><span class="t"><b title="${esc(f.note || f.name)}">${esc(compactTitle(f.note || f.name))}</b><small>${esc(new Date(f.updated).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }))}${done ? ' · 読み込み済み' : ''}</small></span>
           <button class="${done ? 'outline quiet' : 'primary ink'} mini" data-act="raw-drive-get" data-id="${esc(f.id)}" ${d.busy ? 'disabled' : ''}>${done ? '読み込み直す' : '読み込む'}</button></li>`;
       }).join('')}</ul>` : '<p class="small" style="margin:0">pwa/transcript に学習パックがありません。</p>';
     }
@@ -396,7 +425,7 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay, get
     const have = R.cands.find(k => `${k.videoId}|${k.start}|${k.end}` === key);
     const item = {
       id: have?.id || `C-${Date.now().toString(36)}`, videoId: pack.videoId, url: `https://www.youtube.com/watch?v=${pack.videoId}`,
-      title: String(pack.title || '').slice(0, 120), start, end, lang: pack.lang || null,
+      title: compactTitle(pack.title), originalTitle: String(pack.title || '').slice(0, 1000), start, end, lang: pack.lang || null,
       captionKind: ['manual', 'auto'].includes(pack.captionKind) ? pack.captionKind : 'unknown',
       cues: cues.length ? cues : null, source: 'pack', at: Date.now(),
     };
@@ -416,12 +445,16 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay, get
   }
 
   function render(arg) {
+    rememberPlace();
     stopYt();                                          // 画面を作り直すときだけ（点数を選ぶ・字幕スイッチは作り直さない）
     const id = arg ? decodeURIComponent(arg) : '';
     if (id && R.ui.id !== id) R.ui = { id, score: null, checkScore: null, cnote: '' };
+    if (findClip(id)) R.ui.rate = rec(id).resume?.rate || 1;
     if (id === 'picks' && hasApi() && Date.now() - (R.pickSyncAt || 0) > 30000) {     // 開いたときに、待ち行列と突き合わせる
       R.pickSyncAt = Date.now();
-      syncPicks().then(() => { if (location.hash === '#/raw/picks') again(); }, () => {});
+      syncPicks().then(() => { if (location.hash === '#/raw/picks') again(); }, e => {
+        if (location.hash === '#/raw/picks') { R.ui.picks = { msg: { ok: false, text: pickError(e) } }; again(); }
+      });
     }
     app.innerHTML = `
       <div class="screen">
@@ -431,6 +464,12 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay, get
         </div>
         ${nav('raw')}
       </div>`;
+    R.viewId = findClip(id) ? id : null;
+    R.scroller = app.querySelector('.scroll');
+    if (R.viewId) {
+      const resume = rec(id).resume;
+      if (resume) { R.scroller?.scrollTo(0, resume.top || 0); R.ui.rate = resume.rate || 1; }
+    }
   }
 
   /* ---------------- YouTube（公式の IFrame API） ---------------- */
@@ -507,6 +546,7 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay, get
   }
 
   function tickFollow() {
+    if (Date.now() - (R.rememberedAt || 0) > 3000) { R.rememberedAt = Date.now(); rememberPlace(); }
     if (!R.yt?.getCurrentTime) return;
     const els = app.querySelectorAll('.raw-cue');
     if (!els.length) return;
@@ -529,7 +569,7 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay, get
     el.classList.add('now');
     if (playing && Date.now() - follow.touched > 4000) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
   }
-  window.addEventListener('hashchange', () => { if (!location.hash.startsWith('#/raw/')) stopYt(); });
+  window.addEventListener('hashchange', () => { if (!location.hash.startsWith('#/raw/')) { rememberPlace(); stopYt(); R.viewId = null; } });
 
   /* ---------------- 操作 ---------------- */
 
@@ -611,7 +651,8 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay, get
       if (!c) return;
       const r = rec(c.id);
       if (r.first) { r.replays += 1; save(); }
-      playYt(c);
+      const seconds = r.resume?.seconds;
+      playYt(c, seconds >= c.startSec && seconds < c.endSec ? seconds : null);
     },
     // 点数と字幕スイッチは、その場で表示だけ変える（画面を作り直さないので、再生中のプレーヤーも入力中の文も消えない）
     'raw-score': el => { R.ui.score = Number(el.dataset.v); pick('raw-score', el, '[data-act="raw-first"]'); },
@@ -660,8 +701,8 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay, get
       const q = c?.cues?.[i];
       if (!q) return;
       const have = R.picks.find(p => p.videoId === c.videoId && p.s === q.s);
-      if (have) { go('#/raw/picks'); return; }          // もう拾ってある行：一覧で直す
-      const p = { id: `PK-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`, videoId: c.videoId, title: c.title || '', s: q.s,
+      if (have) { rememberOrigin(c.id); go('#/raw/picks'); return; }          // もう拾ってある行：一覧で直す
+      const p = { id: `PK-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`, videoId: c.videoId, title: compactTitle(c.title), s: q.s,
         text: q.t, before: c.cues[i - 1]?.t || '', after: c.cues[i + 1]?.t || '', kind: 'auto', memo: '', status: 'local', at: Date.now() };
       R.picks.push(p);
       await savePicks();
@@ -705,9 +746,10 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay, get
       if (p.status === 'queued' && hasApi()) { try { await gasCall(getSettings(), { action: 'pickDone', id: p.id }); } catch (e) { /* 残っても Claude が作るだけ */ } }
     },
     'raw-pick-sync': async () => {
+      R.pickApiMissing = false;
       R.ui.picks = { busy: true };
       again();
-      try { await syncPicks(); R.ui.picks = { msg: { ok: true, text: '更新しました' } }; } catch (e) { R.ui.picks = { msg: { ok: false, text: `確かめられませんでした：${e.message}` } }; }
+      try { await syncPicks(); R.ui.picks = { msg: { ok: true, text: '更新しました' } }; } catch (e) { R.ui.picks = { msg: { ok: false, text: pickError(e) } }; }
       if (location.hash === '#/raw/picks') again();
     },
     'raw-rate': el => {
@@ -784,7 +826,7 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay, get
     'raw-req': async el => {
       const k = R.cands.find(x => x.id === el.dataset.id);
       if (!k) return;
-      const req = { app: 'grass-raw-request', version: 1, videoId: k.videoId, url: k.start > 0 ? `${k.url}&t=${k.start}s` : k.url, title: k.title || '', start: k.start, end: k.end, captionKind: k.captionKind || null, cueLines: k.cues?.length || 0 };
+      const req = { app: 'grass-raw-request', version: 1, videoId: k.videoId, url: youtubeUrl(k.videoId, k.start), title: compactTitle(k.title), start: k.start, end: k.end, captionKind: k.captionKind || null, cueLines: k.cues?.length || 0 };
       const ok = await copyText(JSON.stringify(req));
       const m = document.getElementById('raw-req-msg');
       if (m) { m.textContent = ok ? 'コピーしました。Slack のスレッドに貼ってください。' : JSON.stringify(req); m.hidden = false; }

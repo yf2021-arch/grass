@@ -11,6 +11,7 @@ import { createBjt } from './bjt.js';
 import { createKatsuyo } from './katsuyo.js';
 import { createWalk } from './walk.js';
 import { createRaw } from './raw.js';
+import { sourceHtml } from './source.js';
 import { createCardAudio } from './cardaudio.js';
 import { parseFuri, furiHtml, furiToggle, initFuri } from './furi.js';
 import { LEAD_CHOICES, leadKeep, setLeadKeep } from './lead.js';
@@ -589,7 +590,7 @@ function backBody(card, panels) {
     </div>
     ${exampleHtml(card)}
     <div class="panels">${out.join('')}</div>
-    ${source ? `<p class="source">出典：${esc(source)}</p>` : ''}`;
+    ${source ? `<p class="source">出典：${sourceHtml(source, esc)}</p>` : ''}`;
 }
 
 async function rate(result) {
@@ -722,7 +723,7 @@ function renderInbox() {
         </div>
         <p class="m">${fx(card, val(card, '日本語の意味'))}</p>
         ${ex ? `<p class="ex">${fx(card, ex)}</p>` : ''}
-        <div class="meta"><span>出典：${esc(val(card, '出典') || '—')}</span>${added ? `<span>追加 ${added}</span>` : ''}</div>
+        <div class="meta"><span>出典：${sourceHtml(val(card, '出典') || '—', esc)}</span>${added ? `<span>追加 ${added}</span>` : ''}</div>
       </article>
       <p class="hint-line">${isHeld ? '保留のカードは、自動では学習に入りません' : `判断しなくても、毎日${limit}枚が自動で「学ぶ」に入ります`}</p>`;
   }
@@ -986,7 +987,7 @@ function renderSettings() {
             <button class="outline quiet" data-act="${S.settings.demo ? 'demo-off' : 'demo-on'}">${S.settings.demo ? 'デモを終了' : 'デモデータで試す'}</button>
           </div>
         </section>
-        <p class="small" style="text-align:center">Grass v1.22.0</p>
+        <p class="small" style="text-align:center">Grass v1.22.1</p>
       </main>
       ${nav('settings')}
     </div>`;

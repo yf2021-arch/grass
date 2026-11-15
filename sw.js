@@ -1,7 +1,7 @@
 // オフラインでも開けるように、アプリ本体をキャッシュする。
 // アプリを更新したら VERSION を上げる（古いキャッシュは自動で消える）。
 
-const VERSION = 'grass-v1.22.0';
+const VERSION = 'grass-v1.22.1';
 const SHELL = [
   './',
   './index.html',
@@ -22,6 +22,7 @@ const SHELL = [
   './js/quiz.js',
   './js/walk.js',
   './js/raw.js',
+  './js/source.js',
   './data/raw/clips.json',
   './js/cardaudio.js',
   './js/furi.js',

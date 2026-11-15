@@ -3,6 +3,7 @@
 Run from the repository root (Node 20+):
 
 ```bash
+node tests/raw.test.mjs              # compact citations, picks API recovery, transcript return/reload (no browser)
 node tests/katsuyo.test.mjs          # 活用ドリル: conjugation rules, distractors, words from cards (no browser)
 node tests/voice-compare.test.mjs     # text-overlap score (no browser)
 node tests/furi.test.mjs              # ふりがな: parsing, okurigana, inflected forms, readings in data/chunks.json, same split as tools/furi.py (no browser)
