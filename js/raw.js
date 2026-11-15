@@ -48,7 +48,7 @@ const SCORES = [
 ];
 
 export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay, getSettings = () => ({}) }) {
-  const R = { clips: [], cands: [], log: {}, ui: { score: null, checkScore: null }, add: null, yt: null, ytReady: null };
+  const R = { clips: [], cands: [], picks: [], log: {}, ui: { score: null, checkScore: null }, add: null, yt: null, ytReady: null };
 
   /* 動画を見ながら字幕を追う（v1.21.0）
    *   1. プレーヤーが画面の外へ出たら、画面の上に固定する（字幕を読みながら動画が見える）
@@ -58,7 +58,8 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay, get
   ['touchstart', 'touchmove', 'wheel'].forEach(ev => app.addEventListener(ev, () => { follow.touched = Date.now(); }, { passive: true }));
 
   async function load() {
-    const [l, cs] = await Promise.all([store.get('meta', 'rawLog'), store.get('meta', 'rawCands')]);
+    const [l, cs, pk] = await Promise.all([store.get('meta', 'rawLog'), store.get('meta', 'rawCands'), store.get('meta', 'rawPicks')]);
+    R.picks = Array.isArray(pk) ? pk : [];
     R.log = l && typeof l === 'object' ? l : {};
     R.cands = Array.isArray(cs) ? cs : [];
     try {
@@ -68,6 +69,7 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay, get
   }
   const save = () => store.put('meta', R.log, 'rawLog');
   const saveCands = () => store.put('meta', R.cands, 'rawCands');
+  const savePicks = () => store.put('meta', R.picks, 'rawPicks');
 
   /** 候補（このスマホだけ）を、素材と同じ形にして使う */
   const fromCand = k => ({
@@ -108,6 +110,7 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay, get
       <section class="group" aria-label="自分の候補">
         <div class="kv"><span>自分の候補（このスマホだけ）</span><b>${R.cands.length}</b></div>
         ${mine}
+        ${R.picks?.length ? `<a class="row-link" href="#/raw/picks"><span class="t"><b>拾った文</b><span>単語・話す練習にする（Claude が作ります）</span></span><span class="n">${R.picks.length} ›</span></a>` : ''}
         <a class="row-link" href="#/raw/add"><span class="t"><b>＋ YouTube の場面を追加</b><span>リンクを貼る・YouTube から「共有 → Grass」・学習パックを読み込む</span></span><span class="n">›</span></a>
       </section>`;
   }
@@ -160,6 +163,7 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay, get
           <button class="chip toggle" aria-pressed="${!!r.subs}" data-act="raw-subs" data-id="${esc(c.id)}">字幕を見てしまった</button>
           <button class="primary ink" data-act="raw-first" data-id="${esc(c.id)}" ${sc == null ? 'disabled' : ''}>初回の結果を記録する</button>
           <p class="caption" style="margin:0;text-align:left">記録すると、要点と理解度は固定されます。そのあとで、答え・表現・文化メモが見られます。</p>
+          ${c.cand && c.cues?.length ? `<button class="text-btn" data-act="raw-skip" data-id="${esc(c.id)}">初回の記録を飛ばして、字幕を見ながら聞く（シャドーイング）</button>` : ''}
         </section>${copy}`;
     }
 
@@ -167,8 +171,9 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay, get
     const lockedBox = `
       <section class="card-box" aria-label="初回の結果">
         <p class="label">初回の結果（固定）</p>
+        ${f.skipped ? `<p class="small" style="margin:0">初回の記録は飛ばしました（字幕を見ながら聞く）· ${esc(new Date(f.at).toLocaleDateString('ja-JP'))}</p>` : `
         <p style="margin:0">${f.gist ? esc(f.gist) : '<span class="muted">（要点は空欄）</span>'}</p>
-        <p class="small" style="margin:0">理解度 ${f.score}・${esc(SCORES[f.score][1])}${f.subs ? ' · 字幕あり' : ' · 字幕なし'} · ${esc(new Date(f.at).toLocaleDateString('ja-JP'))}</p>
+        <p class="small" style="margin:0">理解度 ${f.score}・${esc(SCORES[f.score][1])}${f.subs ? ' · 字幕あり' : ' · 字幕なし'} · ${esc(new Date(f.at).toLocaleDateString('ja-JP'))}</p>`}
       </section>`;
     const qa = (c.firstQs || []).map((q, i) => `<li><b>${esc(q)}</b><br>${esc(c.answers?.[i] || '')}</li>`).join('');
     const ex = (c.expressions || []).map(e => `<li><b>${esc(e.t)}</b><p class="small">${esc(e.note || '')}</p></li>`).join('');
@@ -206,7 +211,8 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay, get
         <p class="label">字幕（押すとそこから再生）· ${esc(kind)}</p>
         ${c.captionKind !== 'manual' ? '<p class="caption" style="margin:0;text-align:left">自動字幕には聞き間違いがあります。文化の話として読む前に、音で確かめてください。</p>' : ''}
         <div class="frow" role="group" aria-label="速さ"><span class="small">速さ</span>${[0.75, 1].map(v => `<button class="chip" aria-pressed="${(R.ui.rate || 1) === v}" data-act="raw-rate" data-v="${v}">${v}×</button>`).join('')}</div>
-        <ol class="raw-cues">${c.cues.map(q => `<li><button class="raw-cue" data-act="raw-cue" data-id="${esc(c.id)}" data-s="${q.s}"><span class="k">${esc(mmss(Math.floor(q.s)))}</span><span>${esc(q.t)}</span></button></li>`).join('')}</ol>
+        <p class="small" style="margin:0">気になった行は ＋ で拾えます。<a href="#/raw/picks" id="raw-pick-link">拾った文（${pickedOf(c).size}）›</a></p>
+        <ol class="raw-cues">${c.cues.map((q, i) => `<li><button class="raw-cue" data-act="raw-cue" data-id="${esc(c.id)}" data-s="${q.s}"><span class="k">${esc(mmss(Math.floor(q.s)))}</span><span>${esc(q.t)}</span></button><button class="raw-pick" data-act="raw-pick" data-id="${esc(c.id)}" data-i="${i}" aria-label="この行を拾う" aria-pressed="${pickedOf(c).has(q.s)}">${pickedOf(c).has(q.s) ? '✓' : '＋'}</button></li>`).join('')}</ol>
       </section>` : '';
     const candBox = c.cand ? `
       <section class="card-box" aria-label="候補">
@@ -229,6 +235,77 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay, get
       ${cu}${hu}
       ${sp ? `<section class="group" aria-label="話す">${sp}</section>` : ''}
       ${candBox}${checkBox}${copy}`;
+  }
+
+  /* ---------------- 拾った文（v1.22.0） ----------------
+   * 字幕の行を ＋ で拾う → このスマホに保存し、Drive の pwa/picks に送る（Apps Script の pickPut）。
+   *   非同期：Claude の予定タスクが pwa/picks を読み、単語カード／話すチャンクを作ってシートに登録し、ファイルを消す。
+   *   手動  ：「Claude に頼む文をコピー」→ Claude に貼る。コピーしたら待ち行列から外す（pickDone）ので、あとで二重に作られない。
+   * 状態：local（未送信）→ queued（待ち）→ done（待ち行列からなくなった＝Claude が処理した）／manual（手動で頼んだ） */
+  const PICK_KIND = { auto: 'おまかせ', word: '単語', speak: '話す' };
+  const PICK_STATE = { local: '未送信', queued: 'Claude 待ち', manual: '手動で頼んだ', done: '処理済み' };
+  const pickedOf = c => new Set(R.picks.filter(p => p.videoId === c.videoId && p.status !== 'gone').map(p => p.s));
+  const hasApi = () => { const st = getSettings() || {}; return !!(st.apiUrl && st.token); };
+  const pickPayload = p => ({ app: 'grass-pick', version: 1, id: p.id, kind: p.kind, text: p.text, memo: p.memo || '', before: p.before || '', after: p.after || '',
+    title: p.title || '', videoId: p.videoId, url: `https://www.youtube.com/watch?v=${p.videoId}${p.s > 0 ? `&t=${Math.floor(p.s)}s` : ''}`, s: p.s, at: p.at });
+
+  /** 待ち行列に送る（local と、直したあとの queued） */
+  async function pushPick(p) {
+    if (!hasApi() || !['local', 'queued'].includes(p.status)) return;
+    try {
+      await gasCall(getSettings(), { action: 'pickPut', pick: pickPayload(p) });
+      p.status = 'queued';
+      p.err = null;
+    } catch (e) { p.err = e.message; }
+    await savePicks();
+  }
+
+  /** 待ち行列の今の中身と突き合わせる：なくなっていたら「処理済み」。未送信・外しそこねたものは送り直す */
+  async function syncPicks() {
+    if (!hasApi()) return;
+    for (const p of R.picks.filter(x => x.status === 'local')) await pushPick(p);
+    for (const p of R.picks.filter(x => x.status === 'manual' && x.undone)) {
+      try { await gasCall(getSettings(), { action: 'pickDone', id: p.id }); p.undone = false; } catch (e) { /* 次に */ }
+    }
+    const r = await gasCall(getSettings(), { action: 'pickList' });
+    const pending = new Set(r.ids || []);
+    R.picks.forEach(p => { if (p.status === 'queued' && !pending.has(p.id)) p.status = 'done'; });
+    await savePicks();
+  }
+
+  function pickRequest(p) {
+    const ja = /[\u3040-\u30ff\u4e00-\u9fff]/.test(p.text);
+    const ctx = [p.before, p.text, p.after].filter(Boolean).join(' ');
+    const src = `出典：${p.title || 'YouTube'}（${pickPayload(p).url}）`;
+    if (p.kind === 'speak') return `SPEAK: ${p.text}\n文脈：${ctx}\n${src}`;
+    if (p.kind === 'word') return `${ja ? '登録' : 'REGISTER'} ${p.memo || p.text}\n文脈：${ctx}\n${src}`;
+    return `EXTRACT:\n${ctx}\n${p.memo ? `気になるところ：${p.memo}\n` : ''}${src}`;
+  }
+
+  function renderPicks() {
+    const d = R.ui.picks || {};
+    const items = [...R.picks].reverse().map(p => `
+      <section class="card-box rawpick" data-pick="${esc(p.id)}">
+        <p class="label">${esc(p.title || 'YouTube')} · ${esc(mmss(Math.floor(p.s)))} · <span class="pk-st s-${esc(p.status)}">${esc(PICK_STATE[p.status] || p.status)}</span></p>
+        <p class="pk-text">${p.before ? `<i>${esc(p.before)} </i>` : ''}<b>${esc(p.text)}</b>${p.after ? `<i> ${esc(p.after)}</i>` : ''}</p>
+        ${['local', 'queued'].includes(p.status) ? `
+        <div class="frow" role="group" aria-label="何にするか">${Object.entries(PICK_KIND).map(([k, l]) => `<button class="chip" aria-pressed="${p.kind === k}" data-act="raw-pick-kind" data-id="${esc(p.id)}" data-v="${k}">${esc(l)}</button>`).join('')}</div>
+        <label class="field">気になる語・メモ（空でも可）<input data-raw="pickmemo" data-id="${esc(p.id)}" value="${esc(p.memo || '')}" autocomplete="off" placeholder="例：見極める"></label>
+        <button class="outline" data-act="raw-pick-copy" data-id="${esc(p.id)}">Claude に頼む文をコピー（すぐ作りたいとき）</button>` : ''}
+        ${p.err ? `<p class="msg err" style="margin:0">送れませんでした：${esc(p.err)}</p>` : ''}
+        <button class="text-btn" data-act="raw-pick-del" data-id="${esc(p.id)}">消す</button>
+      </section>`).join('');
+    return `
+      <section class="card-box" aria-label="拾った文">
+        <p class="label">拾った文（${R.picks.length}）</p>
+        <p class="small" style="margin:0">${hasApi()
+          ? '「Claude 待ち」の文は、Claude が数時間おきにまとめて、単語カードや話す練習にします。できたものは同期で届きます。すぐ作りたいときは「コピー」して Claude に貼ってください（待ち行列からは外れます）。'
+          : '設定で Apps Script の URL とトークンを入れると、Claude が自動で単語カードや話す練習にします。いまは「コピー」して Claude に貼ってください。'}</p>
+        ${hasApi() ? `<button class="outline" data-act="raw-pick-sync" ${d.busy ? 'disabled' : ''}>${d.busy ? '確かめています…' : '状態を更新'}</button>` : ''}
+        ${d.msg ? `<p class="msg ${d.msg.ok ? 'ok' : 'err'}" style="margin:0">${esc(d.msg.text)}</p>` : ''}
+        <a class="text-btn" href="#/raw" style="display:flex;align-items:center;justify-content:center">一覧へ</a>
+      </section>
+      ${items || '<p class="small" style="padding:0 16px">まだありません。字幕の行の ＋ を押すと、ここに入ります。</p>'}`;
   }
 
   /* ---------------- 候補を追加 ---------------- */
@@ -342,11 +419,15 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay, get
     stopYt();                                          // 画面を作り直すときだけ（点数を選ぶ・字幕スイッチは作り直さない）
     const id = arg ? decodeURIComponent(arg) : '';
     if (id && R.ui.id !== id) R.ui = { id, score: null, checkScore: null, cnote: '' };
+    if (id === 'picks' && hasApi() && Date.now() - (R.pickSyncAt || 0) > 30000) {     // 開いたときに、待ち行列と突き合わせる
+      R.pickSyncAt = Date.now();
+      syncPicks().then(() => { if (location.hash === '#/raw/picks') again(); }, () => {});
+    }
     app.innerHTML = `
       <div class="screen">
         <div class="scroll">
           <header class="top"><div><p class="date">本物の素材で、聞く → 確かめる</p><h1>生の日本語</h1></div></header>
-          <main class="home raw">${id === 'add' ? renderAdd() : id ? renderClip(id) : renderList()}</main>
+          <main class="home raw">${id === 'add' ? renderAdd() : id === 'picks' ? renderPicks() : id ? renderClip(id) : renderList()}</main>
         </div>
         ${nav('raw')}
       </div>`;
@@ -463,6 +544,14 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay, get
   });
 
   app.addEventListener('change', async e => {
+    if (e.target.dataset?.raw === 'pickmemo') {
+      const p = R.picks.find(x => x.id === e.target.dataset.id);
+      if (!p) return;
+      p.memo = e.target.value.trim().slice(0, 200);
+      await savePicks();
+      pushPick(p);
+      return;
+    }
     if (e.target.dataset?.raw !== 'packfile' || !e.target.files?.[0]) return;
     try {
       const r = addPack(JSON.parse(await e.target.files[0].text()));
@@ -556,6 +645,71 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay, get
       if (R.yt) { R.yt.seekTo(sec, true); R.yt.playVideo(); } else playYt(c, sec);
       follow.touched = 0;                                // 押した行から、また追いかける（動画は上に固定されるので、画面は動かさない）
     },
+    'raw-skip': async el => {
+      const r = rec(el.dataset.id);
+      if (r.first) return;
+      r.first = { gist: null, score: null, subs: true, skipped: true, at: Date.now() };
+      await save();
+      stopYt();
+      render(R.ui.id);
+      app.querySelector('.scroll')?.scrollTo(0, 0);
+    },
+    'raw-pick': async el => {
+      const c = clip(el.dataset.id);
+      const i = Number(el.dataset.i);
+      const q = c?.cues?.[i];
+      if (!q) return;
+      const have = R.picks.find(p => p.videoId === c.videoId && p.s === q.s);
+      if (have) { go('#/raw/picks'); return; }          // もう拾ってある行：一覧で直す
+      const p = { id: `PK-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`, videoId: c.videoId, title: c.title || '', s: q.s,
+        text: q.t, before: c.cues[i - 1]?.t || '', after: c.cues[i + 1]?.t || '', kind: 'auto', memo: '', status: 'local', at: Date.now() };
+      R.picks.push(p);
+      await savePicks();
+      el.textContent = '✓';
+      el.setAttribute('aria-pressed', 'true');
+      const link = document.getElementById('raw-pick-link');
+      if (link) link.textContent = `拾った文（${pickedOf(c).size}）›`;
+      pushPick(p);                                       // 待ち行列へ（電波がなければ、あとで送る）
+    },
+    'raw-pick-kind': async el => {
+      const p = R.picks.find(x => x.id === el.dataset.id);
+      if (!p) return;
+      p.kind = el.dataset.v;
+      el.parentElement.querySelectorAll('.chip').forEach(b => b.setAttribute('aria-pressed', String(b === el)));
+      await savePicks();
+      pushPick(p);
+    },
+    'raw-pick-copy': async el => {
+      const p = R.picks.find(x => x.id === el.dataset.id);
+      if (!p) return;
+      const memo = app.querySelector(`[data-raw="pickmemo"][data-id="${p.id}"]`);
+      if (memo) p.memo = memo.value.trim().slice(0, 200);
+      const ok = await copyText(pickRequest(p));
+      if (!ok) { R.ui.picks = { msg: { ok: false, text: 'コピーできませんでした' } }; again(); return; }
+      const wasQueued = p.status === 'queued';
+      p.status = 'manual';
+      p.undone = wasQueued;                              // 待ち行列から外す（失敗したら「状態を更新」でやり直す）
+      await savePicks();
+      R.ui.picks = { msg: { ok: true, text: 'コピーしました。Claude に貼ってください。' } };
+      again();
+      if (wasQueued && hasApi()) {
+        try { await gasCall(getSettings(), { action: 'pickDone', id: p.id }); p.undone = false; await savePicks(); } catch (e) { /* あとで */ }
+      }
+    },
+    'raw-pick-del': async el => {
+      const p = R.picks.find(x => x.id === el.dataset.id);
+      if (!p) return;
+      R.picks = R.picks.filter(x => x !== p);
+      await savePicks();
+      again();
+      if (p.status === 'queued' && hasApi()) { try { await gasCall(getSettings(), { action: 'pickDone', id: p.id }); } catch (e) { /* 残っても Claude が作るだけ */ } }
+    },
+    'raw-pick-sync': async () => {
+      R.ui.picks = { busy: true };
+      again();
+      try { await syncPicks(); R.ui.picks = { msg: { ok: true, text: '更新しました' } }; } catch (e) { R.ui.picks = { msg: { ok: false, text: `確かめられませんでした：${e.message}` } }; }
+      if (location.hash === '#/raw/picks') again();
+    },
     'raw-rate': el => {
       R.ui.rate = Number(el.dataset.v) || 1;
       app.querySelectorAll('[data-act="raw-rate"]').forEach(b => b.setAttribute('aria-pressed', String(b === el)));
@@ -644,13 +798,17 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay, get
     },
   };
 
-  const exportData = () => ({ rawLog: R.log, rawCands: R.cands });
+  const exportData = () => ({ rawLog: R.log, rawCands: R.cands, rawPicks: R.picks });
   async function importData(data) {
     let n = 0;
     for (const k of Array.isArray(data?.rawCands) ? data.rawCands : []) {
       if (k?.videoId && !R.cands.some(x => x.id === k.id)) R.cands.push(k);
     }
     await saveCands();
+    for (const p of Array.isArray(data?.rawPicks) ? data.rawPicks : []) {
+      if (p?.id && p.text && !R.picks.some(x => x.id === p.id)) R.picks.push(p);
+    }
+    await savePicks();
     for (const [id, v] of Object.entries(data?.rawLog || {})) {
       if (!R.log[id] || (!R.log[id].first && v?.first)) { R.log[id] = v; n += 1; }
     }
