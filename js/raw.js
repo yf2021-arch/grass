@@ -128,11 +128,14 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay, get
     const c = findClip(id);
     if (!c) return `<section class="card-box"><p class="scene">この素材は見つかりません。</p><a class="text-btn" href="#/raw">一覧へ</a></section>`;
     const r = rec(id);
+    const flash = R.ui.flash;   // 学習パックを読み込んだ直後だけ出す（v1.20.1）
+    R.ui.flash = null;
     const head = `
       <section class="card-box raw-head">
         <p class="label">${esc(c.id)} · ${esc(c.level || '')}</p>
         <p class="raw-title">${c.transferFor && !r.first ? 'テスト用の場面' : esc(c.title)}</p>
         <p class="small" style="margin:0">${esc(span(c))}</p>
+        ${flash ? `<p class="msg ok" style="margin:0">${esc(flash)}</p>` : ''}
       </section>`;
     const copy = `<p class="caption quiz-note">${esc(c.copyright || '')}</p>`;
 
@@ -285,6 +288,15 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay, get
       ${d?.msg ? `<p class="msg ${d.msg.ok ? 'ok' : 'err'}" style="margin:0">${esc(d.msg.text)}</p>` : ''}`;
   }
 
+  /** 読み込んだ学習パックの場面を開く（v1.20.1）。パックに YouTube の動画（videoId）が入っているので、リンクの入力は要らない */
+  function openImported(r) {
+    R.ui.packMsg = null;
+    R.ui.drive = R.ui.drive ? { ...R.ui.drive, msg: null } : null;
+    R.ui.flash = `${r.updated ? '更新' : '追加'}しました（字幕 ${r.cues}行）`;
+    stopYt();
+    go(`#/raw/${encodeURIComponent(r.item.id)}`);
+  }
+
   /** 学習パック（grass-rawpack v1）を候補にする。同じ動画・同じ範囲は1つにまとめる */
   function addPack(pack) {
     if (!pack || pack.app !== 'grass-rawpack' || !/^[A-Za-z0-9_-]{11}$/.test(pack.videoId || '')) throw new Error('学習パックの形ではありません');
@@ -408,7 +420,8 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay, get
     try {
       const r = addPack(JSON.parse(await e.target.files[0].text()));
       await saveCands();
-      R.ui.packMsg = { ok: true, text: `${r.updated ? '更新' : '追加'}しました（字幕 ${r.cues}行）` };
+      openImported(r);
+      return;
     } catch (err) {
       R.ui.packMsg = { ok: false, text: err instanceof SyntaxError ? 'ファイルが JSON として読めません' : err.message };
     }
@@ -452,7 +465,7 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay, get
       r.opens += 1;
       if (r.first) r.replays += 1;
       await save();                                   // 外へ行く前に、書きかけと回数を保存
-      const url = c.embed === 'youtube' && c.videoId ? `https://www.youtube.com/watch?v=${encodeURIComponent(c.videoId)}&t=${c.startSec}s` : c.url;
+      const url = c.embed === 'youtube' && c.videoId ? `https://www.youtube.com/watch?v=${encodeURIComponent(c.videoId)}${c.startSec > 0 ? `&t=${c.startSec}s` : ''}` : c.url;
       window.open(url, '_blank', 'noopener');
       again();
     },
@@ -542,7 +555,9 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay, get
         const r = await gasCall(getSettings(), { action: 'transcriptGet', id: el.dataset.id });
         const res = addPack(r.pack);
         await saveCands();
-        R.ui.drive = { ...R.ui.drive, busy: false, msg: { ok: true, text: `${res.updated ? '更新' : '追加'}しました（字幕 ${res.cues}行）` } };
+        R.ui.drive = { ...R.ui.drive, busy: false };
+        openImported(res);
+        return;
       } catch (e) {
         R.ui.drive = { ...(R.ui.drive || {}), busy: false, msg: { ok: false, text: `読み込めませんでした：${e.message}` } };
       }
@@ -553,7 +568,8 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay, get
       try {
         const r = addPack(JSON.parse(text));
         await saveCands();
-        R.ui.packMsg = { ok: true, text: `${r.updated ? '更新' : '追加'}しました（字幕 ${r.cues}行）` };
+        openImported(r);
+        return;
       } catch (e) {
         R.ui.packMsg = { ok: false, text: e instanceof SyntaxError ? '貼り付けた文が JSON として読めません' : e.message };
       }
@@ -562,7 +578,7 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay, get
     'raw-req': async el => {
       const k = R.cands.find(x => x.id === el.dataset.id);
       if (!k) return;
-      const req = { app: 'grass-raw-request', version: 1, videoId: k.videoId, url: `${k.url}&t=${k.start}s`, title: k.title || '', start: k.start, end: k.end, captionKind: k.captionKind || null, cueLines: k.cues?.length || 0 };
+      const req = { app: 'grass-raw-request', version: 1, videoId: k.videoId, url: k.start > 0 ? `${k.url}&t=${k.start}s` : k.url, title: k.title || '', start: k.start, end: k.end, captionKind: k.captionKind || null, cueLines: k.cues?.length || 0 };
       const ok = await copyText(JSON.stringify(req));
       const m = document.getElementById('raw-req-msg');
       if (m) { m.textContent = ok ? 'コピーしました。Slack のスレッドに貼ってください。' : JSON.stringify(req); m.hidden = false; }
