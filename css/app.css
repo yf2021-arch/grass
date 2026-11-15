@@ -777,3 +777,13 @@ button.row-link { width: 100%; border: 0; text-align: left; font: inherit; color
 .drive-list .t b { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
 .drive-list .t small { color: var(--muted); font-size: 12px; }
 .drive-list button { flex-shrink: 0; width: auto; height: 40px; padding: 0 14px; font-size: 14px; }
+/* 生の日本語：字幕の行を拾う・拾った文（v1.22.0） */
+.raw-cues li { display: flex; align-items: flex-start; gap: 4px; }
+.raw-cues li .raw-cue { flex: 1; min-width: 0; }
+.raw-pick { flex-shrink: 0; width: 40px; height: 40px; border-radius: 20px; border: 1px solid var(--field); background: var(--surface); color: var(--accent); font-size: 18px; line-height: 1; }
+.raw-pick[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); color: #fff; }
+.pk-text { margin: 0; font-size: 16px; line-height: 1.8; }
+.pk-text b { font-weight: 600; }
+.pk-text i { font-style: normal; color: var(--muted); }
+.pk-st.s-queued { color: var(--accent); }
+.pk-st.s-done, .pk-st.s-manual { color: #1f7a3a; }
