@@ -27,16 +27,43 @@ function readPage() {
   return { videoId: id, title, now: v ? v.currentTime : 0 };
 }
 
+// YouTube の文字起こしパネルは2種類ある（0.2.0）
+//   新：「動画の関連情報」パネルの「文字起こし」タブ。1行＝<transcript-segment-view-model>
+//       中に 時刻（.ytwTranscriptSegmentViewModelTimestamp）・読み上げ用の時刻（…TimestampA11yLabel）・本文（span）
+//       2026-11 に確認：17分の動画で 124 行すべてが最初から入っている（見えている部分だけ読み込む作りではない）
+//       字幕の言語・自動字幕かどうかは、このパネルには出ない
+//   旧：<ytd-transcript-segment-renderer>（.segment-timestamp・.segment-text）
+// 画面の作りが変わったら、ここに足す
 function readTranscript() {
   const toS = t => String(t).trim().split(':').map(Number).reduce((a, n) => a * 60 + n, 0);
-  const segs = [...document.querySelectorAll('ytd-transcript-segment-renderer')];
-  const cues = segs.map(el => ({
-    s: toS(el.querySelector('.segment-timestamp')?.textContent || ''),
-    t: (el.querySelector('.segment-text')?.textContent || '').replace(/\s+/g, ' ').trim(),
-  })).filter(c => c.t && Number.isFinite(c.s));
+  const clean = t => String(t || '').replace(/\s+/g, ' ').trim();
+  const LAYOUTS = [
+    { name: 'new', seg: 'transcript-segment-view-model', ts: '.ytwTranscriptSegmentViewModelTimestamp', drop: '.ytwTranscriptSegmentViewModelTimestamp, .ytwTranscriptSegmentViewModelTimestampA11yLabel' },
+    { name: 'old', seg: 'ytd-transcript-segment-renderer', ts: '.segment-timestamp', text: '.segment-text' },
+  ];
+  let cues = [];
+  let layout = null;
+  let found = 0;
+  for (const L of LAYOUTS) {
+    const segs = [...document.querySelectorAll(L.seg)];
+    if (!segs.length) continue;
+    layout = L.name;
+    found = segs.length;
+    cues = segs.map(el => {
+      const stamp = clean(el.querySelector(L.ts)?.textContent);
+      let t;
+      if (L.text) t = clean(el.querySelector(L.text)?.textContent);
+      else { const c = el.cloneNode(true); c.querySelectorAll(L.drop).forEach(x => x.remove()); t = clean(c.textContent); }
+      return { s: /^\d+(:\d{1,2}){1,2}$/.test(stamp) ? toS(stamp) : NaN, t };
+    }).filter(c => c.t && Number.isFinite(c.s));
+    break;
+  }
+  // 同じ行が2つのパネルに入っていることがあるので、重ねない
+  const seen = new Set();
+  cues = cues.filter(c => { const k = `${c.s}|${c.t}`; if (seen.has(k)) return false; seen.add(k); return true; }).sort((a, b) => a.s - b.s);
   const panel = document.querySelector('ytd-engagement-panel-section-list-renderer[target-id*="transcript"]');
-  const lang = (panel?.querySelector('yt-sort-filter-sub-menu-renderer, #footer')?.textContent || '').replace(/\s+/g, ' ').trim();
-  return { cues, lang, panelOpen: !!segs.length };
+  const lang = layout === 'old' ? clean(panel?.querySelector('yt-sort-filter-sub-menu-renderer, #footer')?.textContent) : '';
+  return { cues, lang, layout, panelOpen: found > 0 };
 }
 
 /* ---- ポップアップ ---- */
@@ -69,7 +96,7 @@ async function read() {
   pack = null; $('save').disabled = true; $('copy').disabled = true;
   if (start == null || end == null || end <= start) { prev.innerHTML = '<span class="err">始まりと終わりの時間を確かめてください</span>'; return; }
   const r = await inTab(readTranscript);
-  if (!r.panelOpen) { prev.innerHTML = '<span class="err">文字起こしパネルが見つかりません。「文字起こしを表示」を開いてから、もう一度押してください。字幕のない動画では使えません。</span>'; return; }
+  if (!r.panelOpen) { prev.innerHTML = '<span class="err">文字起こしが見つかりません。動画の説明の「文字起こしを表示」を押して、右の「動画の関連情報」で「文字起こし」のタブを開いてから、もう一度押してください。字幕のない動画では使えません。</span>'; return; }
   const all = r.cues.map((c, i) => ({ ...c, e: r.cues[i + 1]?.s ?? c.s + 5 }));
   const cues = all.filter(c => c.s >= start - 1 && c.s <= end);
   const kind = /自動|auto-generated|automatically/i.test(r.lang) ? 'auto' : r.lang ? 'unknown' : 'unknown';
