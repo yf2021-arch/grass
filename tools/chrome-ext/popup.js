@@ -130,18 +130,37 @@ function setButtons(on) {
   $('copy').textContent = 'コピー';
 }
 
+// 設定の読み書き（0.4.1）：次の順に探す
+//   1. chrome.storage.local（manifest の storage 権限。拡張を ↻ で読み込み直すまで使えない）
+//   2. localStorage（拡張の中だけの保存場所。storage 権限がなくても使える）
+//   3. 拡張のフォルダの config.json（{ "apiUrl": "…/exec", "token": "…" }。手で置く。拡張からは書き換えられない）
 async function loadSetup() {
-  try { setup = { ...setup, ...(await chrome.storage.local.get(['apiUrl', 'token'])) }; } catch (e) { /* */ }
+  const pick = o => (o && o.apiUrl && o.token ? { apiUrl: cleanUrl(o.apiUrl), token: cleanToken(o.token) } : null);
+  let got = null;
+  let from = '';
+  try { if (chrome.storage?.local) { got = pick(await chrome.storage.local.get(['apiUrl', 'token'])); from = got ? 'storage' : ''; } } catch (e) { /* */ }
+  if (!got) { try { got = pick(JSON.parse(localStorage.getItem('grassSetup') || 'null')); from = got ? 'local' : ''; } catch (e) { /* */ } }
+  if (!got) {
+    try {
+      const res = await fetch(chrome.runtime.getURL('config.json'), { cache: 'no-store' });
+      if (res.ok) { got = pick(await res.json()); from = got ? 'config' : ''; }
+    } catch (e) { /* config.json がない */ }
+  }
+  if (got) setup = got;
   $('apiUrl').value = setup.apiUrl || '';
   $('token').value = setup.token || '';
   if (!setup.apiUrl || !setup.token) $('setup').open = true;
+  else if (from === 'config') $('setupmsg').textContent = 'config.json の設定を使っています';
 }
 
 async function saveSetup() {
   setup = { apiUrl: cleanUrl($('apiUrl').value), token: cleanToken($('token').value) };
-  await chrome.storage.local.set(setup);
   $('apiUrl').value = setup.apiUrl;
-  $('setupmsg').textContent = /\/exec$/.test(setup.apiUrl) && setup.token ? '保存しました' : 'URL（…/exec）とトークンを確かめてください';
+  if (!/\/exec$/.test(setup.apiUrl) || !setup.token) { $('setupmsg').textContent = 'URL（…/exec）とトークンを確かめてください'; return; }
+  let ok = false;
+  try { if (chrome.storage?.local) { await chrome.storage.local.set(setup); ok = true; } } catch (e) { /* storage 権限がまだない */ }
+  try { localStorage.setItem('grassSetup', JSON.stringify(setup)); ok = true; } catch (e) { /* */ }
+  $('setupmsg').textContent = ok ? '保存しました（次に開いたときも残ります）' : '保存できませんでした。chrome://extensions で拡張を ↻（再読み込み）してください';
 }
 
 async function toDrive() {

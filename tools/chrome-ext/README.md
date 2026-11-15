@@ -1,4 +1,4 @@
-# Grass 字幕助手（Chrome 拡張・PC 用・試作 0.4）
+# Grass 字幕助手（Chrome 拡張・PC 用・試作 0.4.1）
 
 YouTube の動画ページで、自分で開いた「文字起こし」パネルから、選んだ30〜90秒の字幕だけを
 学習パック（`grass-rawpack` v1）にして保存します。スマホの Grass「生の日本語 → 学習パックを読み込む」で開きます。
@@ -30,3 +30,7 @@ YouTube の動画ページで、自分で開いた「文字起こし」パネル
 2. 本体の `doPost` に1行足す（ほかの action と同じ場所）：`if (action === 'transcript') return saveTranscriptApi_(payload);`
 3. 「デプロイ > デプロイを管理 > 編集 > 新バージョン」で公開し直す（URL は変わらない）。Drive を使う許可を求められたら許可する
 4. 拡張の「Drive に保存するための設定」に、Grass アプリの設定と同じ URL とトークンを入れて「保存」
+   - 拡張のファイルを入れ替えたら、`chrome://extensions` で ↻（再読み込み）する。しないと新しい権限（storage）が効かない
+   - 0.4.1：storage 権限がなくても、拡張の中（localStorage）に保存するので、次に開いても残る
+   - または、このフォルダに `config.json` を置いてもよい：`{ "apiUrl": "https://script.google.com/macros/s/…/exec", "token": "…" }`
+     （トークンが入るので、人に渡したり公開リポジトリに入れたりしない。`.gitignore` に入れてある）
