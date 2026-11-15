@@ -214,7 +214,7 @@ const cardAudio = createCardAudio({ store });
 const speak = createSpeak({ app, esc, go, nav, store, todayStr: srs.todayStr, addDays: srs.addDays, ICON, cardAudio });
 const raw = createRaw({ app, esc, nav, store, go, startChunks: ids => speak.startWith(ids), chunkSay: id => speak.chunkSay(id), getSettings: () => S.settings });
 const bjt = createBjt({ app, esc, go, nav, store, todayStr: srs.todayStr, ICON, audio: { has: speak.hasClip, play: speak.playClip, stop: speak.stopClip }, extraBackup: [raw] });
-const katsuyo = createKatsuyo({ app, esc, nav, store, todayStr: srs.todayStr, ICON, cards: () => S.cards, say: speak.say, canSay: speak.canSay });
+const katsuyo = createKatsuyo({ app, esc, nav, store, todayStr: srs.todayStr, ICON, cards: () => S.cards, say: speak.say, canSay: speak.canSay, cardAudio });
 const walk = createWalk({
   app, esc, nav, store, todayStr: srs.todayStr, ICON, cardAudio,
   cards: () => S.cards, isDue: c => srs.isDue(c), clipUrl: speak.clipUrl, chunks: speak.chunks, quizItems: bjt.walkItems,
@@ -987,7 +987,7 @@ function renderSettings() {
             <button class="outline quiet" data-act="${S.settings.demo ? 'demo-off' : 'demo-on'}">${S.settings.demo ? 'デモを終了' : 'デモデータで試す'}</button>
           </div>
         </section>
-        <p class="small" style="text-align:center">Grass v1.22.2</p>
+        <p class="small" style="text-align:center">Grass v1.22.3</p>
       </main>
       ${nav('settings')}
     </div>`;

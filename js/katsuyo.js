@@ -487,7 +487,7 @@ const LIMIT_SAY_S = 12;                  // 「先に言う」のときは考え
 const AUTO_MS = 2500;                    // 正解のあと自動で次へ（「止めて読む」で止まる）
 const BOX_W = [6, 3, 1.5, 0.7, 0.35];   // 箱ごとの出やすさ（間違えると箱 0 に戻る）
 
-export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = () => [], say = null, canSay = () => null }) {
+export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = () => [], say = null, canSay = () => null, cardAudio = null }) {
   const K = {
     tab: 'play',
     chips: ['て形', 'た形', 'ない形'],
@@ -536,13 +536,24 @@ export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = ()
   const allClipNames = () => [...new Set([...Object.values(K.clips), ...Object.values(K.clipWords).flatMap(m => Object.values(m))])];
   const clipTotal = () => allClipNames().length;
   const rewardAudio = createRewardAudio();
+  let rewardEpoch = 0;
+  const stopReward = () => { rewardEpoch += 1; rewardAudio.stop(); };
   let rewardDone = Promise.resolve();
-  const playText = (t, w = '') => {
+  const playText = async (t, w = '', form = '') => {
+    const epoch = rewardEpoch;
+    const imported = form && cardAudio ? await cardAudio.url(`KT-${w}`, form) : null;
+    if (epoch !== rewardEpoch || !location.hash.startsWith('#/katsuyo')) {
+      if (imported) URL.revokeObjectURL(imported);
+      return false;
+    }
+    if (imported) {
+      try { return await rewardAudio.play(t, imported); } finally { URL.revokeObjectURL(imported); }
+    }
     const file = K.clipWords[w]?.[t] || K.clips[t];
     return rewardAudio.play(t, file ? KA_DIR + encodeURIComponent(file) : null);
   };
   window.addEventListener('hashchange', () => {
-    if (!location.hash.startsWith('#/katsuyo')) { rewardAudio.stop(); clearTimeout(advanceTimer); }
+    if (!location.hash.startsWith('#/katsuyo')) { stopReward(); clearTimeout(advanceTimer); }
   });
 
   async function downloadClips() {
@@ -630,7 +641,7 @@ export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = ()
   }
 
   function start(only = null) {
-    rewardAudio.stop();
+    stopReward();
     clearTimeout(advanceTimer);
     const items = buildRound(only);
     if (!items.length) return;
@@ -679,7 +690,7 @@ export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = ()
 
   /** 答えの形を読み上げる（グループの問題は語そのもの） */
   function sayForm(x) {
-    return playText(x.form === 'group' || x.form === 'agroup' ? x.word.w : x.options[x.answer], x.word.w).catch(() => false);
+    return playText(x.form === 'group' || x.form === 'agroup' ? x.word.w : x.options[x.answer], x.word.w, x.form).catch(() => false);
   }
 
   async function selfCheck(said) {
@@ -704,7 +715,7 @@ export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = ()
   }
 
   async function next() {
-    rewardAudio.stop();
+    stopReward();
     const s = K.session;
     if (!s) return;
     clearTimeout(advanceTimer);
@@ -721,7 +732,7 @@ export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = ()
   function render() {
     if (!location.hash.startsWith('#/katsuyo')) return;
     const s = K.session;
-    if (!s || s.done) rewardAudio.stop();
+    if (!s || s.done) stopReward();
     let body;
     if (s && !s.done) body = questionView(s);
     else if (s && s.done) body = endView(s);
@@ -789,6 +800,7 @@ export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = ()
   function clipLine() {
     const total = clipTotal();
     if (K.dl?.running) return `<p class="kt-note">音声を入れています… ${K.dl.done} / ${K.dl.total}</p>`;
+    if (cardAudio?.info()?.drill) return '<p class="kt-note">読み込んだ音声パックの録音で、正解を自動再生します。</p>';
     if (total) {
       const left = total - K.cached;
       const fail = K.dl?.failed ? `（${K.dl.failed}個は入らなかったので、もう一度）` : '';

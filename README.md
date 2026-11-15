@@ -415,3 +415,12 @@ v1.14.0 から、Moonshine は「話す」の標準。
 正解すると、答えの活用形が自動で流れます。以前の「正解を読み上げ」オフ設定も引き継ぎません。音声ファイルがない場合は、端末に日本語での読み上げをリクエストします。自動で次へ進むのは音声が終わったあとです（端末が音声に対応していないときは、練習を止めません）。スピーカーボタンは再度聞くためのものです。
 
 確認：`node tests/katsuyo-audio.test.mjs`。
+
+### 音声キット：活用の録音・Drive保存・省容量（v1.22.3）
+
+- 「音声を更新.bat」はカードと話す文に加え、活用ドリルの基本語＋自分のカードの動詞・形容詞の答えも録音します。`tools/export_pack_drill.mjs` がアプリと同じルールからリストを作るため、Node.js が必要です。
+- 完成した同じパックを設定から読み込むと、活用ドリルでも録音が自動で鳴ります。スマホの日本語TTSは不要です（未収録の新しい語は次回のパック更新後に使えます）。
+- 完了すると Apps Script 経由でマイドライブ `pwa/audio/grass-card-audio.pack` を上書きします。既存ファイルのID・共有設定を保ち、送信が完了するまで旧ファイルを残す分割アップロードです。`--no-upload` でPCのみ。一部生成（`--limit`・`--ids`・`--csv`）ではDriveの完全パックを置き換えません。
+- Google側には `gas/AudioUpload.gs` を追加し、トークン確認後に `if (/^audioUpload/.test(action)) return audioUploadApi_(action, payload);` を追加して既存のデプロイを新バージョンで公開します。
+- 録音は前回の `.pack` から再利用します。パックを一時ファイルに作って検証してから置き換え、不要な `clips` フォルダは成功後に自動で消します。`--keep-clips` なら残せます。完成した `.pack` と `config.json` は残してください。
+- 確認：`python tests/audio-kit.test.py`、`node tests/audio-upload.test.mjs`、`node tests/katsuyo-audio.test.mjs`。

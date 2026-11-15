@@ -71,6 +71,7 @@ import os
 import re
 import shutil
 import struct
+import subprocess
 import sys
 import time
 import urllib.request
@@ -79,6 +80,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from make_audio import LEAD_SILENCE, LEAD_TAG, request, speakers, style_name, to_mp3  # noqa: E402
 from furi import Checker  # noqa: E402
+
+from audio_pack_cache import index_pack, restore_clip, write_pack, clean_clips
+from upload_audio_pack import upload_pack
 
 PACK_MAGIC = b'GRASSPK1'
 SEP = '｜'
@@ -254,6 +258,8 @@ def make_samples(args, out, readings):
 
 
 def main():
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8')
     ap = argparse.ArgumentParser(description='知識カードの音声パックを作る')
     ap.add_argument('--engine', default='http://127.0.0.1:10101')
     ap.add_argument('--speaker', type=int, help='声のスタイル番号（python tools/make_audio.py --list で確認）')
@@ -264,6 +270,9 @@ def main():
     ap.add_argument('--out', default='grass-card-audio')
     ap.add_argument('--sample', action='append', default=[], help='聞き比べ用のサンプルを作る文（何度でも指定可）')
     ap.add_argument('--redo', default='', help='この ID の音声だけ作り直す（カンマ区切り）')
+    ap.add_argument('--upload', action='store_true', help='完了したパックを Drive pwa/audio に上書き保存')
+    ap.add_argument('--no-upload', action='store_false', dest='upload')
+    ap.add_argument('--keep-clips', action='store_true', help='一時的な音声ファイルを残す')
     args = ap.parse_args()
 
     out = Path(args.out).resolve()
@@ -306,6 +315,8 @@ def main():
     if args.limit:
         cards = cards[:args.limit]
 
+    pack = out / 'grass-card-audio.pack'
+    cached_pack, cached_base = index_pack(pack)
     clips = out / 'clips'
     clips.mkdir(parents=True, exist_ok=True)
     use_mp3 = shutil.which('ffmpeg') is not None
@@ -328,6 +339,17 @@ def main():
     files, made, skipped, shared, switched_words = {}, 0, 0, 0, []
     jobs = [(val(c, 'ID'), k, t, y, val(c, 'ふりがな')) for c in cards for k, t, y in parts(c)]
     jobs += [(c['id'], k, t, y, str(c.get('furi') or '')) for c in chunks for k, t, y in chunk_parts(c)]
+    # The same JavaScript rules as the PWA produce base and personal drill forms.
+    exporter = Path(__file__).resolve().parent / 'export_pack_drill.mjs'
+    try:
+        drill = json.loads(subprocess.run(['node', str(exporter)], input=json.dumps(cards, ensure_ascii=False),
+            capture_output=True, text=True, encoding='utf-8', check=True).stdout)
+    except FileNotFoundError:
+        sys.exit('活用の音声を作るには Node.js が必要です。Node.js をインストールして、もう一度実行してください。')
+    except subprocess.CalledProcessError:
+        sys.exit('活用の音声リストを作れませんでした。キット一式を更新してください。')
+    jobs += [(j['id'], j['key'], j['text'], j['yomi'], '') for j in drill]
+    print(f'活用ドリル：{len(drill)}個の答えを確認します（基本語＋自分のカード）。')
     checker = Checker(lambda t: request(args.engine, '/audio_query', params={'text': t, 'speaker': args.speaker}),
                       out / 'furi-check.json')
     for n, (cid, key, text, yomi, furi) in enumerate(jobs, 1):
@@ -337,7 +359,7 @@ def main():
         if key != 'w' and furi:
             spoken = checker.spoken(spoken, furi, args.speaker)   # エンジンが読み間違えた語だけ、かなにする
         src = f'{spoken}|{args.speaker}|{args.speed}|{LEAD_TAG}'
-        if key == 'w':
+        if key == 'w' or cid.startswith('KT-'):
             src += f'|{yomi}|w2'              # 表現は「漢字で作り、読みが違えばかな」に変えたので作り直す
         ref = f'{cid}:{key}'
         if cid in redo:
@@ -353,6 +375,9 @@ def main():
         if dest.exists():
             if any(i['name'] == fname for r, i in files.items() if r != ref):
                 shared += 1
+            skipped += 1
+            continue
+        if restore_clip(pack, cached_pack, cached_base, fname, dest):
             skipped += 1
             continue
         old = clips / prev.get(ref, '')
@@ -389,17 +414,9 @@ def main():
     added = [r for r in now if r not in prev]
     changed = [r for r in now if r in prev and prev[r] != now[r]]
     gone = [r for r in prev if r not in now]
-    (out / 'last.json').write_text(json.dumps(now, ensure_ascii=False, indent=0), encoding='utf-8')
+    # last.json is updated only after the replacement pack succeeds.
 
     # パックを作る：マジック 8バイト ＋ ヘッダ長（4バイト）＋ ヘッダ JSON ＋ 音声データを順に連結
-    offset, blobs, placed = 0, [], {}
-    for ref, info in files.items():
-        if info['name'] not in placed:          # 同じ音声はパックに1回だけ入れ、ほかのカードはそこを指す
-            data = (clips / info['name']).read_bytes()
-            placed[info['name']] = (offset, len(data))
-            offset += len(data)
-            blobs.append(data)
-        info['off'], info['len'] = placed[info['name']]
     header = {
         'version': 1,
         'made': time.strftime('%Y-%m-%d %H:%M'),
@@ -411,14 +428,14 @@ def main():
         'type': 'audio/mpeg' if use_mp3 else 'audio/wav',
         'cards': len(cards),
         'chunks': len(chunks),
+        'drill': len(drill),
         'files': files,
     }
-    hb = json.dumps(header, ensure_ascii=False).encode('utf-8')
-    pack = out / 'grass-card-audio.pack'
-    with open(pack, 'wb') as f:
-        f.write(PACK_MAGIC + struct.pack('<I', len(hb)) + hb)
-        for b in blobs:
-            f.write(b)
+    write_pack(pack, header, clips)
+    (out / 'last.json').write_text(json.dumps(now, ensure_ascii=False, indent=0), encoding='utf-8')
+    if not args.keep_clips and not args.limit and not ids:
+        clean_clips(out)
+        print('clips の一時音声を削除しました。次回は .pack 内の録音を再利用します。')
     print(f'\n完了：カード {len(cards)}枚・話すの自分の文 {len(chunks)}個・音声 {len(files)}個（作成 {made}・そのまま {skipped}・古い音声の削除 {removed_clips}）'
           + (f'。同じ文を共有：{shared}個' if shared else ''))
     if switched_words:
@@ -436,6 +453,15 @@ def main():
     print(f'音声パック：{pack}（{pack.stat().st_size / 1024 / 1024:.1f}MB）')
     print('このファイルをスマホに移し、アプリの「設定 > カードの音声 > 音声パックを読み込む」で読み込んでください。')
     print('※ 公開リポジトリには入れないでください（例文に職場の内容が入ることがあります）')
+    if args.upload:
+        if args.limit or ids or args.csv:
+            print('一部だけの生成・CSVモードでは Drive の完全パックを上書きしません。')
+        else:
+            try:
+                result = upload_pack(pack, url, token)
+                print(f"Drive pwa/audio に保存しました（同じファイルを更新）：{result.get('url', '')}")
+            except Exception as e:
+                sys.exit(f'Drive に保存できませんでした：{e}\n完成した .pack は PC に残っています。Google 側の AudioUpload.gs とデプロイを確認してください。')
 
 
 if __name__ == '__main__':

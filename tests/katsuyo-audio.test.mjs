@@ -62,3 +62,29 @@ spoken.at(-1).onend();
 await picking;
 drill.actions['kt-quit']();
 console.log('PASS correct-answer action: automatic reward with legacy settings');
+
+// Imported recordings are matched by word + conjugation form, without requesting TTS.
+const speechCount = spoken.length;
+let lookup;
+let playedUrl;
+globalThis.Audio = class {
+  constructor(url) { playedUrl = url; }
+  play() { queueMicrotask(() => this.onended?.()); return Promise.resolve(); }
+  pause() {}
+};
+const imported = createKatsuyo({ app, esc: String, nav: () => '', ICON: {}, todayStr: () => '2026-11-15',
+  store: { get: async () => ({}), put: async () => {} },
+  cardAudio: { info: () => ({ drill: 1 }), url: async (id, key) => { lookup = {id,key}; return 'blob:imported-recording'; } },
+});
+await imported.load(); imported.actions['kt-start']();
+const importedWord = BASE_WORDS.find(w => w.w === app.innerHTML.match(/class="w">([^<]+)/)[1]);
+const importedLabel = app.innerHTML.match(/class="kt-form"><span>([^<]+)/)[1];
+const importedForm = Object.keys(FORMS).find(f => FORMS[f].label === importedLabel);
+const importedRight = conj(importedWord, importedForm);
+const importedOptions = [...app.innerHTML.matchAll(/data-act="kt-pick" data-v="(\d+)"[^>]*>([^<]+)/g)];
+await imported.actions['kt-pick']({ dataset: { v: importedOptions.find(m => m[2] === importedRight)[1] } });
+assert.deepEqual(lookup, { id: `KT-${importedWord.w}`, key: importedForm });
+assert.equal(playedUrl, 'blob:imported-recording');
+assert.equal(spoken.length, speechCount);
+imported.actions['kt-quit']();
+console.log('PASS imported conjugation recording plays automatically without Japanese TTS');
