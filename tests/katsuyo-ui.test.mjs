@@ -32,7 +32,7 @@ try {
       window.__said = [];
       const voice = { lang: 'ja-JP', name: 'test' };
       window.SpeechSynthesisUtterance = class { constructor(t) { this.text = t; } };
-      Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: { getVoices: () => [voice], cancel() {}, speak(u) { window.__said.push(u.text); }, addEventListener() {} } });
+      Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: { getVoices: () => [voice], cancel() {}, speak(u) { window.__said.push(u.text); queueMicrotask(() => u.onend?.()); }, addEventListener() {} } });
     });
     const lastSaid = () => page.evaluate(() => window.__said[window.__said.length - 1]);
     const shot = async name => { if (shots) await page.screenshot({ path: path.join(shots, `${scheme}-${name}.png`), fullPage: true }); };
