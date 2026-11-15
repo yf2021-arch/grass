@@ -10,6 +10,7 @@
 //   公式サイトを開いただけでは「聞いた」にしない。字幕を見てしまったら、その条件も記録する。
 
 // 自分で追加した YouTube の場面（候補）に出す、どの場面にも使える問い
+import { call as gasCall } from './sync.js';
 const GENERIC_QS = ['だれが、だれに話していますか。', '何について話していますか。', 'いちばん大事だと思った一言は何でしたか。'];
 const CAPTION_KIND = { manual: '字幕（人が作成）', auto: '自動字幕・未確認', unknown: '種類不明・未確認' };
 
@@ -46,7 +47,7 @@ const SCORES = [
   [3, 'ほぼ全部分かった'],
 ];
 
-export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay }) {
+export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay, getSettings = () => ({}) }) {
   const R = { clips: [], cands: [], log: {}, ui: { score: null, checkScore: null }, add: null, yt: null, ytReady: null };
 
   async function load() {
@@ -255,12 +256,33 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay }) {
       </section>` : ''}
       <section class="card-box" aria-label="学習パック">
         <p class="label">学習パックを読み込む（PC の字幕助手から）</p>
+        ${driveHtml()}
         <label class="field">ファイル<input type="file" data-raw="packfile" accept="application/json,.json"></label>
         <label class="field">または中身を貼り付け<textarea data-raw="pack" rows="2" class="export" placeholder='{"app":"grass-rawpack",...}'></textarea></label>
         <button class="outline" data-act="raw-pack">読み込む</button>
         ${R.ui.packMsg ? `<p class="msg ${R.ui.packMsg.ok ? 'ok' : 'err'}" style="margin:0">${esc(R.ui.packMsg.text)}</p>` : ''}
       </section>
       <p class="caption quiz-note">候補・字幕の文・メモは、このスマホの中だけに保存されます（公開されません）。</p>`;
+  }
+
+  /* Drive の pwa/transcript から読み込む（v1.20.0）：字幕助手の「Drive に保存」で置いたパックを、Apps Script 経由で一覧・取得する */
+  const packKey = name => { const m = /^grass-rawpack-([A-Za-z0-9_-]{11})-(\d+)-(\d+)\.json$/.exec(name || ''); return m ? `${m[1]}|${m[2]}|${m[3]}` : null; };
+  function driveHtml() {
+    const d = R.ui.drive;
+    const st = getSettings() || {};
+    if (!st.apiUrl || !st.token) return '<p class="small" style="margin:0">Drive から読み込むには、設定で Apps Script の URL とトークンを入れてください。</p>';
+    const have = new Set(R.cands.map(k => `${k.videoId}|${k.start}|${k.end}`));
+    let list = '';
+    if (d?.files) {
+      list = d.files.length ? `<ul class="drive-list">${d.files.map(f => {
+        const done = have.has(packKey(f.name));
+        return `<li><span class="t"><b>${esc(f.note || f.name)}</b><small>${esc(new Date(f.updated).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }))}${done ? ' · 読み込み済み' : ''}</small></span>
+          <button class="${done ? 'outline quiet' : 'primary ink'} mini" data-act="raw-drive-get" data-id="${esc(f.id)}" ${d.busy ? 'disabled' : ''}>${done ? '読み込み直す' : '読み込む'}</button></li>`;
+      }).join('')}</ul>` : '<p class="small" style="margin:0">pwa/transcript に学習パックがありません。</p>';
+    }
+    return `<button class="primary ink" data-act="raw-drive-list" ${d?.busy ? 'disabled' : ''}>${d?.busy ? '読み込み中…' : d?.files ? 'Drive の一覧を更新' : 'Drive（pwa/transcript）から選ぶ'}</button>
+      ${list}
+      ${d?.msg ? `<p class="msg ${d.msg.ok ? 'ok' : 'err'}" style="margin:0">${esc(d.msg.text)}</p>` : ''}`;
   }
 
   /** 学習パック（grass-rawpack v1）を候補にする。同じ動画・同じ範囲は1つにまとめる */
@@ -501,6 +523,30 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay }) {
       R.add = null;
       stopYt();
       go(`#/raw/${encodeURIComponent(res.item.id)}`);
+    },
+    'raw-drive-list': async () => {
+      R.ui.drive = { ...(R.ui.drive || {}), busy: true, msg: null };
+      again();
+      try {
+        const r = await gasCall(getSettings(), { action: 'transcriptList' });
+        R.ui.drive = { files: r.files || [] };
+      } catch (e) {
+        R.ui.drive = { ...(R.ui.drive || {}), busy: false, msg: { ok: false, text: `一覧を出せませんでした：${e.message}` } };
+      }
+      again();
+    },
+    'raw-drive-get': async el => {
+      R.ui.drive = { ...(R.ui.drive || {}), busy: true, msg: null };
+      again();
+      try {
+        const r = await gasCall(getSettings(), { action: 'transcriptGet', id: el.dataset.id });
+        const res = addPack(r.pack);
+        await saveCands();
+        R.ui.drive = { ...R.ui.drive, busy: false, msg: { ok: true, text: `${res.updated ? '更新' : '追加'}しました（字幕 ${res.cues}行）` } };
+      } catch (e) {
+        R.ui.drive = { ...(R.ui.drive || {}), busy: false, msg: { ok: false, text: `読み込めませんでした：${e.message}` } };
+      }
+      again();
     },
     'raw-pack': async () => {
       const text = String(app.querySelector('[data-raw="pack"]')?.value || '').trim();

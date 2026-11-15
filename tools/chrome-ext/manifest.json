@@ -1,8 +1,9 @@
 {
   "manifest_version": 3,
   "name": "Grass 字幕助手",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "YouTube の文字起こしパネルから、選んだ範囲（空欄なら全部）の字幕を学習パック（grass-rawpack）にして保存する",
-  "permissions": ["activeTab", "scripting"],
+  "permissions": ["activeTab", "scripting", "storage"],
+  "host_permissions": ["https://script.google.com/*", "https://script.googleusercontent.com/*"],
   "action": { "default_title": "Grass 字幕助手", "default_popup": "popup.html" }
 }

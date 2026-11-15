@@ -8,6 +8,16 @@ const toSec = v => {
   if (!p.length || p.some(n => !Number.isFinite(n) || n < 0)) return null;
   return p.reduce((a, n) => a * 60 + n, 0);
 };
+// Drive に保存（0.4.0）：Grass の Apps Script（{ action: 'transcript' }）に送ると、マイドライブ / pwa / transcript に置く。
+//   URL とトークンは、この PC の chrome.storage.local にだけ保存する
+const cleanUrl = raw => {
+  const s = String(raw ?? '').replace(/[\s\u200B-\u200D\u2060\uFEFF]/g, '');
+  const m = s.match(/https:\/\/script\.google\.com\/(?:a\/[^/]+\/)?macros\/s\/[A-Za-z0-9_-]+\/exec/);
+  return m ? m[0] : s;
+};
+const cleanToken = raw => String(raw ?? '').replace(/[\s\u200B-\u200D\u2060\uFEFF]/g, '');
+let setup = { apiUrl: '', token: '' };
+
 let page = null;   // { videoId, title, now, duration }
 let pack = null;
 
@@ -92,7 +102,7 @@ async function read() {
   const eRaw = $('e').value.trim();
   const prev = $('prev');
   prev.hidden = false;
-  pack = null; $('save').disabled = true; $('copy').disabled = true;
+  pack = null; setButtons(false); $('drivemsg').textContent = '';
   const start = sRaw ? toSec(sRaw) : 0;
   const endIn = eRaw ? toSec(eRaw) : null;
   if (start == null || (eRaw && endIn == null) || (endIn != null && endIn <= start)) { prev.innerHTML = '<span class="err">始まりと終わりの時間を確かめてください（空欄なら、最初から／最後まで）</span>'; return; }
@@ -111,7 +121,56 @@ async function read() {
   prev.innerHTML = `<div class="muted">${kind === 'auto' ? '自動字幕（未確認）' : '字幕の種類：分からない（未確認）'}${r.lang ? ` · ${r.lang}` : ''}</div><ol></ol>`;
   const ol = prev.querySelector('ol');
   cues.forEach(c => { const li = document.createElement('li'); li.textContent = `${mmss(c.s)} ${c.t}`; ol.append(li); });
-  $('save').disabled = false; $('copy').disabled = false;
+  setButtons(true);
+}
+
+function setButtons(on) {
+  ['save', 'copy'].forEach(id => { $(id).disabled = !on; });
+  $('drive').disabled = !on;
+  $('copy').textContent = 'コピー';
+}
+
+async function loadSetup() {
+  try { setup = { ...setup, ...(await chrome.storage.local.get(['apiUrl', 'token'])) }; } catch (e) { /* */ }
+  $('apiUrl').value = setup.apiUrl || '';
+  $('token').value = setup.token || '';
+  if (!setup.apiUrl || !setup.token) $('setup').open = true;
+}
+
+async function saveSetup() {
+  setup = { apiUrl: cleanUrl($('apiUrl').value), token: cleanToken($('token').value) };
+  await chrome.storage.local.set(setup);
+  $('apiUrl').value = setup.apiUrl;
+  $('setupmsg').textContent = /\/exec$/.test(setup.apiUrl) && setup.token ? '保存しました' : 'URL（…/exec）とトークンを確かめてください';
+}
+
+async function toDrive() {
+  if (!pack) return;
+  const msg = $('drivemsg');
+  if (!setup.apiUrl || !setup.token) { $('setup').open = true; msg.innerHTML = '<span class="err">下の「Drive に保存するための設定」に URL とトークンを入れてください</span>'; return; }
+  $('drive').disabled = true;
+  msg.textContent = 'Drive に保存しています…';
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 45000);
+    const res = await fetch(setup.apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },   // Apps Script は事前確認（OPTIONS）に答えないので text/plain で送る
+      body: JSON.stringify({ action: 'transcript', token: setup.token, pack }),
+      redirect: 'follow', credentials: 'omit', cache: 'no-store', signal: ctrl.signal,
+    }).finally(() => clearTimeout(timer));
+    const data = await res.json().catch(() => { throw new Error(`応答を読めません（${res.status}）。URL と、Apps Script の公開（新バージョン）を確かめてください`); });
+    if (!data.ok) throw new Error(data.error || '不明なエラー');
+    msg.innerHTML = '';
+    const ok = document.createElement('span'); ok.className = 'ok';
+    ok.textContent = `${data.updated ? '上書きしました' : '保存しました'}：${data.folder || 'pwa/transcript'}/${data.name}`;
+    msg.append(ok);
+  } catch (e) {
+    msg.innerHTML = '<span class="err"></span>';
+    msg.firstChild.textContent = e.name === 'AbortError' ? '時間切れです。もう一度押してください' : `保存できませんでした：${e.message}`;
+  } finally {
+    $('drive').disabled = !pack;
+  }
 }
 
 function saveFile() {
@@ -128,6 +187,9 @@ $('ns').onclick = () => nowTo('s').catch(e => alertBox(e));
 $('ne').onclick = () => nowTo('e').catch(e => alertBox(e));
 $('read').onclick = () => read().catch(e => alertBox(e));
 $('save').onclick = saveFile;
+$('drive').onclick = () => toDrive();
+$('saveSetup').onclick = () => saveSetup().catch(e => { $('setupmsg').textContent = e.message; });
 $('copy').onclick = async () => { if (pack) { await navigator.clipboard.writeText(JSON.stringify(pack)); $('copy').textContent = 'コピーしました'; } };
 function alertBox(e) { const p = $('prev'); p.hidden = false; p.innerHTML = '<span class="err"></span>'; p.firstChild.textContent = e.message || String(e); }
+loadSetup();
 init();

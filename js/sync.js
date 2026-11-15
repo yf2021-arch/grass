@@ -28,7 +28,8 @@ async function probe(url) {
   }
 }
 
-async function call(settings, body) {
+/** Apps Script に1回送る（字幕の学習パックの一覧・取得でも使う） */
+export async function call(settings, body) {
   const url = cleanUrl(settings.apiUrl);
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);

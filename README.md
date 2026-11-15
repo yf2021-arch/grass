@@ -98,6 +98,15 @@ Claude（grass-card-extractor）──register──▶ Apps Script ◀──pul
 - 素材は2つ：`data/chunks.json` の架空の30個（公開）と、シート「02_話すチャンク」の自分の文（非公開）。
   `data/chunks.json` には会社名・顧客名・社内の文は入れないでください。職場で拾った文はシートだけに置きます
 
+### 字幕を Drive 経由で読み込む（v1.20.0・字幕助手 0.4.0）
+
+PC の Chrome 拡張「Grass 字幕助手」（`tools/chrome-ext`）の「Drive に保存」で、学習パックをマイドライブ / pwa / transcript に置く。
+スマホの Grass は「生の日本語 → ＋ YouTube の場面を追加 → Drive（pwa/transcript）から選ぶ」で一覧を出し、「読み込む」を押すだけ（ファイルの受け渡しは要らない）。
+
+- どちらも同期と同じ Apps Script を使う（`gas/Transcripts.gs`。action：`transcript` 保存・`transcriptList` 一覧・`transcriptGet` 取得。pwa/transcript の外のファイルは返さない）
+- 登録スクリプト本体の `doPost` に1行：`if (/^transcript/.test(action)) return transcriptApi_(action, payload);`。足したら新バージョンで公開し直す
+- 拡張の URL とトークンは、Grass の設定と同じもの（PC の拡張の中にだけ保存）
+
 ### 自分の文（v1.5.0）
 
 職場や動画で拾った文を、話す練習に足します。文はシートとスマホの中だけにあり、公開リポジトリには入りません。
