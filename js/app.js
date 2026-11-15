@@ -211,7 +211,7 @@ function nav(current) {
 
 const cardAudio = createCardAudio({ store });
 const speak = createSpeak({ app, esc, go, nav, store, todayStr: srs.todayStr, addDays: srs.addDays, ICON, cardAudio });
-const raw = createRaw({ app, esc, nav, store, go, startChunks: ids => speak.startWith(ids), chunkSay: id => speak.chunkSay(id) });
+const raw = createRaw({ app, esc, nav, store, go, startChunks: ids => speak.startWith(ids), chunkSay: id => speak.chunkSay(id), getSettings: () => S.settings });
 const bjt = createBjt({ app, esc, go, nav, store, todayStr: srs.todayStr, ICON, audio: { has: speak.hasClip, play: speak.playClip, stop: speak.stopClip }, extraBackup: [raw] });
 const katsuyo = createKatsuyo({ app, esc, nav, store, todayStr: srs.todayStr, ICON, cards: () => S.cards, say: speak.say, canSay: speak.canSay });
 const walk = createWalk({
@@ -986,7 +986,7 @@ function renderSettings() {
             <button class="outline quiet" data-act="${S.settings.demo ? 'demo-off' : 'demo-on'}">${S.settings.demo ? 'デモを終了' : 'デモデータで試す'}</button>
           </div>
         </section>
-        <p class="small" style="text-align:center">Grass v1.19.1</p>
+        <p class="small" style="text-align:center">Grass v1.20.0</p>
       </main>
       ${nav('settings')}
     </div>`;

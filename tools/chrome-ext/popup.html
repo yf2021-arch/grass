@@ -7,6 +7,10 @@
   h1 { font-size: 15px; margin: 0 0 8px; }
   .box { background: #fff; border: 1px solid #e3e3de; border-radius: 10px; padding: 10px; margin-bottom: 8px; }
   .row { display: flex; gap: 6px; align-items: center; margin: 4px 0; }
+  input.wide { width: 100%; }
+  .actions { margin-top: 8px; padding-top: 8px; border-top: 1px solid #e3e3de; }
+  .ok { color: #1f7a3a; }
+  details summary { cursor: pointer; color: #2b57c8; }
   input { width: 70px; padding: 4px 6px; border: 1px solid #ccc; border-radius: 6px; font: inherit; }
   button { padding: 6px 10px; border: 1px solid #2b57c8; border-radius: 8px; background: #fff; color: #2b57c8; font: inherit; cursor: pointer; }
   button.main { background: #2b57c8; color: #fff; }
@@ -25,10 +29,22 @@
     <div class="row">終わり <input id="e" placeholder="最後まで"> <button id="ne">今の時間</button></div>
     <p class="muted" style="margin:2px 0 0">時間が空欄なら、最初から／最後まで。両方空欄で全部の字幕を読みます。</p>
     <div class="row"><button class="main" id="read">字幕を読む</button><span class="muted" id="len"></span></div>
+    <div class="row actions">
+      <button class="main" id="drive" disabled>Drive に保存</button>
+      <button id="save" disabled>ファイルに保存</button>
+      <button id="copy" disabled>コピー</button>
+    </div>
+    <div class="muted" id="drivemsg"></div>
   </div>
   <div class="box" id="prev" hidden></div>
-  <div class="row"><button class="main" id="save" disabled>学習パックを保存</button><button id="copy" disabled>コピー</button></div>
-  <p class="muted">読むのは、押したときに画面に見えている文字起こしだけです。範囲を入れたときは、その外は保存しません。保存したファイルを Drive などでスマホに送り、Grass の「生の日本語 → 学習パックを読み込む」で開きます。</p>
+  <details class="box" id="setup">
+    <summary>Drive に保存するための設定</summary>
+    <p class="muted">Grass アプリの「設定」と同じ Apps Script の URL とトークンを入れてください。保存先は マイドライブ / pwa / transcript です（なければ作ります）。</p>
+    <div class="row"><input id="apiUrl" class="wide" placeholder="https://script.google.com/macros/s/…/exec"></div>
+    <div class="row"><input id="token" class="wide" type="password" placeholder="トークン"> <button id="saveSetup">保存</button></div>
+    <div class="muted" id="setupmsg"></div>
+  </details>
+  <p class="muted">読むのは、押したときに画面に見えている文字起こしだけです。範囲を入れたときは、その外は保存しません。「Drive に保存」は マイドライブ / pwa / transcript に置きます。スマホの Grass の「生の日本語 → 学習パックを読み込む」で開きます。</p>
   <script src="popup.js"></script>
 </body>
 </html>
