@@ -50,6 +50,13 @@ const SCORES = [
 export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay, getSettings = () => ({}) }) {
   const R = { clips: [], cands: [], log: {}, ui: { score: null, checkScore: null }, add: null, yt: null, ytReady: null };
 
+  /* 動画を見ながら字幕を追う（v1.21.0）
+   *   1. プレーヤーが画面の外へ出たら、画面の上に固定する（字幕を読みながら動画が見える）
+   *   2. いま話している行に印を付けて、画面の中ほどへ送る（カラオケのように。YouTube の字幕は行ごとの時刻なので、行の単位）
+   *      指で動かしたあと4秒は、勝手に送らない */
+  const follow = { timer: null, io: null, now: null, touched: 0 };
+  ['touchstart', 'touchmove', 'wheel'].forEach(ev => app.addEventListener(ev, () => { follow.touched = Date.now(); }, { passive: true }));
+
   async function load() {
     const [l, cs] = await Promise.all([store.get('meta', 'rawLog'), store.get('meta', 'rawCands')]);
     R.log = l && typeof l === 'object' ? l : {};
@@ -110,7 +117,7 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay, get
   function playerBox(c, r) {
     if (c.embed === 'youtube' && c.videoId) {
       return `
-        <div class="raw-player" id="raw-yt" aria-label="動画"></div>
+        <div class="raw-player" aria-label="動画"><div id="raw-yt"></div></div>
         <div class="grid2">
           <button class="primary" data-act="raw-yt" data-id="${esc(c.id)}">▶ 場面を再生（${c.endSec - c.startSec}秒）</button>
           <button class="outline" data-act="raw-open" data-id="${esc(c.id)}">YouTube で開く</button>
@@ -128,8 +135,8 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay, get
     const c = findClip(id);
     if (!c) return `<section class="card-box"><p class="scene">この素材は見つかりません。</p><a class="text-btn" href="#/raw">一覧へ</a></section>`;
     const r = rec(id);
-    const flash = R.ui.flash;   // 学習パックを読み込んだ直後だけ出す（v1.20.1）
-    R.ui.flash = null;
+    const flash = R.flash;      // 学習パックを読み込んだ直後だけ出す（R.ui は場面が変わると作り直すので、その外に置く）
+    R.flash = null;
     const head = `
       <section class="card-box raw-head">
         <p class="label">${esc(c.id)} · ${esc(c.level || '')}</p>
@@ -198,6 +205,7 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay, get
       <section class="card-box" aria-label="字幕">
         <p class="label">字幕（押すとそこから再生）· ${esc(kind)}</p>
         ${c.captionKind !== 'manual' ? '<p class="caption" style="margin:0;text-align:left">自動字幕には聞き間違いがあります。文化の話として読む前に、音で確かめてください。</p>' : ''}
+        <div class="frow" role="group" aria-label="速さ"><span class="small">速さ</span>${[0.75, 1].map(v => `<button class="chip" aria-pressed="${(R.ui.rate || 1) === v}" data-act="raw-rate" data-v="${v}">${v}×</button>`).join('')}</div>
         <ol class="raw-cues">${c.cues.map(q => `<li><button class="raw-cue" data-act="raw-cue" data-id="${esc(c.id)}" data-s="${q.s}"><span class="k">${esc(mmss(Math.floor(q.s)))}</span><span>${esc(q.t)}</span></button></li>`).join('')}</ol>
       </section>` : '';
     const candBox = c.cand ? `
@@ -242,7 +250,7 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay, get
       <section class="card-box" aria-label="場面">
         <p class="label">2. 場面の始まりと終わりに印を付ける</p>
         <p class="small" style="margin:0">動画を流して、始まりで「ここから」、終わりで「ここまで」。時間を直接直してもかまいません（動画は切り取りもダウンロードもしません）。</p>
-        <div class="raw-player" id="raw-yt" aria-label="動画"></div>
+        <div class="raw-player" aria-label="動画"><div id="raw-yt"></div></div>
         <button class="primary" data-act="raw-yt" data-id="add">▶ 動画を流す</button>
         <p class="msg err" id="raw-yt-err" hidden></p>
         <div class="grid2">
@@ -292,7 +300,7 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay, get
   function openImported(r) {
     R.ui.packMsg = null;
     R.ui.drive = R.ui.drive ? { ...R.ui.drive, msg: null } : null;
-    R.ui.flash = `${r.updated ? '更新' : '追加'}しました（字幕 ${r.cues}行）`;
+    R.flash = `${r.updated ? '更新' : '追加'}しました（字幕 ${r.cues}行）`;
     stopYt();
     go(`#/raw/${encodeURIComponent(r.item.id)}`);
   }
@@ -386,20 +394,59 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay, get
       videoId: c.videoId,
       playerVars: vars,
       events: {
-        onReady: e => { if (from != null) e.target.seekTo(from, true); e.target.playVideo(); },
+        onReady: e => { if (from != null) e.target.seekTo(from, true); if (R.ui.rate && R.ui.rate !== 1) e.target.setPlaybackRate?.(R.ui.rate); e.target.playVideo(); },
         onStateChange: e => { if (e.data === 1) started = true; },   // 1 = 再生中
         onError: e => showYtMsg([101, 150].includes(e.data)
           ? 'この動画は、ほかのサイトでの再生が許可されていません。「YouTube で開く」から見てください。'
           : 'プレーヤーでエラーが起きました。「YouTube で開く」から見られます。'),
       },
     });
+    startFollow();
     setTimeout(() => {                                  // 自動再生が止められたとき：プレーヤーの ▶ を押してもらう
       if (!started && here() && R.yt) showYtMsg('再生が始まらないときは、プレーヤーの ▶ を直接押してください。');
     }, 5000);
   }
 
   function stopYt() {
+    clearInterval(follow.timer); follow.timer = null;
+    follow.io?.disconnect(); follow.io = null;
+    follow.now = null;
     if (R.yt) { try { R.yt.destroy(); } catch (e) { /* もう消えている */ } R.yt = null; }
+  }
+
+  function startFollow() {
+    const wrap = app.querySelector('.raw-player');
+    const scroller = app.querySelector('.scroll');
+    if (wrap && scroller && 'IntersectionObserver' in window) {
+      follow.io = new IntersectionObserver(es => { wrap.classList.toggle('pin', !es[es.length - 1].isIntersecting && !!R.yt); }, { root: scroller, threshold: 0 });
+      follow.io.observe(wrap);
+    }
+    clearInterval(follow.timer);
+    follow.timer = setInterval(tickFollow, 250);
+  }
+
+  function tickFollow() {
+    if (!R.yt?.getCurrentTime) return;
+    const els = app.querySelectorAll('.raw-cue');
+    if (!els.length) return;
+    let t;
+    let playing = false;
+    try { t = R.yt.getCurrentTime(); playing = R.yt.getPlayerState?.() === 1; } catch (e) { return; }
+    if (!Number.isFinite(t)) return;
+    let lo = 0;
+    let hi = els.length - 1;
+    let idx = -1;
+    while (lo <= hi) {                                   // 始まりの時刻が t 以下の、最後の行
+      const mid = (lo + hi) >> 1;
+      if (Number(els[mid].dataset.s) <= t + 0.2) { idx = mid; lo = mid + 1; } else hi = mid - 1;
+    }
+    const el = idx >= 0 ? els[idx] : null;
+    if (el === follow.now) return;
+    follow.now?.classList.remove('now');
+    follow.now = el;
+    if (!el) return;
+    el.classList.add('now');
+    if (playing && Date.now() - follow.touched > 4000) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
   }
   window.addEventListener('hashchange', () => { if (!location.hash.startsWith('#/raw/')) stopYt(); });
 
@@ -507,7 +554,12 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay, get
       if (!c) return;
       const sec = Number(el.dataset.s);
       if (R.yt) { R.yt.seekTo(sec, true); R.yt.playVideo(); } else playYt(c, sec);
-      document.getElementById('raw-yt')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      follow.touched = 0;                                // 押した行から、また追いかける（動画は上に固定されるので、画面は動かさない）
+    },
+    'raw-rate': el => {
+      R.ui.rate = Number(el.dataset.v) || 1;
+      app.querySelectorAll('[data-act="raw-rate"]').forEach(b => b.setAttribute('aria-pressed', String(b === el)));
+      try { R.yt?.setPlaybackRate?.(R.ui.rate); } catch (e) { /* まだ再生していない */ }
     },
     'raw-parse': () => {
       readAddInputs();
