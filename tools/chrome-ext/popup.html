@@ -21,13 +21,14 @@
   <div class="box" id="info"><span class="muted">YouTube の動画ページで開いてください。</span></div>
   <div class="box">
     <p class="muted" style="margin:0 0 6px">先に、動画の説明の「文字起こしを表示」を押して、右の「動画の関連情報」で「文字起こし」タブを開いてください（字幕のない動画では使えません）。</p>
-    <div class="row">始まり <input id="s" placeholder="1:23"> <button id="ns">今の時間</button></div>
-    <div class="row">終わり <input id="e" placeholder="2:30"> <button id="ne">今の時間</button></div>
+    <div class="row">始まり <input id="s" placeholder="最初から"> <button id="ns">今の時間</button></div>
+    <div class="row">終わり <input id="e" placeholder="最後まで"> <button id="ne">今の時間</button></div>
+    <p class="muted" style="margin:2px 0 0">時間が空欄なら、最初から／最後まで。両方空欄で全部の字幕を読みます。</p>
     <div class="row"><button class="main" id="read">字幕を読む</button><span class="muted" id="len"></span></div>
   </div>
   <div class="box" id="prev" hidden></div>
   <div class="row"><button class="main" id="save" disabled>学習パックを保存</button><button id="copy" disabled>コピー</button></div>
-  <p class="muted">読むのは、押したときに画面に見えている文字起こしだけです。選んだ範囲の外は保存しません。保存したファイルを Drive などでスマホに送り、Grass の「生の日本語 → 学習パックを読み込む」で開きます。</p>
+  <p class="muted">読むのは、押したときに画面に見えている文字起こしだけです。範囲を入れたときは、その外は保存しません。保存したファイルを Drive などでスマホに送り、Grass の「生の日本語 → 学習パックを読み込む」で開きます。</p>
   <script src="popup.js"></script>
 </body>
 </html>

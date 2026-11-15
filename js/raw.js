@@ -272,7 +272,7 @@ export function createRaw({ app, esc, nav, store, go, startChunks, chunkSay }) {
     const cues = (Array.isArray(pack.cues) ? pack.cues : [])
       .map(q => ({ s: Number(q.s), e: Number(q.e), t: String(q.t || '').trim() }))
       .filter(q => Number.isFinite(q.s) && q.t && q.s >= start - 1 && q.s <= end + 1)
-      .slice(0, 200);
+      .slice(0, 3000);   // 字幕助手 0.3.0 で動画全部の字幕も読み込めるように（前は 200 行で切っていた）
     const key = `${pack.videoId}|${start}|${end}`;
     const have = R.cands.find(k => `${k.videoId}|${k.start}|${k.end}` === key);
     const item = {
