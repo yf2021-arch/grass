@@ -2,3 +2,4 @@
 grass-card-audio/
 *.pack
 __pycache__/
+tools/chrome-ext/config.json
