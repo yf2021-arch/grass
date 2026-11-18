@@ -59,7 +59,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     audio: { files: {}, credit: '', cached: 0 },
     voice: { on: false, sr: false, srState: null, micErr: null,   // srState: { ok, reason, at }
       wh: false, whModel: DEFAULT_WH_MODEL, whBytes: 0, whDl: null, whErr: null,  // whDl: { loaded, total }
-      whFiles: {}, whVerified: {}, whStatus: null },  // whFiles: モデルごとの読み込んだファイル名。whVerified: 実際に文字にできた日時
+      whFiles: {}, whVerified: {}, whStatus: null, over: false },  // whFiles: モデルごとの読み込んだファイル名。whVerified: 実際に文字にできた日時
   };
   const voice = createVoice();
   const whisper = createWhisper();
@@ -75,7 +75,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     if (vo && typeof vo === 'object') {
       SP.voice = { ...SP.voice, on: !!vo.on, sr: !!vo.sr && srSupported(), srState: vo.srState || null,
         // v1.14.0：標準を Moonshine に変えた。前の版で選んでいたモデル（base・small）は、一度だけ Moonshine に切り替える
-        wh: !!vo.wh, whModel: (vo.whModelV || 0) >= 2 && WH_MODELS[vo.whModel] && !WH_MODELS[vo.whModel].lab ? vo.whModel : DEFAULT_WH_MODEL,
+        over: !!vo.over, wh: !!vo.wh, whModel: (vo.whModelV || 0) >= 2 && WH_MODELS[vo.whModel] && !WH_MODELS[vo.whModel].lab ? vo.whModel : DEFAULT_WH_MODEL,
         whFiles: vo.whFiles && typeof vo.whFiles === 'object' ? vo.whFiles : {}, whVerified: vo.whVerified && typeof vo.whVerified === 'object' ? vo.whVerified : {} };
       if ((vo.whModelV || 0) < 2) saveVoice();   // 一度だけの切り替えを、すぐに保存する（v1.16.1）
     }
@@ -142,7 +142,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
 
   const saveLog = () => store.put('meta', SP.log.slice(-LOG_MAX), 'speakLog');
   const saveStuck = () => store.put('meta', SP.stuck, 'stuck');
-  const saveVoice = () => store.put('meta', { on: SP.voice.on, sr: SP.voice.sr, srState: SP.voice.srState, wh: SP.voice.wh, whModel: SP.voice.whModel, whModelV: 2, whFiles: SP.voice.whFiles, whVerified: SP.voice.whVerified }, 'speakVoice');
+  const saveVoice = () => store.put('meta', { on: SP.voice.on, over: SP.voice.over, sr: SP.voice.sr, srState: SP.voice.srState, wh: SP.voice.wh, whModel: SP.voice.whModel, whModelV: 2, whFiles: SP.voice.whFiles, whVerified: SP.voice.whVerified }, 'speakVoice');
   const whReady = () => SP.voice.on && SP.voice.wh && SP.voice.whBytes > 0;
   const baseReady = () => !!SP.voice.whStatusByModel?.base?.ready;
   whisper.purgeRetired().catch(() => {});      // Whisper small（約400MB）が端末に残っていれば消す（v1.14.0）
@@ -297,7 +297,8 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
         <div class="frow" role="group" aria-label="機能で選ぶ">${chips}</div>
         <button class="primary" data-act="sp-start" data-mode="scene" ${n ? '' : 'disabled'}>場面から言う（${n}問）</button>
         <button class="outline" data-act="sp-start" data-mode="look" ${n ? '' : 'disabled'}>読んで、顔を上げて言う（${n}問）</button>
-        ${SP.filter === "DBMS会議" ? '<button class="primary" data-act="sp-start" data-mode="expand">5秒 → 15秒 → 30秒で話す（5問）</button>' : ""}
+        ${SP.filter === "DBMS会議" ? `<button class="primary" data-act="sp-start" data-mode="expand">5秒 → 15秒 → 30秒で話す（5問）</button>
+        ${srSupported() ? `<label class="line"><span class="t"><b>「オーバー」で終了（実験）</b><span>5→15→30秒の練習で使用。開始を押し、終わったら「オーバー」と言う。ブラウザーの音声認識サービスを使います。Androidでは認識が途切れる場合があります。録音ファイルは作らず、認識された文字を表示します。</span></span><span class="switch"><input type="checkbox" data-act="sp-over" ${SP.voice.over ? 'checked' : ''}><span></span></span></label>` : '<p class="small">このブラウザーでは音声での終了は使えません（手動操作は可能）。</p>'}` : ""}
         ${voiceSwitches()}
         <p class="caption" style="margin:-6px 0 0">まだ練習していないもの → 前回詰まったもの → 久しぶりのもの、の順に出ます</p>
       </section>`
@@ -509,7 +510,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
       const id = WH_MODELS[SP.voice.whModel].id;   // 読み込み中にモデルを変えても、結果は読み込んだモデルの名前で残す
       whisper.load(SP.voice.whModel).then(r => { if (r.files.length) { SP.voice.whFiles[id] = r.files; saveVoice(); } }).catch(() => {});
     }
-    SP.drill = { mode, ids, i: 0, phase: 'front', t0: 0, ms: 0, peeks: 0, peeking: false, results: [], startedAt: Date.now(), expandStage: 0, expandTimes: [] };
+    SP.drill = { mode, ids, i: 0, phase: 'front', t0: 0, ms: 0, peeks: 0, peeking: false, results: [], startedAt: Date.now(), expandStage: 0, expandTimes: [], expandTexts: [], overDisabled: false };
     go('#/drill');
   }
 
@@ -554,7 +555,14 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
            <section class="sec"><h2>場面</h2><p class="scene">${fx(c, c.scene)}</p></section>`;
       const stage = d.expandStage || 0;
       const prompts = ['結論を一文で伝える', '理由や影響を一つ加える', '条件・例外・次の対応を加える'];
-      const foot = d.mode === 'expand' ? `<p>目標 ${[5,15,30][stage]}秒：${prompts[stage]}</p><p class="small">声に出し、話し終えたら次へ。時間は自動終了しません。</p><button class="reveal" data-act="sp-expand-next">${stage === 2 ? 'お手本を見る' : '次の段階へ'}</button>` : d.mode === 'scene'
+      const overMode = d.mode === 'expand' && SP.voice.over && srSupported() && !d.overDisabled;
+      const foot = d.mode === 'expand'
+        ? `<p>目標 ${[5,15,30][stage]}秒：${prompts[stage]}</p>
+           ${d.voiceMsg ? `<p class="msg err">${esc(d.voiceMsg)}</p>` : ''}
+           ${overMode && !d.take ? `<button class="reveal" data-act="sp-over-start">音声認識を開始</button><p class="small">終了時は「オーバー」。聞き取れない時は手動で終了できます。開始するまでは練習時間を計りません。認識にはGoogle等のサービスを使用する場合があります。</p>` : ''}
+           ${overMode && d.take ? `<p class="small">聞き取り中… 終了するには「オーバー」</p><p class="small heard-live" aria-live="off">${esc(d.heardLive || '')}</p><button class="reveal" data-act="sp-expand-next">手動で終了</button>` : ''}
+           ${!overMode ? `<p class="small">声に出し、話し終えたら次へ。時間は自動終了しません。</p><button class="reveal" data-act="sp-expand-next">${stage === 2 ? 'お手本を見る' : '次の段階へ'}</button>` : ''}`
+        : d.mode === 'scene'
         ? `<p>声に出して日本語で言ってから、答えを見る</p><button class="reveal" data-act="sp-reveal">答えを見る</button>`
         : `<p>覚えたら、画面から目を離す</p><button class="reveal" data-act="sp-lookup">顔を上げる</button>`;
       app.innerHTML = `
@@ -914,6 +922,8 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     d.t0 = 0;
     d.expandStage = 0;
     d.expandTimes = [];
+    d.expandTexts = [];
+    d.overDisabled = false;
     d.ms = 0;
     d.peeks = 0;
     d.peeking = false;
@@ -998,21 +1008,62 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     return false;
   }
 
+  function advanceExpand(d) {
+    if (SP.drill !== d || d.phase !== 'front') return;
+    const now = performance.now();
+    d.expandTimes.push(now - d.t0);
+    d.heardLive = '';
+    d.voiceMsg = null;
+    d.t0 = now;
+    if (d.expandStage < 2) { d.expandStage++; renderDrill(); }
+    else { d.ms = d.expandTimes.reduce((a, b) => a + b, 0); d.phase = 'back'; renderDrill(); }
+  }
+
   /* ---------------- 操作 ---------------- */
 
   const actions = {
     'sp-filter': el => { SP.filter = el.dataset.v; renderSpeak(); },
     'sp-start': el => startDrill(el.dataset.mode),
+    'sp-over': el => { SP.voice.over = !!el.checked; saveVoice(); renderSpeakKeep(); },
     'sp-again': () => startDrill(SP.drill?.mode || 'scene'),
     'sp-home': () => { dropRec(SP.drill); SP.drill = null; voice.release(); go('#/speak'); },
     'sp-quit': () => { dropRec(SP.drill); SP.drill = null; voice.release(); go('#/speak'); },
+    'sp-over-start': () => {
+      const d = SP.drill;
+      if (!d || d.mode !== 'expand' || d.phase !== 'front' || d.take || d.overDisabled) return;
+      d.t0 = performance.now();
+      d.heardLive = '';
+      d.voiceMsg = null;
+      // The Web Speech API is an alternative to MediaRecorder, not a simultaneous capture.
+      d.take = voice.recognize({
+        lang: 'ja-JP', endCommand: true, keepListening: true, maxTakeMs: 70000,
+        onText: t => {
+          if (SP.drill !== d || d.phase !== 'front') return;
+          d.heardLive = t;
+          const node = app.querySelector('.heard-live');
+          if (node) node.textContent = t;
+        },
+        onEnd: res => {
+          if (SP.drill !== d || d.phase !== 'front') return;
+          d.take = null;
+          d.expandTexts[d.expandStage] = res.text || d.heardLive || '';
+          advanceExpand(d);
+        },
+        onFail: why => {
+          if (SP.drill !== d || d.phase !== 'front') return;
+          d.take = null;
+          d.overDisabled = true;
+          d.voiceMsg = '音声認識が使えません（' + (SR_MSG[why] || why) + '）。手動で続けられます。';
+          renderDrill();
+        },
+      });
+      renderDrill();
+    },
     'sp-expand-next': () => {
       const d = SP.drill;
       if (!d || d.mode !== 'expand' || d.phase !== 'front') return;
-      const now = performance.now();
-      d.expandTimes.push(now - d.t0);
-      if (d.expandStage < 2) { d.expandStage++; d.t0 = now; renderDrill(); }
-      else { d.ms = d.expandTimes.reduce((a,b) => a+b, 0); d.phase = 'back'; renderDrill(); }
+      if (d.take) { d.take.stop(); return; }
+      advanceExpand(d);
     },
     'sp-reveal': () => {
       const d = SP.drill;
