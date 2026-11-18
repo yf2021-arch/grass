@@ -297,6 +297,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
         <div class="frow" role="group" aria-label="機能で選ぶ">${chips}</div>
         <button class="primary" data-act="sp-start" data-mode="scene" ${n ? '' : 'disabled'}>場面から言う（${n}問）</button>
         <button class="outline" data-act="sp-start" data-mode="look" ${n ? '' : 'disabled'}>読んで、顔を上げて言う（${n}問）</button>
+        ${SP.filter === "DBMS会議" ? '<button class="primary" data-act="sp-start" data-mode="expand">5秒 → 15秒 → 30秒で話す（5問）</button>' : ""}
         ${voiceSwitches()}
         <p class="caption" style="margin:-6px 0 0">まだ練習していないもの → 前回詰まったもの → 久しぶりのもの、の順に出ます</p>
       </section>`
@@ -502,13 +503,13 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
   /* ---------------- 練習 ---------------- */
 
   function startDrill(mode) {
-    const ids = pick(DRILL_SIZE, SP.filter);
+    const ids = mode === "expand" ? SP.chunks.filter(c => inFilter(c, SP.filter)).slice(0, DRILL_SIZE).map(c => c.id) : pick(DRILL_SIZE, SP.filter);
     if (!ids.length) return;
     if (mode === 'look' && whReady()) {   // 先に読み込んでおく（最初の1問を速く）。失敗したら、文字にするときにもう一度試し、そこで理由を出す
       const id = WH_MODELS[SP.voice.whModel].id;   // 読み込み中にモデルを変えても、結果は読み込んだモデルの名前で残す
       whisper.load(SP.voice.whModel).then(r => { if (r.files.length) { SP.voice.whFiles[id] = r.files; saveVoice(); } }).catch(() => {});
     }
-    SP.drill = { mode, ids, i: 0, phase: 'front', t0: 0, ms: 0, peeks: 0, peeking: false, results: [], startedAt: Date.now() };
+    SP.drill = { mode, ids, i: 0, phase: 'front', t0: 0, ms: 0, peeks: 0, peeking: false, results: [], startedAt: Date.now(), expandStage: 0, expandTimes: [] };
     go('#/drill');
   }
 
@@ -547,11 +548,13 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
 
     if (d.phase === 'front') {
       if (!d.t0) d.t0 = performance.now();
-      const body = d.mode === 'scene'
+      const body = (d.mode === 'scene' || d.mode === 'expand')
         ? `<section class="sec"><h2>場面</h2><p class="meaning">${fx(c, c.scene)}</p></section>`
         : `<section class="sec"><h2>読んで覚える</h2><p class="look-text">${fx(c, c.say)}</p></section>
            <section class="sec"><h2>場面</h2><p class="scene">${fx(c, c.scene)}</p></section>`;
-      const foot = d.mode === 'scene'
+      const stage = d.expandStage || 0;
+      const prompts = ['結論を一文で伝える', '理由や影響を一つ加える', '条件・例外・次の対応を加える'];
+      const foot = d.mode === 'expand' ? `<p>目標 ${[5,15,30][stage]}秒：${prompts[stage]}</p><p class="small">声に出し、話し終えたら次へ。時間は自動終了しません。</p><button class="reveal" data-act="sp-expand-next">${stage === 2 ? 'お手本を見る' : '次の段階へ'}</button>` : d.mode === 'scene'
         ? `<p>声に出して日本語で言ってから、答えを見る</p><button class="reveal" data-act="sp-reveal">答えを見る</button>`
         : `<p>覚えたら、画面から目を離す</p><button class="reveal" data-act="sp-lookup">顔を上げる</button>`;
       app.innerHTML = `
@@ -909,6 +912,8 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     d.i += 1;
     d.phase = 'front';
     d.t0 = 0;
+    d.expandStage = 0;
+    d.expandTimes = [];
     d.ms = 0;
     d.peeks = 0;
     d.peeking = false;
@@ -1001,6 +1006,14 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     'sp-again': () => startDrill(SP.drill?.mode || 'scene'),
     'sp-home': () => { dropRec(SP.drill); SP.drill = null; voice.release(); go('#/speak'); },
     'sp-quit': () => { dropRec(SP.drill); SP.drill = null; voice.release(); go('#/speak'); },
+    'sp-expand-next': () => {
+      const d = SP.drill;
+      if (!d || d.mode !== 'expand' || d.phase !== 'front') return;
+      const now = performance.now();
+      d.expandTimes.push(now - d.t0);
+      if (d.expandStage < 2) { d.expandStage++; d.t0 = now; renderDrill(); }
+      else { d.ms = d.expandTimes.reduce((a,b) => a+b, 0); d.phase = 'back'; renderDrill(); }
+    },
     'sp-reveal': () => {
       const d = SP.drill;
       d.ms = performance.now() - d.t0;
