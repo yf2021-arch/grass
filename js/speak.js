@@ -469,6 +469,8 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     } else if (el.dataset.act === 'sp-wh') {
       SP.voice.wh = el.checked;
       SP.voice.whErr = null;
+    } else if (el.dataset.act === 'sp-over') {
+      SP.voice.over = el.checked;
     } else if (el.dataset.act === 'sp-sr') {
       SP.voice.sr = el.checked;
       if (el.checked && SP.voice.srState && !SP.voice.srState.ok) SP.voice.srState = null;   // もう一度試す
@@ -607,6 +609,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
           </div>
           ${SP.ui.ttsMsg ? `<p class="small">${esc(SP.ui.ttsMsg)}</p>` : ''}
           ${d.rec ? voiceResult(d) : `<p class="timer">${d.mode === 'scene' ? '答えを見るまで' : '顔を上げてから'} <b>${secLabel(d.ms)}</b>${d.mode === 'look' && d.peeks ? ` · 見た回数 ${d.peeks}` : ''}</p>`}
+          ${d.mode === 'expand' ? `<section class="panel fit"><h3>5秒 → 15秒 → 30秒</h3><p>${d.expandTimes.map((t, i) => `${[5,15,30][i]}秒目標：${secLabel(t)}`).join(' · ')}</p>${d.expandTexts.some(Boolean) ? `<h3>認識した内容（実験）</h3>${d.expandTexts.map((t,i) => `<p>${[5,15,30][i]}秒：${esc(t || '（認識なし）')}</p>`).join('')}` : ''}<p class="small">認識結果は参考用です。言い換えや文字起こしの誤りは、話し方の失敗とは限りません。</p></section>` : ''}
           ${c.pattern ? `<section class="panel fit"><h3>型</h3><p class="pattern">${fx(c, c.pattern)}</p></section>` : ''}
           ${c.note ? `<p class="scene" style="font-size:15px">${fx(c, c.note)}</p>` : ''}
           ${vars ? `<section class="sec"><h2>1か所変えて、言い直す</h2><ul class="variants">${vars}</ul></section>` : ''}
@@ -1024,7 +1027,6 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
   const actions = {
     'sp-filter': el => { SP.filter = el.dataset.v; renderSpeak(); },
     'sp-start': el => startDrill(el.dataset.mode),
-    'sp-over': el => { SP.voice.over = !!el.checked; saveVoice(); renderSpeakKeep(); },
     'sp-again': () => startDrill(SP.drill?.mode || 'scene'),
     'sp-home': () => { dropRec(SP.drill); SP.drill = null; voice.release(); go('#/speak'); },
     'sp-quit': () => { dropRec(SP.drill); SP.drill = null; voice.release(); go('#/speak'); },
@@ -1035,7 +1037,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
       d.heardLive = '';
       d.voiceMsg = null;
       // The Web Speech API is an alternative to MediaRecorder, not a simultaneous capture.
-      d.take = voice.recognize({
+      const take = voice.recognize({
         lang: 'ja-JP', endCommand: true, keepListening: true, maxTakeMs: 70000,
         onText: t => {
           if (SP.drill !== d || d.phase !== 'front') return;
@@ -1057,6 +1059,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
           renderDrill();
         },
       });
+      if (!d.overDisabled && SP.drill === d && d.phase === 'front') d.take = take;
       renderDrill();
     },
     'sp-expand-next': () => {
