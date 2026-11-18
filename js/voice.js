@@ -210,7 +210,8 @@ export function createVoice() {
    * 音声認識を始める。タップの処理の中で（await より前に）呼ぶ。
    * 文字になれば onEnd({ kind:'sr', text, onsetAt, endAt })、使えなければ onFail(理由) が1回だけ呼ばれる。
    */
-  function recognize({ lang = 'ja-JP', onText = () => {}, onEnd = () => {}, onFail = () => {} } = {}) {
+  function recognize({ lang = 'ja-JP', onText = () => {}, onEnd = () => {}, onFail = () => {},
+    endCommand = false, keepListening = false, maxTakeMs = MAX_TAKE } = {}) {
     if (take) take.cancel();
     if (!SR) { onFail('unsupported'); return null; }
     const t0 = performance.now();
@@ -224,22 +225,26 @@ export function createVoice() {
     let quietTimer = null;
     let holdUntil = 0;
     let stopping = false;
-
+    let me = null; // r.start() may throw before the take object is assigned
+    let endReason = 'manual';
+    let maxTimer = null;
+    const overAtEnd = /(?:オーバー|オーヴァー|おーばー|over)[\s。．.!！]*$/i;
     const text = () => (finalText + interim).trim();
+    const clearTimers = () => {
+      clearTimeout(startTimer); clearTimeout(quietTimer); clearTimeout(maxTimer);
+    };
     const end = () => {
       if (done) return;
       done = true;
-      clearTimeout(startTimer);
-      clearTimeout(quietTimer);
+      clearTimers();
       try { r.abort(); } catch (e) { /* もう止まっている */ }
       if (take === me) take = null;
-      onEnd({ kind: 'sr', text: text(), onsetAt, endAt: endAt || performance.now() });
+      onEnd({ kind: 'sr', text: text(), onsetAt, endAt: endAt || performance.now(), reason: endReason });
     };
     const fail = why => {
       if (done) return;
       done = true;
-      clearTimeout(startTimer);
-      clearTimeout(quietTimer);
+      clearTimers();
       try { r.abort(); } catch (e) { /* もう止まっている */ }
       if (take === me) take = null;
       onFail(why);
@@ -270,10 +275,21 @@ export function createVoice() {
         // Android は、区切りごとに新しい認識を始め直すので、前の確定分に足していく
         finalText = (r._base || '') + f;
         interim = i;
+        // End command is accepted only from a finalized recognition result.
+        // An ordinary mention of オーバー in the middle of speech must not stop recording.
+        if (endCommand && f && overAtEnd.test(f.trim())) {
+          finalText = finalText.replace(overAtEnd, '').trim();
+          interim = '';
+          endReason = 'over';
+          endAt = performance.now();
+          onText(text());
+          end();
+          return;
+        }
         if (onsetAt == null) onsetAt = performance.now();
         endAt = performance.now();
         onText(text());
-        quietLater();
+        if (!keepListening) quietLater();
       };
       r.onerror = e => {
         const err = e.error || 'error';
@@ -285,7 +301,7 @@ export function createVoice() {
         if (!started) { fail('no-service'); return; }
         if (stopping) { end(); return; }
         // 何も聞き取れていなければ、最長まで始め直す（考えている間に切れないように）
-        if ((!text() || performance.now() < holdUntil) && performance.now() - t0 < MAX_TAKE) {
+        if ((keepListening || !text() || performance.now() < holdUntil) && performance.now() - t0 < maxTakeMs) {
           const base = finalText;
           try { startOne(); r._base = base; } catch (e) { end(); }
           return;
@@ -296,12 +312,13 @@ export function createVoice() {
     };
 
     const startTimer = setTimeout(() => { if (!started) fail('timeout'); }, SR_START_TIMEOUT);
+    maxTimer = setTimeout(() => { endReason = 'max'; end(); }, maxTakeMs);
     try { startOne(); } catch (e) { fail(e.name || 'error'); return null; }
 
-    const me = {
+    me = {
       kind: 'sr',
       stop: () => { if (!done) { stopping = true; try { r.stop(); } catch (e) { /* */ } setTimeout(end, 700); } },
-      cancel: () => { if (!done) { done = true; clearTimeout(startTimer); clearTimeout(quietTimer); try { r.abort(); } catch (e) { /* */ } if (take === me) take = null; } },
+      cancel: () => { if (!done) { done = true; clearTimers(); try { r.abort(); } catch (e) { /* */ } if (take === me) take = null; } },
       hold: ms => { holdUntil = performance.now() + ms; if (text()) quietLater(); },
     };
     take = me;
