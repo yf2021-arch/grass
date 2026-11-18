@@ -75,7 +75,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     if (vo && typeof vo === 'object') {
       SP.voice = { ...SP.voice, on: !!vo.on, sr: !!vo.sr && srSupported(), srState: vo.srState || null,
         // v1.14.0：標準を Moonshine に変えた。前の版で選んでいたモデル（base・small）は、一度だけ Moonshine に切り替える
-        over: !!vo.over, wh: !!vo.wh, whModel: (vo.whModelV || 0) >= 2 && WH_MODELS[vo.whModel] && !WH_MODELS[vo.whModel].lab ? vo.whModel : DEFAULT_WH_MODEL,
+        over: !!vo.over && vo.overOptInV2 === true, wh: !!vo.wh, whModel: (vo.whModelV || 0) >= 2 && WH_MODELS[vo.whModel] && !WH_MODELS[vo.whModel].lab ? vo.whModel : DEFAULT_WH_MODEL,
         whFiles: vo.whFiles && typeof vo.whFiles === 'object' ? vo.whFiles : {}, whVerified: vo.whVerified && typeof vo.whVerified === 'object' ? vo.whVerified : {} };
       if ((vo.whModelV || 0) < 2) saveVoice();   // 一度だけの切り替えを、すぐに保存する（v1.16.1）
     }
@@ -142,7 +142,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
 
   const saveLog = () => store.put('meta', SP.log.slice(-LOG_MAX), 'speakLog');
   const saveStuck = () => store.put('meta', SP.stuck, 'stuck');
-  const saveVoice = () => store.put('meta', { on: SP.voice.on, over: SP.voice.over, sr: SP.voice.sr, srState: SP.voice.srState, wh: SP.voice.wh, whModel: SP.voice.whModel, whModelV: 2, whFiles: SP.voice.whFiles, whVerified: SP.voice.whVerified }, 'speakVoice');
+  const saveVoice = () => store.put('meta', { on: SP.voice.on, over: SP.voice.over, overOptInV2: true, sr: SP.voice.sr, srState: SP.voice.srState, wh: SP.voice.wh, whModel: SP.voice.whModel, whModelV: 2, whFiles: SP.voice.whFiles, whVerified: SP.voice.whVerified }, 'speakVoice');
   const whReady = () => SP.voice.on && SP.voice.wh && SP.voice.whBytes > 0;
   const baseReady = () => !!SP.voice.whStatusByModel?.base?.ready;
   whisper.purgeRetired().catch(() => {});      // Whisper small（約400MB）が端末に残っていれば消す（v1.14.0）
@@ -298,7 +298,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
         <button class="primary" data-act="sp-start" data-mode="scene" ${n ? '' : 'disabled'}>場面から言う（${n}問）</button>
         <button class="outline" data-act="sp-start" data-mode="look" ${n ? '' : 'disabled'}>読んで、顔を上げて言う（${n}問）</button>
         ${SP.filter === "DBMS会議" ? `<button class="primary" data-act="sp-start" data-mode="expand">5秒 → 15秒 → 30秒で話す（5問）</button>
-        ${srSupported() ? `<label class="line"><span class="t"><b>「オーバー」で終了（実験）</b><span>5→15→30秒の練習で使用。開始を押し、終わったら「オーバー」と言う。ブラウザーの音声認識サービスを使います。Androidでは認識が途切れる場合があります。録音ファイルは作らず、認識された文字を表示します。</span></span><span class="switch"><input type="checkbox" data-act="sp-over" ${SP.voice.over ? 'checked' : ''}><span></span></span></label>` : '<p class="small">このブラウザーでは音声での終了は使えません（手動操作は可能）。</p>'}` : ""}
+        ${srSupported() ? `<label class="line"><span class="t"><b>「オーバー」で終了（実験）</b><span>通常は「録音を開始」でローカル録音します。これをオンにするとブラウザ音声認識による「オーバー」終了を試します。ブラウザーの音声認識サービスを使います。Androidでは認識が途切れる場合があります。録音ファイルは作らず、認識された文字を表示します。</span></span><span class="switch"><input type="checkbox" data-act="sp-over" ${SP.voice.over ? 'checked' : ''}><span></span></span></label>` : '<p class="small">このブラウザーでは音声での終了は使えません（手動操作は可能）。</p>'}` : ""}
         ${voiceSwitches()}
         <p class="caption" style="margin:-6px 0 0">まだ練習していないもの → 前回詰まったもの → 久しぶりのもの、の順に出ます</p>
       </section>`
@@ -512,7 +512,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
       const id = WH_MODELS[SP.voice.whModel].id;   // 読み込み中にモデルを変えても、結果は読み込んだモデルの名前で残す
       whisper.load(SP.voice.whModel).then(r => { if (r.files.length) { SP.voice.whFiles[id] = r.files; saveVoice(); } }).catch(() => {});
     }
-    SP.drill = { mode, ids, i: 0, phase: 'front', t0: 0, ms: 0, peeks: 0, peeking: false, results: [], startedAt: Date.now(), expandStage: 0, expandTimes: [], expandTexts: [], overDisabled: false };
+    SP.drill = { mode, ids, i: 0, phase: 'front', t0: 0, ms: 0, peeks: 0, peeking: false, results: [], startedAt: Date.now(), expandStage: 0, expandTimes: [], expandTexts: [], expandStatus: [], overDisabled: false, expandOpening: false };
     go('#/drill');
   }
 
@@ -558,12 +558,15 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
       const stage = d.expandStage || 0;
       const prompts = ['結論を一文で伝える', '理由や影響を一つ加える', '条件・例外・次の対応を加える'];
       const overMode = d.mode === 'expand' && SP.voice.over && srSupported() && !d.overDisabled;
+      const localMode = d.mode === 'expand' && !overMode && micSupported();
       const foot = d.mode === 'expand'
         ? `<p>目標 ${[5,15,30][stage]}秒：${prompts[stage]}</p>
            ${d.voiceMsg ? `<p class="msg err">${esc(d.voiceMsg)}</p>` : ''}
            ${overMode && !d.take ? `<button class="reveal" data-act="sp-over-start">音声認識を開始</button><p class="small">終了時は「オーバー」。聞き取れない時は手動で終了できます。開始するまでは練習時間を計りません。認識にはGoogle等のサービスを使用する場合があります。</p>` : ''}
            ${overMode && d.take ? `<p class="small">聞き取り中… 終了するには「オーバー」</p><p class="small heard-live" aria-live="off">${esc(d.heardLive || '')}</p><button class="reveal" data-act="sp-expand-next">手動で終了</button>` : ''}
-           ${!overMode ? `<p class="small">声に出し、話し終えたら次へ。時間は自動終了しません。</p><button class="reveal" data-act="sp-expand-next">${stage === 2 ? 'お手本を見る' : '次の段階へ'}</button>` : ''}`
+           ${localMode && !d.take ? `<button class="reveal" data-act="sp-expand-record" ${d.expandOpening ? 'disabled' : ''}>${d.expandOpening ? 'マイクを準備中…' : '録音を開始'}</button><p class="small">途中で考えても録音は止まりません。話し終えたら「録音終了」をタップ。自動でローカル文字起こしを開始します。${SP.voice.whBytes > 0 ? '' : ' 事前に「話す」画面で音声モデルをダウンロードしてください。'}</p>` : ''}
+           ${localMode && d.take ? `<p class="small">録音中（最長70秒） · 無音でも止まりません</p><button class="reveal" data-act="sp-expand-next">録音終了 → 自動で文字起こし</button>` : ''}
+           ${!localMode && !overMode ? `<p class="small">声に出し、話し終えたら次へ。時間は自動終了しません。</p><button class="reveal" data-act="sp-expand-next">${stage === 2 ? 'お手本を見る' : '次の段階へ'}</button>` : ''}`
         : d.mode === 'scene'
         ? `<p>声に出して日本語で言ってから、答えを見る</p><button class="reveal" data-act="sp-reveal">答えを見る</button>`
         : `<p>覚えたら、画面から目を離す</p><button class="reveal" data-act="sp-lookup">顔を上げる</button>`;
@@ -610,6 +613,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
           ${SP.ui.ttsMsg ? `<p class="small">${esc(SP.ui.ttsMsg)}</p>` : ''}
           ${d.rec ? voiceResult(d) : `<p class="timer">${d.mode === 'scene' ? '答えを見るまで' : '顔を上げてから'} <b>${secLabel(d.ms)}</b>${d.mode === 'look' && d.peeks ? ` · 見た回数 ${d.peeks}` : ''}</p>`}
           ${d.mode === 'expand' ? `<section class="panel fit"><h3>5秒 → 15秒 → 30秒</h3><p>${d.expandTimes.map((t, i) => `${[5,15,30][i]}秒目標：${secLabel(t)}`).join(' · ')}</p>${d.expandTexts.some(Boolean) ? `<h3>認識した内容（実験）</h3>${d.expandTexts.map((t,i) => `<p>${[5,15,30][i]}秒：${esc(t || '（認識なし）')}</p>`).join('')}` : ''}<p class="small">認識結果は参考用です。言い換えや文字起こしの誤りは、話し方の失敗とは限りません。</p></section>` : ''}
+          ${d.mode === 'expand' ? `<section class="panel fit"><h3>各段階の文字起こし</h3>${[0,1,2].map(i => `<p>${[5,15,30][i]}秒：${esc((d.expandTexts[i] ? d.expandTexts[i] + (d.expandStatus[i] && d.expandStatus[i] !== '完了' ? ' [' + d.expandStatus[i] + ']' : '') : (d.expandStatus[i] || '（録音なし）')))}</p>`).join('')}<p class="small">自分の言葉で説明できていれば、模範解答との文字一致は必要ありません。</p></section>` : ''}
           ${c.pattern ? `<section class="panel fit"><h3>型</h3><p class="pattern">${fx(c, c.pattern)}</p></section>` : ''}
           ${c.note ? `<p class="scene" style="font-size:15px">${fx(c, c.note)}</p>` : ''}
           ${vars ? `<section class="sec"><h2>1か所変えて、言い直す</h2><ul class="variants">${vars}</ul></section>` : ''}
@@ -926,6 +930,8 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     d.expandStage = 0;
     d.expandTimes = [];
     d.expandTexts = [];
+    d.expandStatus = [];
+    d.expandOpening = false;
     d.overDisabled = false;
     d.ms = 0;
     d.peeks = 0;
@@ -1011,6 +1017,35 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     return false;
   }
 
+  async function transcribeExpand(d, stage, blob) {
+    if (!blob) { d.expandStatus[stage] = '録音データがありません'; return; }
+    if (!SP.voice.whBytes) { d.expandStatus[stage] = 'ローカル音声モデル未準備（話す画面でダウンロード）'; return; }
+    d.expandStatus[stage] = 'スマホの中で文字起こし中…';
+    const cardId = d.ids[d.i];
+    const model = SP.voice.whModel;
+    try {
+      const pcm = await decodeForWhisper(blob, 0, Infinity);
+      // Segment to reduce peak memory and avoid Whisper base's 30s window.
+      const len = 12 * 16000;
+      const pieces = [];
+      for (let p = 0; p < pcm.length; p += len) {
+        if (SP.drill !== d || d.ids[d.i] !== cardId) return;
+        const out = await whisper.transcribe(model, pcm.slice(p, p + len));
+        if (SP.drill !== d || d.ids[d.i] !== cardId) return;
+        if (out.text?.trim()) pieces.push(out.text.trim());
+        d.expandTexts[stage] = pieces.join(' ');
+        d.expandStatus[stage] = '文字起こし中… ' + Math.min(100, Math.round((p + len) / Math.max(1, pcm.length) * 100)) + '%';
+        if (SP.drill === d && d.phase === 'back') renderDrill();
+      }
+      if (SP.drill !== d || d.ids[d.i] !== cardId) return;
+      d.expandStatus[stage] = pieces.length ? '完了' : '文字を認識できませんでした';
+    } catch (e) {
+      if (SP.drill === d && d.ids[d.i] === cardId) d.expandStatus[stage] = '文字起こし失敗：' + (e?.message || 'エラー');
+    } finally {
+      if (SP.drill === d && d.ids[d.i] === cardId && d.phase === 'back') renderDrill();
+    }
+  }
+
   function advanceExpand(d) {
     if (SP.drill !== d || d.phase !== 'front') return;
     const now = performance.now();
@@ -1030,6 +1065,38 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     'sp-again': () => startDrill(SP.drill?.mode || 'scene'),
     'sp-home': () => { dropRec(SP.drill); SP.drill = null; voice.release(); go('#/speak'); },
     'sp-quit': () => { dropRec(SP.drill); SP.drill = null; voice.release(); go('#/speak'); },
+    'sp-expand-record': async () => {
+      const d = SP.drill;
+      if (!d || d.mode !== 'expand' || d.phase !== 'front' || d.take || d.expandOpening) return;
+      d.expandOpening = true;
+      d.voiceMsg = null;
+      voice.prepare();
+      renderDrill();
+      try {
+        const take = await voice.record({
+          maxTakeMs: 70000, autoStopSilence: false,
+          onEnd: res => {
+            if (SP.drill !== d || d.phase !== 'front') {
+              if (res.url) URL.revokeObjectURL(res.url);
+              return;
+            }
+            d.take = null;
+            const stage = d.expandStage;
+            if (res.url) URL.revokeObjectURL(res.url);
+            transcribeExpand(d, stage, res.blob);
+            advanceExpand(d);
+          },
+        });
+        if (SP.drill !== d || d.phase !== 'front') { take.cancel(); return; }
+        d.take = take;
+        d.t0 = performance.now();
+      } catch (e) {
+        d.voiceMsg = '録音を開始できません：' + (e?.name || e?.message || 'エラー');
+      } finally {
+        d.expandOpening = false;
+        if (SP.drill === d && d.phase === 'front') renderDrill();
+      }
+    },
     'sp-over-start': () => {
       const d = SP.drill;
       if (!d || d.mode !== 'expand' || d.phase !== 'front' || d.take || d.overDisabled) return;
@@ -1065,6 +1132,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     'sp-expand-next': () => {
       const d = SP.drill;
       if (!d || d.mode !== 'expand' || d.phase !== 'front') return;
+      if (d.expandOpening) return;
       if (d.take) { d.take.stop(); return; }
       advanceExpand(d);
     },
