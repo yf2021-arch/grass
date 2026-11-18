@@ -80,10 +80,15 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
       if ((vo.whModelV || 0) < 2) saveVoice();   // 一度だけの切り替えを、すぐに保存する（v1.16.1）
     }
     refreshWhStatus();
-    try {
-      const res = await fetch('data/chunks.json', { cache: 'no-cache' });
-      if (res.ok) SP.base = (await res.json()).chunks || [];
-    } catch (e) { /* オフラインで未キャッシュなら、自分の文と詰まりメモだけ使える */ }
+    // 公開の会話素材とDBMS会議デッキを読み込む。追加デッキが取得できなくても通常の練習は続ける。
+    const sources = ['data/chunks.json', 'data/dbms-meeting.json'];
+    const packs = await Promise.all(sources.map(async path => {
+      try {
+        const res = await fetch(path, { cache: 'no-cache' });
+        return res.ok ? (await res.json()).chunks || [] : [];
+      } catch (e) { return []; }
+    }));
+    SP.base = packs.flat();
     await reloadMine();
     await loadAudio();
   }
