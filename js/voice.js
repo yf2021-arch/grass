@@ -288,7 +288,7 @@ export function createVoice() {
         if (onsetAt == null) onsetAt = performance.now();
         endAt = performance.now();
         onText(text());
-        quietLater();
+        if (!keepListening) quietLater();
       };
       r.onerror = e => {
         const err = e.error || 'error';
