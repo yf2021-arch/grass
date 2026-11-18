@@ -225,6 +225,7 @@ export function createVoice() {
     let quietTimer = null;
     let holdUntil = 0;
     let stopping = false;
+    let me = null; // r.start() may throw before the take object is assigned
     let endReason = 'manual';
     let maxTimer = null;
     const overAtEnd = /(?:オーバー|オーヴァー|おーばー|over)[\s。．.!！]*$/i;
@@ -314,7 +315,7 @@ export function createVoice() {
     maxTimer = setTimeout(() => { endReason = 'max'; end(); }, maxTakeMs);
     try { startOne(); } catch (e) { fail(e.name || 'error'); return null; }
 
-    const me = {
+    me = {
       kind: 'sr',
       stop: () => { if (!done) { stopping = true; try { r.stop(); } catch (e) { /* */ } setTimeout(end, 700); } },
       cancel: () => { if (!done) { done = true; clearTimers(); try { r.abort(); } catch (e) { /* */ } if (take === me) take = null; } },
