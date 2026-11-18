@@ -1021,6 +1021,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     if (!blob) { d.expandStatus[stage] = '録音データがありません'; return; }
     if (!SP.voice.whBytes) { d.expandStatus[stage] = 'ローカル音声モデル未準備（話す画面でダウンロード）'; return; }
     d.expandStatus[stage] = 'スマホの中で文字起こし中…';
+    const cardId = d.ids[d.i];
     const model = SP.voice.whModel;
     try {
       const pcm = await decodeForWhisper(blob, 0, Infinity);
@@ -1028,18 +1029,20 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
       const len = 12 * 16000;
       const pieces = [];
       for (let p = 0; p < pcm.length; p += len) {
-        if (SP.drill !== d) return;
+        if (SP.drill !== d || d.ids[d.i] !== cardId) return;
         const out = await whisper.transcribe(model, pcm.slice(p, p + len));
+        if (SP.drill !== d || d.ids[d.i] !== cardId) return;
         if (out.text?.trim()) pieces.push(out.text.trim());
         d.expandTexts[stage] = pieces.join(' ');
         d.expandStatus[stage] = '文字起こし中… ' + Math.min(100, Math.round((p + len) / Math.max(1, pcm.length) * 100)) + '%';
         if (SP.drill === d && d.phase === 'back') renderDrill();
       }
+      if (SP.drill !== d || d.ids[d.i] !== cardId) return;
       d.expandStatus[stage] = pieces.length ? '完了' : '文字を認識できませんでした';
     } catch (e) {
-      d.expandStatus[stage] = '文字起こし失敗：' + (e?.message || 'エラー');
+      if (SP.drill === d && d.ids[d.i] === cardId) d.expandStatus[stage] = '文字起こし失敗：' + (e?.message || 'エラー');
     } finally {
-      if (SP.drill === d && d.phase === 'back') renderDrill();
+      if (SP.drill === d && d.ids[d.i] === cardId && d.phase === 'back') renderDrill();
     }
   }
 
