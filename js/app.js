@@ -1161,7 +1161,7 @@ app.addEventListener('click', e => {
 });
 
 app.addEventListener('change', async e => {
-  if (['sp-voice', 'sp-sr', 'sp-wh'].includes(e.target.dataset.act)) { speak.onChange(e.target); return; }
+  if (['sp-voice', 'sp-sr', 'sp-wh', 'sp-over'].includes(e.target.dataset.act)) { speak.onChange(e.target); return; }
   if (e.target.dataset.act === 'bjt-part') { bjt.actions['bjt-part'](e.target); return; }
   if (e.target.id === 'ca-file') {
     const file = e.target.files?.[0];
