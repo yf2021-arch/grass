@@ -1,7 +1,7 @@
 // node tests/voice-long-record.test.mjs
 // Regression: long-form practice ignores pauses, respects manual stop and custom cap.
 import assert from 'node:assert/strict';
-globalThis.window = { MediaRecorder: class FakeMediaRecorder {
+globalThis.MediaRecorder = class FakeMediaRecorder {
   static isTypeSupported() { return true; }
   state = 'inactive';
   mimeType = 'audio/webm';
@@ -11,11 +11,12 @@ globalThis.window = { MediaRecorder: class FakeMediaRecorder {
     this.ondataavailable?.({ data: new Blob(['audio'], {type: 'audio/webm'}) });
     this.onstop?.();
   }
-} };
-globalThis.navigator = { mediaDevices: { getUserMedia: async () => ({
+};
+globalThis.window = { MediaRecorder: globalThis.MediaRecorder };
+Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { mediaDevices: { getUserMedia: async () => ({
   getTracks: () => [{ stop() {} }],
   getAudioTracks: () => [{ readyState: 'live' }],
-}) } };
+}) } } });
 const { createVoice } = await import('../js/voice.js');
 const v = createVoice();
 let result;
