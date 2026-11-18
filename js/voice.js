@@ -97,7 +97,7 @@ export function createVoice() {
    * 時刻はどれも performance.now()。onsetAt は声が出なければ null。
    * マイクが使えないときは例外（NotAllowedError など）を投げる。
    */
-  async function record({ onLevel = () => {}, onEnd = () => {} } = {}) {
+  async function record({ onLevel = () => {}, onEnd = () => {}, maxTakeMs = MAX_TAKE, autoStopSilence = true } = {}) {
     if (take) take.cancel();
     await openMic();
     const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus']
@@ -168,7 +168,7 @@ export function createVoice() {
       const blob = new Blob(parts, { type: rec.mimeType || mime || 'audio/webm' });
       const url = blob.size ? URL.createObjectURL(blob) : null;
       // startAt は録音ファイルの 0 秒にあたる時刻。録音の開始は t0 より遅れることがあるので、start イベントの時刻を使う（v1.19.0）
-      onEnd({ kind: 'rec', url, blob: blob.size ? blob : null, startAt: recStart ?? t0, onsetAt, anyVoiceAt: anyVoiceAt != null && onsetAt != null ? Math.min(anyVoiceAt, onsetAt) : onsetAt, endAt: lastVoice || performance.now(), reason });
+      onEnd({ kind: 'rec', url, blob: blob.size ? blob : null, startAt: recStart ?? t0, onsetAt, anyVoiceAt: anyVoiceAt != null && onsetAt != null ? Math.min(anyVoiceAt, onsetAt) : onsetAt, endAt: autoStopSilence ? (lastVoice || performance.now()) : performance.now(), reason });
     };
     rec.onstop = emit;
     rec.onstart = () => { recStart = performance.now(); };
@@ -187,9 +187,9 @@ export function createVoice() {
       // 直近3秒は、いまのしきい値で見直す（声→雑音への見直しだけ。前の声を後から増やすことはしない）
       for (let i = hist.length - 2; i >= 0 && now - hist[i].t <= FLOOR_WIN; i -= 1) if (hist[i].v && hist[i].rms <= thr) hist[i].v = false;
       analyse();
-      if (now - t0 > MAX_TAKE) { finish('max'); return; }
+      if (now - t0 > maxTakeMs) { finish('max'); return; }
       if (now < holdUntil) return;
-      if (onsetAt != null && voiced >= MIN_VOICE && now - Math.max(lastVoice, holdUntil) > SILENCE) finish('silence');
+      if (autoStopSilence && onsetAt != null && voiced >= MIN_VOICE && now - Math.max(lastVoice, holdUntil) > SILENCE) finish('silence');
     }, TICK);
 
     try { rec.start(); } catch (e) { clearInterval(timer); closeMic(); throw e; }
