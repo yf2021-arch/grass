@@ -75,7 +75,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
     if (vo && typeof vo === 'object') {
       SP.voice = { ...SP.voice, on: !!vo.on, sr: !!vo.sr && srSupported(), srState: vo.srState || null,
         // v1.14.0：標準を Moonshine に変えた。前の版で選んでいたモデル（base・small）は、一度だけ Moonshine に切り替える
-        over: !!vo.over, wh: !!vo.wh, whModel: (vo.whModelV || 0) >= 2 && WH_MODELS[vo.whModel] && !WH_MODELS[vo.whModel].lab ? vo.whModel : DEFAULT_WH_MODEL,
+        over: !!vo.over && vo.overOptInV2 === true, wh: !!vo.wh, whModel: (vo.whModelV || 0) >= 2 && WH_MODELS[vo.whModel] && !WH_MODELS[vo.whModel].lab ? vo.whModel : DEFAULT_WH_MODEL,
         whFiles: vo.whFiles && typeof vo.whFiles === 'object' ? vo.whFiles : {}, whVerified: vo.whVerified && typeof vo.whVerified === 'object' ? vo.whVerified : {} };
       if ((vo.whModelV || 0) < 2) saveVoice();   // 一度だけの切り替えを、すぐに保存する（v1.16.1）
     }
@@ -142,7 +142,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
 
   const saveLog = () => store.put('meta', SP.log.slice(-LOG_MAX), 'speakLog');
   const saveStuck = () => store.put('meta', SP.stuck, 'stuck');
-  const saveVoice = () => store.put('meta', { on: SP.voice.on, over: SP.voice.over, sr: SP.voice.sr, srState: SP.voice.srState, wh: SP.voice.wh, whModel: SP.voice.whModel, whModelV: 2, whFiles: SP.voice.whFiles, whVerified: SP.voice.whVerified }, 'speakVoice');
+  const saveVoice = () => store.put('meta', { on: SP.voice.on, over: SP.voice.over, overOptInV2: true, sr: SP.voice.sr, srState: SP.voice.srState, wh: SP.voice.wh, whModel: SP.voice.whModel, whModelV: 2, whFiles: SP.voice.whFiles, whVerified: SP.voice.whVerified }, 'speakVoice');
   const whReady = () => SP.voice.on && SP.voice.wh && SP.voice.whBytes > 0;
   const baseReady = () => !!SP.voice.whStatusByModel?.base?.ready;
   whisper.purgeRetired().catch(() => {});      // Whisper small（約400MB）が端末に残っていれば消す（v1.14.0）
@@ -298,7 +298,7 @@ export function createSpeak({ app, esc, go, nav, store, todayStr, addDays, ICON,
         <button class="primary" data-act="sp-start" data-mode="scene" ${n ? '' : 'disabled'}>場面から言う（${n}問）</button>
         <button class="outline" data-act="sp-start" data-mode="look" ${n ? '' : 'disabled'}>読んで、顔を上げて言う（${n}問）</button>
         ${SP.filter === "DBMS会議" ? `<button class="primary" data-act="sp-start" data-mode="expand">5秒 → 15秒 → 30秒で話す（5問）</button>
-        ${srSupported() ? `<label class="line"><span class="t"><b>「オーバー」で終了（実験）</b><span>5→15→30秒の練習で使用。開始を押し、終わったら「オーバー」と言う。ブラウザーの音声認識サービスを使います。Androidでは認識が途切れる場合があります。録音ファイルは作らず、認識された文字を表示します。</span></span><span class="switch"><input type="checkbox" data-act="sp-over" ${SP.voice.over ? 'checked' : ''}><span></span></span></label>` : '<p class="small">このブラウザーでは音声での終了は使えません（手動操作は可能）。</p>'}` : ""}
+        ${srSupported() ? `<label class="line"><span class="t"><b>「オーバー」で終了（実験）</b><span>通常は「録音を開始」でローカル録音します。これをオンにするとブラウザ音声認識による「オーバー」終了を試します。ブラウザーの音声認識サービスを使います。Androidでは認識が途切れる場合があります。録音ファイルは作らず、認識された文字を表示します。</span></span><span class="switch"><input type="checkbox" data-act="sp-over" ${SP.voice.over ? 'checked' : ''}><span></span></span></label>` : '<p class="small">このブラウザーでは音声での終了は使えません（手動操作は可能）。</p>'}` : ""}
         ${voiceSwitches()}
         <p class="caption" style="margin:-6px 0 0">まだ練習していないもの → 前回詰まったもの → 久しぶりのもの、の順に出ます</p>
       </section>`
