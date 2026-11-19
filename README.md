@@ -424,3 +424,7 @@ v1.14.0 から、Moonshine は「話す」の標準。
 - Google側には `gas/AudioUpload.gs` を追加し、トークン確認後に `if (/^audioUpload/.test(action)) return audioUploadApi_(action, payload);` を追加して既存のデプロイを新バージョンで公開します。
 - 録音は前回の `.pack` から再利用します。パックを一時ファイルに作って検証してから置き換え、不要な `clips` フォルダは成功後に自動で消します。`--keep-clips` なら残せます。完成した `.pack` と `config.json` は残してください。
 - 確認：`python tests/audio-kit.test.py`、`node tests/audio-upload.test.mjs`、`node tests/katsuyo-audio.test.mjs`。
+
+### 〜ば〜ほど（v1.22.7）
+
+「今日 → 活用ドリル → ドリル」で「ば〜ほど」を選択。動詞・い形容詞・な形容詞を、仕事と日常の例文で練習します。英語の意味、読みつきの導入、活用手順は同画面とルール図にあります。「選ぶ前に答えを言う」と苦手の再練習も利用できます。音声は既存の端末TTS／音声パックの仕組みを使用（新しい録音はパック再生成が必要）。
