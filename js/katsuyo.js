@@ -25,6 +25,7 @@ const GODAN_RU = ['帰る', '入る', '知る', '要る', '切る', '走る', '�
 const ICHI_KANJI = ['見る', '居る', '着る', '寝る', '出る', '得る', '似る', '煮る', '経る', '射る', '診る', '鋳る'];
 
 export const FORMS = {
+  bahodo: { label: '〜ば〜ほど', en: 'the more…, the more…', chip: 'ば〜ほど' },
   group:  { label: 'グループ', en: 'which group?', chip: 'グループ' },
   te:     { label: 'て形', en: '-te (and… / please…)', chip: 'て形' },
   ta:     { label: 'た形', en: 'past (did)', chip: 'た形' },
@@ -42,7 +43,7 @@ export const FORMS = {
   and:    { label: '〜んです（形容詞）', en: 'explaining', chip: 'んです' },
   andta:  { label: '〜んです（形容詞・過去）', en: 'explaining, past', chip: 'んです' },
 };
-export const CHIPS = ['グループ', 'て形', 'た形', 'ない形', '形容詞', '受け身', '使役', '可能形', 'んです'];
+export const CHIPS = ['グループ', 'て形', 'た形', 'ない形', '形容詞', '受け身', '使役', '可能形', 'んです', 'ば〜ほど'];
 const VERB_FORMS = ['group', 'te', 'ta', 'nai', 'pass', 'caus', 'pot', 'nd', 'ndta'];
 const ADJ_FORMS = ['agroup', 'aneg', 'apast', 'apneg', 'ate', 'and', 'andta'];
 const GROUP_OPTS = ['五段（う動詞）', '一段（る動詞）', '不規則（する・来る）'];
@@ -72,6 +73,12 @@ export function conj(word, form) {
   const a = ROWS[last]?.[0];
   const toTa = t => t.replace(/て$/, 'た').replace(/で$/, 'だ');
   switch (form) {
+    case 'bahodo': {
+      if (g === 'na') return w + 'であればあるほど';
+      if (g === 'i') return iStem(w) + 'ければ' + (isYoi(w) ? iStem(w) + 'い' : w) + 'ほど';
+      const ba = g === '5' ? s5 + ROWS[last][3] + 'ば' : g === '1' ? s5 + 'れば' : g === 's' ? suruStem(w) + 'すれば' : kuruStem(w) + 'くれば';
+      return ba + (g === 'k' ? kuruStem(w) + 'くる' : w) + 'ほど';
+    }
     case 'group': return GROUP_OPTS[g === '5' ? 0 : g === '1' ? 1 : 2];
     case 'agroup': return AGROUP_OPTS[g === 'i' ? 0 : 1];
     case 'te': case 'ta': {
@@ -105,6 +112,11 @@ function wrongForms(word, form) {
   const row = ROWS[last] || ROWS.る;
   const a = row[0], i = row[1], e = row[3];
   const toTa = t => t.replace(/て$/, 'た').replace(/で$/, 'だ');
+  if (form === 'bahodo') {
+    if (g === 'na') return [w + 'ければ' + w + 'ほど', w + 'であればあるほう', w + 'であればあったほど'];
+    if (g === 'i') return [w + 'れば' + w + 'ほど', s5 + 'ければ' + s5 + 'ければほど', s5 + 'かったら' + s5 + 'かったほど'];
+    return [w + 'れば' + w + 'ほど', conj(word, 'ta') + conj(word, 'ta') + 'ほど', conj(word, 'te') + w + 'ほど', masuStem(word) + 'ます' + w + 'ほど'];
+  }
   if (form === 'te' || form === 'ta') {
     let c;
     if (g === 's') { const st = suruStem(w); c = [st + 'すって', st + 'しって', st + 'すて', st + 'さして']; }
@@ -195,6 +207,11 @@ export function rulePath(word, form) {
   const last = w.slice(-1);
   const a = ROWS[last]?.[0];
   const trap = trapNote(word);
+  if (form === 'bahodo') {
+    const rule = g === 'na' ? 'な形容詞 ＋ であればあるほど' : g === 'i' ? 'い → ければ ＋ 同じ形容詞 ＋ ほど' : g === '5' ? '五段：語尾をえ段＋ば → 辞書形＋ほど' : g === '1' ? '一段：る → れば → 辞書形＋ほど' : g === 's' ? 'する → すればするほど' : '来る → くればくるほど';
+    return { fam: g === 'na' ? 'naadj' : g === 'i' ? 'iadj' : 'erow', rule,
+      trap: g === 'i' && isYoi(w) ? 'いい → よければよいほど。「よければいいほど」も使えます。' : g === 'na' ? '「簡単なら簡単なほど」も正しい形です。ここでは「であればあるほど」を練習。' : g === 'i' ? '前の「い」を「ければ」に変え、後ろに元の形容詞＋ほど。' : '前は「ば形」、後ろは「辞書形」。同じ動詞を繰り返す。意味は「the more…, the more…」。' };
+  }
   if (form === 'group' || form === 'agroup') {
     if (g === '5') {
       if (last !== 'る') return { fam: 'g5', rule: '「る」以外で終わる → 五段', trap };
@@ -438,7 +455,27 @@ export function ruGroup(w, r = '') {
 }
 
 /** 例文の枠（＿ に答えが入る）。空ならラベルだけ出す */
+const BAHODO_FRAMES = {
+  '読む': 'この本は＿、理解が深まります。',
+  '使う': 'このツールは＿、便利さが分かります。',
+  '話す': '日本語は＿、自信がつきます。',
+  '書く': 'コードは＿、上達します。',
+  '考える': 'この問題は＿、難しく感じます。',
+  '見る': 'この図は＿、新しい発見があります。',
+  '食べる': 'この料理は＿、好きになります。',
+  '確認する': '仕様は＿、疑問点が見つかります。',
+  '来る': 'この町には＿、愛着が湧きます。',
+  '多い': 'データが＿、処理に時間がかかります。',
+  '早い': '返事は＿、助かります。',
+  '長い': '会議が＿、集中力が落ちます。',
+  'いい': '品質は＿、お客様に喜ばれます。',
+  '簡単': '操作は＿、覚えやすくなります。',
+  '便利': 'ツールは＿、使う人が増えます。',
+  'きれい': '画面は＿、見ていて気持ちがいいです。',
+};
+
 export function frameOf(word, form) {
+  if (form === 'bahodo') return BAHODO_FRAMES[word.w] || '';
   if (form === 'group' || form === 'agroup') return '';
   if (word.mine) return { te: '＿、…', ta: 'もう＿。', nai: '＿と、困る。', pot: '一人で＿？', nd: '実は、＿。', ndta: '実は、＿。', and: '実は、＿。', andta: '実は、＿。' }[form] || '';
   const o = word.o || '';
@@ -456,9 +493,10 @@ export function frameOf(word, form) {
 
 /** この語で出せる形 */
 export function formsFor(word) {
-  if (!isVerb(word.g)) return ADJ_FORMS;
+  const extra = !word.mine && BAHODO_FRAMES[word.w] ? ['bahodo'] : [];
+  if (!isVerb(word.g)) return [...ADJ_FORMS, ...extra];
   // 可能形：自然に起きること（届く・経つ）、ある、知る（知れる は別の意味）は出さない
-  return VERB_FORMS.filter(f => !(f === 'pass' && word.v) && !(f === 'caus' && word.n) && !(f === 'pot' && (word.n || word.x || isAru(word.w))));
+  return [...VERB_FORMS, ...extra].filter(f => !(f === 'pass' && word.v) && !(f === 'caus' && word.n) && !(f === 'pot' && (word.n || word.x || isAru(word.w))));
 }
 
 /** 単語ごとの読み上げる文（語そのもの＋すべての答えの形）と、その読み（かな）。
@@ -743,7 +781,7 @@ export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = ()
       <div class="screen">
         <div class="scroll">
           <header class="top">
-            <div><p class="date">て・た・ない・形容詞・受け身・使役・可能・んです</p><h1>活用ドリル</h1></div>
+            <div><p class="date">て・た・ない・形容詞・受け身・使役・可能・んです・ば〜ほど</p><h1>活用ドリル</h1></div>
             ${s && !s.done ? `<button class="text-btn" data-act="kt-quit">やめる</button>` : ''}
           </header>
           ${tabs}
@@ -789,6 +827,7 @@ export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = ()
           <span class="kt-note">正解すると答えの音声が自動で流れます。</span>
         </div>
         ${clipLine()}
+        ${K.chips.includes('ば〜ほど') ? bahodoFormula() : ''}
         <button class="primary ink kt-start" data-act="kt-start" ${K.chips.length ? '' : 'disabled'}>スタート</button>
         <p class="kt-meta">今日 ${today}問 · ベスト ${K.best}点</p>
       </section>
@@ -902,6 +941,7 @@ export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = ()
   ];
 
   function ruleRow(fam, form, word = null) {
+    if (form === 'bahodo') return bahodoFormula();
     if (form === 'pot') return `${danStrip('pot')}<div class="kt-map kt-mini">${aRowTable('pot')}</div>`;
     if (form === 'nd' || form === 'ndta' || form === 'and' || form === 'andta') return ndFormula();
     if (form === 'te' || form === 'ta') {
@@ -1020,8 +1060,28 @@ export function createKatsuyo({ app, esc, nav, store, todayStr, ICON, cards = ()
     </table>
     <p class="kt-note">きれい・嫌い・有名 は「い」で終わっても な形容詞（きれいな部屋）。</p>`;
 
+  function bahodoFormula() {
+    return `<section class="kt-panel">
+      <h2>〜ば〜ほど：the more…, the more…</h2>
+      <p>The more A, the more B. Aが変わるにつれて、Bも変わります。</p>
+      <p>練習すればするほど、上手になります。<br><small>れんしゅうすればするほど、じょうずになります。<br>The more you practice, the better you get.</small></p>
+      <p>① ば形を作る → ② 同じ語を繰り返して「ほど」 → ③ 結果を言う</p>
+      <ul>
+        <li>五段：読む（よむ）→ 読めば読むほど</li>
+        <li>一段：見る（みる）→ 見れば見るほど</li>
+        <li>不規則：する → すればするほど ／ 来る → くればくるほど</li>
+        <li>い形容詞：多い（おおい）→ 多ければ多いほど</li>
+        <li>例外：いい → よければよいほど</li>
+        <li>な形容詞：簡単（かんたん）→ 簡単であればあるほど</li>
+      </ul>
+      <p class="kt-note">「れば」をそのまま付けない：読むれば × → 読めば ○。「ほど」の前は辞書形です。<br>な形容詞は「簡単なら簡単なほど」も使えます。</p>
+      <p>まず形を選ぶ練習 →「選ぶ前に答えを言う」→ 正解の例文全体を声に出す。</p>
+      <p class="kt-note">自分の仕事で一文：データが＿＿、＿＿。／このツールは＿＿、＿＿。</p>
+    </section>`;
+  }
+
   function rulesView() {
-    return `
+    return `${bahodoFormula()}
       <section class="kt-panel">
         <h2>て形・た形：語の最後の字で決まる</h2>
         <p class="kt-chant">うつる → って ・ むぶぬ → んで ・ く → いて ・ ぐ → いで ・ す → して</p>

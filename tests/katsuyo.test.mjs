@@ -183,3 +183,19 @@ assert.equal(conj(V('問う', '5'), 'ta'), '問うた');
   assert.equal(file.words.find(x => x.w === '来る').texts.find(t => t.t === 'こない').yomi, 'こない');
 }
 console.log(`ok — ${n} forms, ${opts} option sets, ${BASE_WORDS.length} base words`);
+
+// Proportional expressions: all groups, irregular readings and natural sentence contexts.
+for (const [w, g, expected] of [
+  ['読む', '5', '読めば読むほど'], ['見る', '1', '見れば見るほど'],
+  ['確認する', 's', '確認すれば確認するほど'], ['来る', 'k', 'くればくるほど'],
+  ['多い', 'i', '多ければ多いほど'], ['いい', 'i', 'よければよいほど'],
+  ['きれい', 'na', 'きれいであればあるほど'],
+]) {
+  assert.equal(conj({ w, g }, 'bahodo'), expected);
+  assert.ok(formsFor(BASE_WORDS.find(x => x.w === w)).includes('bahodo'));
+  assert.equal((frameOf({ w, g }, 'bahodo').match(/＿/g) || []).length, 1);
+  assert.ok(!rulePath({ w, g }, 'bahodo').rule.includes('undefined'));
+}
+assert.ok(!formsFor({ w: '読む', g: '5', mine: true }).includes('bahodo'));
+assert.ok(!makeOptions({ w: '簡単', g: 'na' }, 'bahodo').options.includes('簡単なら簡単なほど'));
+console.log('PASS: ば〜ほど forms, contexts and valid-alternative exclusion');

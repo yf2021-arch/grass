@@ -330,7 +330,7 @@ function renderToday() {
             <span class="n">${walk.todayMin() ? `今日 ${walk.todayMin()}分` : ''} ${ICON.chevron}</span>
           </a>
           <a class="row-link" href="#/katsuyo">
-            <span class="t"><b>活用ドリル</b><span>て・た・ない形・形容詞・受け身・使役・可能形・〜んです を10問ずつ。図で覚えるルールつき</span></span>
+            <span class="t"><b>活用ドリル</b><span>て・た・ない形・形容詞・受け身・使役・可能形・〜んです・〜ば〜ほど を10問ずつ。図で覚えるルールつき</span></span>
             <span class="n">${katsuyo.todayCount() ? `今日 ${katsuyo.todayCount()}問` : ''} ${ICON.chevron}</span>
           </a>
           <a class="row-link" href="#/bjt">

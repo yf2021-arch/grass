@@ -21,7 +21,7 @@ const server = http.createServer((req, res) => {
 await new Promise(r => server.listen(0, r));
 const base = `http://localhost:${server.address().port}`;
 const shots = process.env.SHOTS;
-const browser = await chromium.launch();
+const browser = await chromium.launch(process.env.GRASS_CHROMIUM ? { executablePath: process.env.GRASS_CHROMIUM } : {});
 try {
   for (const scheme of shots ? ['light', 'dark'] : ['light']) {
     const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block', colorScheme: scheme, deviceScaleFactor: shots ? 2 : 1 });
@@ -190,6 +190,25 @@ try {
       await page.click('[data-act="kt-next"]');
     }
     await page.click('[data-act="kt-quit"]');
+
+    // Dedicated ば〜ほど category: mobile lesson, complete round, sentence feedback and persistence.
+    for (const chip of await page.locator('[data-act="kt-chip"][aria-pressed="true"]').all()) await chip.click();
+    await page.click('[data-act="kt-chip"][data-v="ば〜ほど"]');
+    assert.match(await page.textContent('.kt-hero'), /The more A, the more B/);
+    await shot('bahodo-intro');
+    await page.click('[data-act="kt-start"]');
+    for (let q = 1; q <= 10; q++) {
+      await page.waitForSelector('[data-act="kt-pick"]:not([disabled])');
+      assert.equal(await page.textContent('.kt-form span'), '〜ば〜ほど');
+      await page.locator('[data-act="kt-pick"]').nth(await rightIndex()).click();
+      await page.waitForSelector('.kt-fb.ok');
+      assert.match(await page.textContent('.kt-fb .kt-sent'), /ほど/);
+      if (q === 1) await shot('bahodo-answer');
+      await page.click('[data-act="kt-next"]');
+    }
+    await page.click('[data-act="kt-home"]');
+    await page.reload();
+    await page.waitForSelector('[data-act="kt-chip"][data-v="ば〜ほど"][aria-pressed="true"]');
 
     // AivisSpeech clips (data/katsuyo-audio): a right answer plays the clip of that word, not the phone voice,
     // and 音声をまとめて入れる stores every clip
