@@ -8,7 +8,7 @@ import { demoCards } from './demo.js';
 import { parseVisual, visualHtml } from './visual.js';
 import { createSpeak } from './speak.js';
 import { createBjt } from './bjt.js';
-import { createKatsuyo } from './katsuyo.js';
+import { createKatsuyo, wordFromCard, conj, masuStem } from './katsuyo.js';
 import { createWalk } from './walk.js';
 import { createRaw } from './raw.js';
 import { sourceHtml } from './source.js';
@@ -280,7 +280,7 @@ function renderToday() {
   } else {
     const startBlock = total
       ? `<button class="primary" data-act="start">${ICON.focus}集中して始める</button>
-         <p class="caption">始めるとナビを隠して、1枚ずつ表示します</p>`
+         <button class="hint-btn" data-act="start-writing">書いて復習</button>`
       : `<p class="scene" style="text-align:center">今日の分は終わりました。</p>
          ${inboxCount ? '<button class="primary ink" data-act="start-extra">受信箱から3枚学ぶ</button>' : ''}`;
     main = `
@@ -349,10 +349,11 @@ function renderToday() {
 
 /* ============================== 復習 ============================== */
 
-function startSession(extraNew = 0) {
+function startSession(extraNew = 0, writing = false) {
   const p = sessionPreview(extraNew);
   if (!p.queue.length) { go('#/today'); return; }
   S.session = {
+    writing,
     ids: p.queue.map(c => c.ID),
     newIds: new Set(p.fresh.map(c => c.ID)),
     i: 0,
@@ -398,11 +399,76 @@ function reviewHeader(card) {
     </header>`;
 }
 
+function writingQuestion(card) {
+  const base = val(card, '表現').replace(/^[～〜~]/, '').trim();
+  const forms = [base];
+  const word = wordFromCard(card);
+  if (word && word.w === base) {
+    if (['1', '5', 's', 'k'].includes(word.g)) {
+      forms.push(...['te', 'ta', 'nai', 'pass', 'caus', 'pot'].map(f => conj(word, f)));
+      for (const suffix of ['いる', 'いない', 'いた', 'います', 'いません', 'いました']) {
+        forms.push(conj(word, 'te') + suffix);
+      }
+      for (const suffix of ['ます', 'ました', 'ません', 'ませんでした']) {
+        forms.push(masuStem(word) + suffix);
+      }
+    } else {
+      forms.push(...['aneg', 'apast', 'apneg', 'ate'].map(f => conj(word, f)));
+    }
+  }
+  const example = val(card, '自分の例文');
+  for (const form of forms.filter(Boolean).sort((a, b) => b.length - a.length)) {
+    const at = example.indexOf(form);
+    if (at < 0) continue;
+    const rest = example.slice(at + form.length);
+    // 不確かな活用の途中で切らず、判断できない例文は意味から出題する。
+    if (!/^(?:$|[。、！？!?」』）\s]|という|こと|ので|けど)/u.test(rest)) continue;
+    const prompt = example.slice(0, at) + '＿＿＿＿' + rest;
+    if (!prompt.includes(base) && !prompt.includes(form)) return { prompt, answer: form, base };
+  }
+  const meaning = val(card, '日本語の意味') || val(card, '英語の意味');
+  return { prompt: base ? meaning.split(base).join('＿＿＿＿') : meaning, answer: base, base };
+}
+
+function renderWriting(card) {
+  const ss = S.session;
+  const { prompt, answer, base } = writingQuestion(card);
+  app.innerHTML = `
+    <div class="screen plain">
+      ${reviewHeader(card)}
+      <main class="scroll front"><section class="sec">
+        <h2>書いて復習</h2><p class="meaning">${esc(prompt || '登録した表現を入力してください。')}</p>
+        <label for="written-answer">答え</label>
+        <input id="written-answer" lang="ja" autocomplete="off" spellcheck="false">
+        <button class="hint-btn" type="button" id="written-hint">ヒント</button>
+        <p id="written-clue" class="scene" hidden>${esc(answer === base ? (val(card, '読み') || base) : base)}</p>
+      </section></main>
+      <footer class="rv-foot"><button class="reveal" data-act="flip">答えを見る</button></footer>
+    </div>`;
+  const input = app.querySelector('#written-answer');
+  app.querySelector('#written-hint').onclick = event => {
+    event.currentTarget.hidden = true;
+    app.querySelector('#written-clue').hidden = false;
+    input.focus();
+  };
+  let composing = false;
+  const check = event => {
+    if (composing || event.isComposing || !answer || ss.busy) return;
+    if (input.value.trim().normalize('NFKC') === answer.normalize('NFKC')) rate('good');
+  };
+  input.oncompositionstart = () => { composing = true; };
+  input.oncompositionend = event => { composing = false; check(event); };
+  input.oninput = check;
+  input.focus();
+}
+
 function renderReview() {
   if (!S.session || S.session.summary) { S.session = null; startSession(); return; }
   const ss = S.session;
   const card = byId(ss.ids[ss.i]);
   if (!card) { nextCard(); return; }
+
+  if (!ss.flipped && ss.writing) { renderWriting(card); return; }
 
   if (!ss.flipped && S.settings.listenFirst && cardAudio.has(card.ID, 'ex')) {
     ss.listen = true;
@@ -617,6 +683,8 @@ async function rate(result) {
     return;
   }
   ss.busy = false;
+  if (S.session !== ss || route().name !== 'review') return;
+  if (ss.writing && !ss.flipped && result === 'good') toast('✓ できた', 700);
   nextCard();
 }
 
@@ -1071,6 +1139,7 @@ async function saveConnection(form) {
 
 const actions = {
   start: () => startSession(),
+  'start-writing': () => startSession(0, true),
   'start-extra': () => startSession(3),
   home: () => { S.session = null; go('#/today'); },
   quit: () => { S.session = null; scheduleSync(300); go('#/today'); },
