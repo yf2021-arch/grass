@@ -64,7 +64,7 @@ const aruNai = w => w.replace(/(ある|有る|在る)$/, 'ない');
 // 問う・請う・乞う の て形は「うて」（問うて・問うた）
 const isTou = w => /(問う|請う|乞う)$/.test(w);
 /** ます形の語幹（書き・食べ・確認し・き） */
-const masuStem = ({ w, g }) => (g === '5' ? w.slice(0, -1) + (ROWS[w.slice(-1)] || ROWS.る)[1] : g === '1' ? w.slice(0, -1) : g === 's' ? suruStem(w) + 'し' : kuruStem(w) + 'き');
+export const masuStem = ({ w, g }) => (g === '5' ? w.slice(0, -1) + (ROWS[w.slice(-1)] || ROWS.る)[1] : g === '1' ? w.slice(0, -1) : g === 's' ? suruStem(w) + 'し' : kuruStem(w) + 'き');
 
 /** 正しい形。word = { w, g }。g は 5 | 1 | s | k | i | na */
 export function conj(word, form) {
