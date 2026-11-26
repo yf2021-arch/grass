@@ -3,8 +3,8 @@ import fs from 'node:fs';
 const base=new URL('../js/',import.meta.url);
 const toURL=src=>'data:text/javascript;base64,'+Buffer.from(src).toString('base64');
 let source=fs.readFileSync(new URL('bjt-learn.js',base),'utf8');
-source=source.replace(/from '\.\/(bjt-core-[^']+\.js|bjt-yamato\.js|furi\.js)'/g,(_,p)=>'from "'+toURL(fs.readFileSync(new URL(p,base),'utf8'))+'"');
-const {BJT_ITEMS,stage,flow,grade,queue,question,createBjtLearn,visibleReading,spokenLabel,rubyTarget,rubyLabel,rubyExample,yamatoNote}=await import(toURL(source));
+source=source.replace(/from '\.\/(bjt-core-[^']+\.js|bjt-yamato\.js|bjt-readings\.js|bjt-explanation-ruby\.js|furi\.js)'/g,(_,p)=>'from "'+toURL(fs.readFileSync(new URL(p,base),'utf8'))+'"');
+const {BJT_ITEMS,stage,flow,grade,queue,question,createBjtLearn,visibleReading,spokenLabel,rubyTarget,rubyLabel,rubyExample,yamatoNote,rubyText}=await import(toURL(source));
 assert.equal(BJT_ITEMS.length,900);assert.equal(new Set(BJT_ITEMS.map(x=>x.id)).size,900);
 for(const [category,n] of Object.entries({'文法':150,'語彙':500,'連語':200,'敬語':50}))assert.equal(BJT_ITEMS.filter(x=>x.category===category).length,n);
 for(const x of BJT_ITEMS){assert.equal(x.examples.length,2);assert.ok(x.english);assert.ok(spokenLabel(x));assert.equal(x.reading,visibleReading(x));for(const f of ['choice','typing']){const q=question(x,BJT_ITEMS,{},f);assert.equal(new Set(q.options).size,4);assert.ok(q.options.includes(x.meaning));assert.ok(q.answer);}}
@@ -25,3 +25,8 @@ assert.ok(rubyExample(BJT_ITEMS.find(x=>x.id==='g01')).includes('<ruby>次第<rt
 assert.ok(yamatoNote(BJT_ITEMS.find(x=>x.id==='g01')).plain.includes('わけ'));
 assert.equal(BJT_ITEMS.filter(x=>yamatoNote(x)).length,162);
 for(const x of BJT_ITEMS){const html=rubyLabel(x);assert.ok(html);if(!x.reading)assert.ok(!html.includes('<ruby>'));}
+
+assert.match(rubyText('相手に事情を説明する。'),/<ruby>相手<rt>あいて<\/rt><\/ruby>/);
+assert.match(rubyText('事情を説明する'),/<ruby>説明<rt>せつめい<\/rt><\/ruby>/);
+assert.equal(rubyText('ものの'),'ものの');assert.equal(rubyText('<script>'),'&lt;script&gt;');
+assert.match(rubyExample(BJT_ITEMS.find(x=>x.id==='g01')),/<ruby>納期<rt>のうき<\/rt><\/ruby>/);
