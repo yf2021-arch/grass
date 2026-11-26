@@ -797,3 +797,7 @@ button.row-link { width: 100%; border: 0; text-align: left; font: inherit; color
 .rawpick .label, .source, .icard .meta { overflow-wrap: anywhere; }
 
 #written-answer { display: block; box-sizing: border-box; width: 100%; font: inherit; padding: .7em; margin: .4em 0 1em; }
+
+/* BJT の5タブ：小画面でも文字を省略せず、必要なら横にスクロール。 */
+.bjt-tabs { overflow-x: auto; }
+.bjt-tabs .seg-btn { flex: 1 0 auto; min-width: 52px; padding: 0 8px; }

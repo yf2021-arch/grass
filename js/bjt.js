@@ -1,5 +1,6 @@
 // BJT 対策（v1.6.0・練習は v1.7.0）
-//   #/bjt … 4つのタブ
+//   #/bjt … 5つのタブ
+//     学習     … J2 基礎表現・間隔復習・ながら学習（js/bjt-learn.js）
 //     練習     … アプリの中で解ける非公式の問題集（js/quiz.js）
 //     記録     … 模試・練習の結果（部ごとの正解・未回答・時間）を残し、部ごとの推移を見る
 //     間違い   … 間違えた問題の原因を記録し、次の日に見直す。分からなかった表現は REGISTER: でカードにする
@@ -77,7 +78,7 @@ export function createBjt({ app, esc, go, nav, store, todayStr, ICON, audio = { 
           <header class="top">
             <div><p class="date">目標 480点（J2 上位・高度人材ポイント 15点）</p><h1>BJT 対策</h1></div>
           </header>
-          <div class="seg" role="tablist">${tabs}</div>
+          <div class="seg bjt-tabs" role="tablist">${tabs}</div>
           <main class="home bjt">${body}</main>
         </div>
         ${nav('bjt')}
