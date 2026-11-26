@@ -213,7 +213,7 @@ function nav(current) {
 const cardAudio = createCardAudio({ store });
 const speak = createSpeak({ app, esc, go, nav, store, todayStr: srs.todayStr, addDays: srs.addDays, ICON, cardAudio });
 const raw = createRaw({ app, esc, nav, store, go, startChunks: ids => speak.startWith(ids), chunkSay: id => speak.chunkSay(id), getSettings: () => S.settings });
-const bjt = createBjt({ app, esc, go, nav, store, todayStr: srs.todayStr, ICON, audio: { has: speak.hasClip, play: speak.playClip, stop: speak.stopClip }, extraBackup: [raw] });
+const bjt = createBjt({ app, esc, go, nav, store, todayStr: srs.todayStr, ICON, audio: { has: speak.hasClip, play: speak.playClip, stop: speak.stopClip }, extraBackup: [raw], canStudyAudio: () => !walk.active() });
 const katsuyo = createKatsuyo({ app, esc, nav, store, todayStr: srs.todayStr, ICON, cards: () => S.cards, say: speak.say, canSay: speak.canSay, cardAudio });
 const walk = createWalk({
   app, esc, nav, store, todayStr: srs.todayStr, ICON, cardAudio,
@@ -227,6 +227,7 @@ const playBtn = (id, key, extra = '') => cardAudio.has(id, key)
 
 function render() {
   const r = route();
+  if (r.name !== 'bjt') bjt.leaveLearning();
   if (r.name !== 'drill') speak.releaseMic();          // 練習の外ではマイクを閉じる（「戻る」で抜けたときも）
   const screens = { today: renderToday, review: renderReview, done: renderDone, inbox: renderInbox, speak: speak.renderSpeak, drill: speak.renderDrill, bjt: bjt.renderBjt, katsuyo: katsuyo.render, walk: walk.render, raw: raw.render, search: renderSearch, card: renderDetail, family: renderFamily, settings: renderSettings };
   (screens[r.name] || renderToday)(r.arg);
@@ -334,7 +335,7 @@ function renderToday() {
             <span class="n">${katsuyo.todayCount() ? `今日 ${katsuyo.todayCount()}問` : ''} ${ICON.chevron}</span>
           </a>
           <a class="row-link" href="#/bjt">
-            <span class="t"><b>BJT 対策</b><span>練習問題・結果の記録・間違いノート・ペースタイマー${bjt.timerRunning() ? '（計測中）' : ''}</span></span>
+            <span class="t"><b>BJT 対策</b><span>J2 基礎学習・練習問題・結果の記録・間違いノート${bjt.timerRunning() ? '（計測中）' : ''}</span></span>
             <span class="n">${bjt.dueCount() ? `見直し ${bjt.dueCount()}件` : ''} ${ICON.chevron}</span>
           </a>
           <section class="week" aria-label="今週の記録">
