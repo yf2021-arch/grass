@@ -807,3 +807,13 @@ button.row-link { width: 100%; border: 0; text-align: left; font: inherit; color
 .bjt-ruby rt { font-size: .55em; font-weight: 400; color: var(--accent-strong); }
 .bjt-yamato { border-inline-start: 2px solid var(--accent); padding-inline-start: 10px; margin: 10px 0; }
 .bjt-yamato p { margin: 4px 0; }
+
+/* BJT explanation: core meaning first; plain Japanese uses a compact 和 marker. */
+.bjt-explanation { line-height: 1.95; }
+.bjt-explanation .bjt-term { font-size: 20px; font-weight: 700; line-height: 1.8; }
+.bjt-explanation p { margin: 6px 0; overflow-wrap: anywhere; }
+.bjt-explanation rt { font-size: .55em; }
+.bjt-yamato-lead { font-size: 17px; color: var(--accent-strong); }
+.bjt-wa { display: inline-block; font-size: 12px; font-weight: 700; border: 1px solid var(--accent); border-radius: 4px; padding: 0 4px; line-height: 1.5; vertical-align: .1em; }
+.bjt-example { border-inline-start: 2px solid var(--accent); padding-inline-start: 9px; font-size: 16px; }
+.bjt-detail { color: var(--muted); }
