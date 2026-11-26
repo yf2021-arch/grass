@@ -801,3 +801,9 @@ button.row-link { width: 100%; border: 0; text-align: left; font: inherit; color
 /* BJT の5タブ：小画面でも文字を省略せず、必要なら横にスクロール。 */
 .bjt-tabs { overflow-x: auto; }
 .bjt-tabs .seg-btn { flex: 1 0 auto; min-width: 52px; padding: 0 8px; }
+
+/* BJT explanation: always-visible ruby above kanji, never in independent drills. */
+.bjt-ruby ruby { ruby-position: over; }
+.bjt-ruby rt { font-size: .55em; font-weight: 400; color: var(--accent-strong); }
+.bjt-yamato { border-inline-start: 2px solid var(--accent); padding-inline-start: 10px; margin: 10px 0; }
+.bjt-yamato p { margin: 4px 0; }
