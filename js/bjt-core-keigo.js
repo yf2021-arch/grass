@@ -1,3 +1,4 @@
+// Original BJT preparation learning material.
 export const BJT_KEIGO = [
   {
     "id": "h07",
@@ -419,7 +420,7 @@ export const BJT_KEIGO = [
     "id": "h39",
     "category": "敬語",
     "label": "ご存じ",
-    "reading": "",
+    "reading": "ごぞんじ",
     "english": "know (honorific)",
     "meaning": "相手が知っていることを敬って表す",
     "explanation": "相手が知っていることを敬って表す。",
@@ -452,19 +453,6 @@ export const BJT_KEIGO = [
     "examples": [
       "来週、【お目にかかる】機会を楽しみにしております。",
       "直接【お目にかかる】ことができて光栄です。"
-    ]
-  },
-  {
-    "id": "h42",
-    "category": "敬語",
-    "label": "お会いする",
-    "reading": "おあいする",
-    "english": "meet (humble)",
-    "meaning": "自分が相手に会うことを丁寧に述べる",
-    "explanation": "自分が相手に会うことを丁寧に述べる。",
-    "examples": [
-      "明日、担当者に【お会いする】予定です。",
-      "展示会で【お会いする】機会をいただきました。"
     ]
   },
   {
@@ -574,14 +562,14 @@ export const BJT_KEIGO = [
   {
     "id": "h51",
     "category": "敬語",
-    "label": "お引き立て賜り",
-    "reading": "おひきたてたまわり",
+    "label": "お引き立てを賜り",
+    "reading": "おひきたてをたまわり",
     "english": "for your continued patronage",
     "meaning": "取引相手などから受けた支援への改まった感謝",
     "explanation": "取引相手などから受けた支援への改まった感謝。",
     "examples": [
-      "日頃より【お引き立て賜り】、厚く御礼申し上げます。",
-      "格別の【お引き立て賜り】、誠にありがとうございます。"
+      "日頃より【お引き立てを賜り】、厚く御礼申し上げます。",
+      "格別の【お引き立てを賜り】、誠にありがとうございます。"
     ]
   }
 ];

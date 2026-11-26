@@ -1,4 +1,4 @@
-// Original BJT preparation grammar collection.
+// Original BJT preparation learning material.
 export const BJT_GRAMMAR = [
   {
     "id": "g23",
@@ -347,7 +347,7 @@ export const BJT_GRAMMAR = [
     "meaning": "情報から推測されることを述べる",
     "explanation": "情報から推測されることを述べる。",
     "examples": [
-      "原因は設備の老朽化【とみられる】。",
+      "原因は設備の老朽化だ【とみられる】。",
       "今後も需要が増える【とみられる】。"
     ]
   },
@@ -479,19 +479,6 @@ export const BJT_GRAMMAR = [
     "examples": [
       "安い【だからといって】、採用するとは限らない。",
       "急ぎ【だからといって】、確認を省けない。"
-    ]
-  },
-  {
-    "id": "g60",
-    "category": "文法",
-    "label": "～にもかかわらず（逆接副詞）",
-    "reading": "",
-    "english": "nevertheless",
-    "meaning": "独立した接続表現で反対の結果を示す",
-    "explanation": "独立した接続表現で反対の結果を示す。",
-    "examples": [
-      "十分な説明をした。【にもかかわらず】、誤解が生じた。",
-      "何度も確認した。【にもかかわらず】、間違いが残った。"
     ]
   },
   {
@@ -1015,19 +1002,6 @@ export const BJT_GRAMMAR = [
     ]
   },
   {
-    "id": "g101",
-    "category": "文法",
-    "label": "～について",
-    "reading": "",
-    "english": "about; regarding",
-    "meaning": "話題を示す",
-    "explanation": "話題を示す。",
-    "examples": [
-      "新制度【について】、説明します。",
-      "予算【について】、検討しました。"
-    ]
-  },
-  {
     "id": "g102",
     "category": "文法",
     "label": "～をめぐって",
@@ -1077,19 +1051,6 @@ export const BJT_GRAMMAR = [
     "examples": [
       "新事業の開始【に当たって】、説明会を開く。",
       "入札参加【に当たって】、条件を確認する。"
-    ]
-  },
-  {
-    "id": "g106",
-    "category": "文法",
-    "label": "～にあたり",
-    "reading": "",
-    "english": "on the occasion of",
-    "meaning": "開始や変更の際の改まった表現",
-    "explanation": "開始や変更の際の改まった表現。",
-    "examples": [
-      "移転【にあたり】、住所を変更する。",
-      "契約更新【にあたり】、内容を確認する。"
     ]
   },
   {
@@ -1375,7 +1336,7 @@ export const BJT_GRAMMAR = [
     "explanation": "望ましい選択を述べる。",
     "examples": [
       "早めに連絡する【に越したことはない】。",
-      "確認は多い【に越したことはない】。"
+      "確認の機会は多い【に越したことはない】。"
     ]
   },
   {
@@ -1402,19 +1363,6 @@ export const BJT_GRAMMAR = [
     "examples": [
       "延期する【しかない】。",
       "別の業者を探す【しかない】。"
-    ]
-  },
-  {
-    "id": "g131",
-    "category": "文法",
-    "label": "～ずにはいられない",
-    "reading": "",
-    "english": "cannot help doing",
-    "meaning": "自然に抑えられない気持ち",
-    "explanation": "自然に抑えられない気持ち。",
-    "examples": [
-      "成果を見て喜ば【ずにはいられない】。",
-      "安全面を心配せ【ずにはいられない】。"
     ]
   },
   {
@@ -1649,19 +1597,6 @@ export const BJT_GRAMMAR = [
     "examples": [
       "部長【をはじめ】、関係者が参加した。",
       "国内【をはじめ】、各地域で展開する。"
-    ]
-  },
-  {
-    "id": "g150",
-    "category": "文法",
-    "label": "～など",
-    "reading": "",
-    "english": "such as",
-    "meaning": "代表例を挙げる",
-    "explanation": "代表例を挙げる。",
-    "examples": [
-      "契約書や請求書【など】を保管する。",
-      "品質や価格【など】を比較する。"
     ]
   },
   {

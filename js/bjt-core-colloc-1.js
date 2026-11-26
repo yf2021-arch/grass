@@ -1,3 +1,4 @@
+// Original BJT preparation learning material.
 export const BJT_COLLOC_1 = [
   {
     "id": "c09",
@@ -257,19 +258,6 @@ export const BJT_COLLOC_1 = [
     "examples": [
       "本番作業の【段取りを組む】。",
       "出荷までの【段取りを組む】ことが重要だ。"
-    ]
-  },
-  {
-    "id": "c29",
-    "category": "連語",
-    "label": "段取りをつける",
-    "reading": "だんどりをつける",
-    "english": "make arrangements",
-    "meaning": "仕事に必要な準備を整える",
-    "explanation": "仕事に必要な準備を整える。",
-    "examples": [
-      "会議の【段取りをつける】。",
-      "担当変更に向けて【段取りをつける】。"
     ]
   },
   {

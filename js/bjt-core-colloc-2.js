@@ -1,3 +1,4 @@
+// Original BJT preparation learning material.
 export const BJT_COLLOC_2 = [
   {
     "id": "c108",
@@ -387,19 +388,6 @@ export const BJT_COLLOC_2 = [
     "examples": [
       "原材料高騰のため【価格を引き上げる】。",
       "利益を確保するため【価格を引き上げる】必要がある。"
-    ]
-  },
-  {
-    "id": "c138",
-    "category": "連語",
-    "label": "価格を据え置く",
-    "reading": "かかくをすえおく",
-    "english": "keep prices unchanged",
-    "meaning": "価格を変更せず維持する",
-    "explanation": "価格を変更せず維持する。",
-    "examples": [
-      "今期は【価格を据え置く】。",
-      "既存顧客向けには【価格を据え置く】方針だ。"
     ]
   },
   {

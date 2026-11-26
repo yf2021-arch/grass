@@ -1,3 +1,4 @@
+// Original BJT preparation learning material.
 export const BJT_VOCAB_2 = [
   {
     "id": "v118",
@@ -361,19 +362,6 @@ export const BJT_VOCAB_2 = [
     "examples": [
       "売上を今月分に【計上】する。",
       "費用の【計上】時期を確認する。"
-    ]
-  },
-  {
-    "id": "v146",
-    "category": "語彙",
-    "label": "計算",
-    "reading": "けいさん",
-    "english": "calculation",
-    "meaning": "数値を求めること",
-    "explanation": "数値を求めること。",
-    "examples": [
-      "請求額を【計算】する。",
-      "税額の【計算】を確認する。"
     ]
   },
   {
