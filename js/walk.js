@@ -270,6 +270,7 @@ export function createWalk({ app, esc, nav, store, todayStr, ICON, cards, isDue,
     return `
       <section class="card-box" aria-label="流すもの">
         <p class="label">流すもの</p>
+        <p class="small"><a href="#/bjt/learn">BJT 学習のながら読み上げへ</a>（端末の日本語音声・画面オン）</p>
         <div class="frow wrap" role="group" aria-label="種類">${kinds}</div>
         ${s.card ? `<div class="frow wrap" role="group" aria-label="単語の範囲">${chip('walk-scope', 'due', s.scope === 'due', '単語：今日の復習')}${chip('walk-scope', 'all', s.scope === 'all', '単語：学習中ぜんぶ')}</div>` : ''}
         <p class="small" style="margin:0">単語は 例文 → 表現 → 例文、話すは 文 → 間 → 文、聴解は 会話 → 選択肢 → 間 → 正解 の順に流れます。</p>
