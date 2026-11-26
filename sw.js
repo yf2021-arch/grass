@@ -1,7 +1,7 @@
 // オフラインでも開けるように、アプリ本体をキャッシュする。
 // アプリを更新したら VERSION を上げる（古いキャッシュは自動で消える）。
 
-const VERSION = 'grass-v1.24.0';
+const VERSION = 'grass-v1.25.0';
 const SHELL = [
   './',
   './index.html',
@@ -19,6 +19,15 @@ const SHELL = [
   './js/whisper-worker.js',
   './js/bjt.js',
   './js/bjt-learn.js',
+  './js/bjt-core-grammar.js',
+  './js/bjt-core-vocab-1.js',
+  './js/bjt-core-vocab-2.js',
+  './js/bjt-core-vocab-3.js',
+  './js/bjt-core-vocab-4.js',
+  './js/bjt-core-vocab-5.js',
+  './js/bjt-core-colloc-1.js',
+  './js/bjt-core-colloc-2.js',
+  './js/bjt-core-keigo.js',
   './js/katsuyo.js',
   './js/katsuyo-audio.js',
   './js/quiz.js',
